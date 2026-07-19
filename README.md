@@ -4,8 +4,9 @@
 
 | ファイル | 内容 |
 |---|---|
+| [`index.html`](index.html) | 2作品への入口となるメニューページ(GitHub Pagesのトップ) |
 | [`abyss.html`](abyss.html) | 深海10,911mへの潜航体験。実在の深海生物26種を撮影して図鑑を完成させる |
-| [`index.html`](index.html) | リアルタイム銀河シミュレーター。ブラックホールを射出して銀河を操る |
+| [`galaxy.html`](galaxy.html) | リアルタイム銀河シミュレーター。ブラックホールを射出して銀河を操る |
 
 ---
 
@@ -99,7 +100,8 @@ GitHub Pages を有効にすれば、そのままURLで公開できます
 ## 📁 構成
 
 ```
+index.html   … メニューページ(2作品への入口)
 abyss.html   … 深海探査体験(HTML / CSS / JS すべて込み)
-index.html   … 銀河シミュレーター(同上)
+galaxy.html  … 銀河シミュレーター(同上)
 README.md    … このファイル
 ```

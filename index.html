@@ -2,790 +2,296 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>GALAXY FORGE — 銀河シミュレーター</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTERACTIVE WORLDS — 銀河と深海</title>
 <style>
-  :root {
-    --accent: #7dd3fc;
-    --accent2: #c084fc;
-    --panel-bg: rgba(10, 14, 26, 0.72);
-    --panel-border: rgba(125, 211, 252, 0.18);
-    --text: #dbe7ff;
-    --text-dim: #8093b8;
-  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    width: 100%; height: 100%;
-    overflow: hidden;
-    background: #030409;
+  :root {
+    --tx: #e6f0f8;
+    --dim: #8ba3bd;
+  }
+  html, body { width: 100%; min-height: 100%; }
+  body {
     font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
-    color: var(--text);
-    -webkit-user-select: none; user-select: none;
-    touch-action: none;
+    color: var(--tx);
+    background: #01040a;
+    overflow-x: hidden;
+    min-height: 100vh;
+    position: relative;
   }
-  #space { position: fixed; inset: 0; display: block; cursor: crosshair; }
+  /* cosmos (top) → abyss (bottom) gradient */
+  #bg {
+    position: fixed; inset: 0; z-index: -2;
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(150, 90, 220, 0.28), transparent 60%),
+      radial-gradient(900px 600px at 12% 8%, rgba(70, 120, 220, 0.22), transparent 60%),
+      linear-gradient(180deg, #0a0716 0%, #0a1230 30%, #06204a 55%, #041a3a 72%, #021024 88%, #01060f 100%);
+  }
+  #stars { position: fixed; inset: 0; z-index: -1; display: block; pointer-events: none; }
 
-  /* ---------- Title ---------- */
-  #title {
-    position: fixed; top: 22px; left: 26px;
-    pointer-events: none;
-    z-index: 10;
-    animation: fadeIn 1.6s ease both;
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: clamp(48px, 9vh, 110px) 22px 70px;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh;
   }
-  #title h1 {
-    font-size: 26px;
-    font-weight: 800;
-    letter-spacing: 0.16em;
-    background: linear-gradient(100deg, #e0f2fe 10%, var(--accent) 45%, var(--accent2) 90%);
+
+  header { text-align: center; margin-bottom: clamp(36px, 7vh, 74px); animation: rise 1s ease both; }
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.42em; text-indent: 0.42em;
+    color: var(--dim); margin-bottom: 16px;
+  }
+  h1 {
+    font-size: clamp(34px, 6.5vw, 68px);
+    font-weight: 800; letter-spacing: 0.06em; line-height: 1.1;
+    background: linear-gradient(100deg, #d9b3ff 0%, #8fd0ff 48%, #48e0d0 100%);
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 18px rgba(125, 211, 252, 0.35));
+    filter: drop-shadow(0 4px 30px rgba(100, 150, 255, 0.25));
   }
-  #title p {
-    margin-top: 4px;
-    font-size: 11.5px;
-    letter-spacing: 0.32em;
-    color: var(--text-dim);
+  header p {
+    margin-top: 16px; font-size: clamp(13px, 1.6vw, 15px);
+    color: var(--dim); letter-spacing: 0.08em; line-height: 1.9;
   }
 
-  /* ---------- Stats ---------- */
-  #stats {
-    position: fixed; top: 24px; right: 24px;
-    z-index: 10;
-    display: flex; gap: 10px;
-    animation: fadeIn 1.6s ease both;
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    width: 100%;
   }
-  .stat {
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
-    border-radius: 12px;
-    padding: 8px 14px;
-    text-align: center;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    min-width: 74px;
-  }
-  .stat b {
-    display: block;
-    font-size: 16px;
-    font-variant-numeric: tabular-nums;
-    color: var(--accent);
-  }
-  .stat span { font-size: 10px; letter-spacing: 0.12em; color: var(--text-dim); }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
 
-  /* ---------- Control panel ---------- */
-  #panel {
-    position: fixed; right: 24px; top: 96px;
-    z-index: 10;
-    width: 252px;
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
-    border-radius: 16px;
-    padding: 18px;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-    animation: slideIn 0.9s cubic-bezier(.2,.9,.25,1) both;
-    transition: transform 0.45s cubic-bezier(.2,.9,.25,1), opacity 0.35s ease;
+  .card {
+    position: relative;
+    display: flex; flex-direction: column;
+    border-radius: 20px;
+    overflow: hidden;
+    text-decoration: none; color: inherit;
+    min-height: 380px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(8, 14, 26, 0.5);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    transition: transform 0.4s cubic-bezier(.2,.9,.25,1), box-shadow 0.4s, border-color 0.4s;
+    animation: rise 1s ease both;
   }
-  #panel.hidden { transform: translateX(300px); opacity: 0; pointer-events: none; }
-  #panel h2 {
-    font-size: 11px; letter-spacing: 0.24em;
-    color: var(--text-dim);
-    margin-bottom: 12px;
-  }
-  .row { margin-bottom: 14px; }
-  .row label {
-    display: flex; justify-content: space-between;
-    font-size: 11.5px; color: var(--text);
-    margin-bottom: 6px;
-  }
-  .row label output { color: var(--accent); font-variant-numeric: tabular-nums; }
-  input[type="range"] {
-    width: 100%; height: 4px;
-    appearance: none; -webkit-appearance: none;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-  }
-  input[type="range"]::-webkit-slider-thumb {
-    appearance: none; -webkit-appearance: none;
-    width: 15px; height: 15px;
-    border-radius: 50%;
-    background: #eaf6ff;
-    border: 2px solid var(--accent);
-    box-shadow: 0 0 10px rgba(125, 211, 252, 0.6);
-    cursor: pointer;
-  }
-  input[type="range"]::-moz-range-thumb {
-    width: 13px; height: 13px;
-    border-radius: 50%;
-    background: #eaf6ff;
-    border: 2px solid var(--accent);
-    box-shadow: 0 0 10px rgba(125, 211, 252, 0.6);
-    cursor: pointer;
-  }
+  .card:nth-child(1) { animation-delay: 0.1s; }
+  .card:nth-child(2) { animation-delay: 0.22s; }
+  .card:hover { transform: translateY(-8px); border-color: rgba(255,255,255,0.22); }
+  .card:hover .art canvas { transform: scale(1.06); }
+  .card:hover .go { gap: 16px; }
+  .card:hover .go .arrow { transform: translateX(4px); }
 
-  .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  button {
-    font-family: inherit;
-    font-size: 11.5px;
-    letter-spacing: 0.06em;
-    padding: 9px 6px;
-    background: rgba(125, 211, 252, 0.08);
-    color: var(--text);
-    border: 1px solid rgba(125, 211, 252, 0.25);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.18s ease;
+  .art { position: relative; height: 210px; overflow: hidden; }
+  .art canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; transition: transform 0.6s ease; }
+  .art::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 40%, rgba(8, 14, 26, 0.75) 100%);
   }
-  button:hover {
-    background: rgba(125, 211, 252, 0.22);
-    border-color: var(--accent);
-    box-shadow: 0 0 14px rgba(125, 211, 252, 0.35);
-    transform: translateY(-1px);
+  .body { padding: 22px 24px 26px; display: flex; flex-direction: column; flex: 1; }
+  .tag {
+    font-size: 10.5px; letter-spacing: 0.24em;
+    padding: 4px 12px; border-radius: 999px; align-self: flex-start;
+    margin-bottom: 12px; font-weight: 700;
   }
-  button:active { transform: translateY(0); }
-  button.wide { grid-column: 1 / -1; }
-  button.on {
-    background: rgba(192, 132, 252, 0.25);
-    border-color: var(--accent2);
-    color: #f3e8ff;
+  .card h2 { font-size: 23px; font-weight: 800; letter-spacing: 0.04em; }
+  .card .en { font-size: 11px; letter-spacing: 0.22em; margin-top: 4px; }
+  .card .desc { margin-top: 12px; font-size: 13px; line-height: 1.85; color: var(--dim); flex: 1; }
+  .feat { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 7px; }
+  .feat span {
+    font-size: 10.5px; color: var(--tx);
+    padding: 4px 10px; border-radius: 7px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
+  .go {
+    margin-top: 20px; display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+    transition: gap 0.3s;
+  }
+  .go .arrow { transition: transform 0.3s; }
 
-  /* ---------- Hint bar ---------- */
-  #hint {
-    position: fixed; bottom: 18px; left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    font-size: 11.5px;
-    letter-spacing: 0.08em;
-    color: var(--text-dim);
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
-    border-radius: 999px;
-    padding: 9px 22px;
-    white-space: nowrap;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    animation: fadeIn 2.2s ease both;
-  }
-  #hint b { color: var(--accent); font-weight: 600; }
+  /* abyss theming */
+  .card.abyss .tag { background: rgba(72, 224, 208, 0.14); color: #6ff0e0; border: 1px solid rgba(72,224,208,0.3); }
+  .card.abyss:hover { box-shadow: 0 26px 60px rgba(10, 80, 90, 0.5); }
+  .card.abyss h2 { color: #cdefff; }
+  .card.abyss .en, .card.abyss .go { color: #48e0d0; }
+  /* galaxy theming */
+  .card.galaxy .tag { background: rgba(180, 130, 255, 0.14); color: #d3b4ff; border: 1px solid rgba(180,130,255,0.3); }
+  .card.galaxy:hover { box-shadow: 0 26px 60px rgba(60, 30, 110, 0.5); }
+  .card.galaxy h2 { color: #ecdfff; }
+  .card.galaxy .en, .card.galaxy .go { color: #c084fc; }
 
-  #toggle-panel {
-    position: fixed; right: 24px; top: 96px;
-    z-index: 11;
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    font-size: 15px;
-    padding: 0;
-    display: none;
-    align-items: center; justify-content: center;
+  footer {
+    margin-top: auto; padding-top: 54px;
+    text-align: center; font-size: 11.5px; color: var(--dim); letter-spacing: 0.05em; line-height: 2;
   }
+  footer a { color: #8fd0ff; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .hint { margin-top: 6px; font-size: 10.5px; color: #5a7089; }
 
-  /* ---------- Toast ---------- */
-  #toast {
-    position: fixed; top: 88px; left: 50%;
-    transform: translate(-50%, -8px);
-    z-index: 20;
-    font-size: 13px;
-    letter-spacing: 0.1em;
-    color: #eaf6ff;
-    background: rgba(20, 28, 52, 0.85);
-    border: 1px solid var(--panel-border);
-    border-radius: 999px;
-    padding: 9px 24px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease, transform 0.3s ease;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-  #toast.show { opacity: 1; transform: translate(-50%, 0); }
-
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes slideIn { from { transform: translateX(300px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-  @media (max-width: 720px) {
-    #panel { right: 12px; top: 88px; width: 218px; }
-    #toggle-panel { display: flex; right: 12px; top: 44px; }
-    #stats { right: 12px; top: 12px; gap: 6px; }
-    .stat { min-width: 60px; padding: 6px 8px; }
-    #title { top: 12px; left: 14px; }
-    #title h1 { font-size: 19px; }
-    #hint { display: none; }
-  }
+  @keyframes rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 </head>
 <body>
-<canvas id="space"></canvas>
+<div id="bg"></div>
+<canvas id="stars"></canvas>
 
-<div id="title">
-  <h1>GALAXY FORGE</h1>
-  <p>リアルタイム銀河シミュレーター</p>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">INTERACTIVE WORLDS</div>
+    <h1>銀河と、深海。</h1>
+    <p>ブラウザだけで動く、2つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところまで。</p>
+  </header>
+
+  <div class="cards">
+    <a class="card abyss" href="abyss.html">
+      <div class="art"><canvas id="art-abyss"></canvas></div>
+      <div class="body">
+        <span class="tag">DEEP SEA EXPLORATION</span>
+        <h2>ABYSS</h2>
+        <div class="en">深海 10,911m への潜航</div>
+        <div class="desc">潜航艇の探照灯で闇を照らし、実在の深海生物26種を撮影して図鑑を集める。深くなるほど光は消え、水圧は増し、生物は自ら光りだす。</div>
+        <div class="feat"><span>🔦 探照灯</span><span>📖 図鑑26種</span><span>🐙 生物発光</span><span>🎧 環境音</span></div>
+        <div class="go"><span>潜航する</span><span class="arrow">→</span></div>
+      </div>
+    </a>
+
+    <a class="card galaxy" href="galaxy.html">
+      <div class="art"><canvas id="art-galaxy"></canvas></div>
+      <div class="body">
+        <span class="tag">GALAXY SIMULATOR</span>
+        <h2>GALAXY FORGE</h2>
+        <div class="en">リアルタイム銀河シミュレーター</div>
+        <div class="desc">最大12,000個の恒星をリアルタイム重力演算。クリック＆ドラッグでブラックホールを射出し、銀河を衝突・崩壊・再構築させて遊ぶ。</div>
+        <div class="feat"><span>🌌 12,000星</span><span>🕳 ブラックホール</span><span>💥 銀河衝突</span><span>🎛 4プリセット</span></div>
+        <div class="go"><span>創造する</span><span class="arrow">→</span></div>
+      </div>
+    </a>
+  </div>
+
+  <footer>
+    Canvas &amp; Web Audio でつくった、依存ライブラリなしの2作品。<br>
+    <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a>
+    <div class="hint">カードをクリックで起動 ・ どちらもフルスクリーン推奨</div>
+  </footer>
 </div>
-
-<div id="stats">
-  <div class="stat"><b id="st-fps">60</b><span>FPS</span></div>
-  <div class="stat"><b id="st-stars">0</b><span>恒星</span></div>
-  <div class="stat"><b id="st-bh">0</b><span>ブラックホール</span></div>
-</div>
-
-<button id="toggle-panel" title="パネル表示切替">☰</button>
-
-<div id="panel">
-  <h2>CONTROL DECK</h2>
-  <div class="row">
-    <label>恒星の数 <output id="out-count">4000</output></label>
-    <input type="range" id="in-count" min="500" max="12000" step="500" value="4000">
-  </div>
-  <div class="row">
-    <label>重力の強さ <output id="out-grav">1.0</output></label>
-    <input type="range" id="in-grav" min="0.1" max="3" step="0.1" value="1">
-  </div>
-  <div class="row">
-    <label>時間の流れ <output id="out-time">1.0</output></label>
-    <input type="range" id="in-time" min="0" max="2.5" step="0.1" value="1">
-  </div>
-  <div class="row">
-    <label>光の残像 <output id="out-trail">0.35</output></label>
-    <input type="range" id="in-trail" min="0.05" max="0.9" step="0.05" value="0.35">
-  </div>
-  <h2 style="margin-top:16px">プリセット</h2>
-  <div class="btn-grid">
-    <button data-preset="spiral">渦巻銀河</button>
-    <button data-preset="collision">銀河衝突</button>
-    <button data-preset="ring">リング星雲</button>
-    <button data-preset="chaos">カオス</button>
-  </div>
-  <div class="btn-grid">
-    <button id="btn-pause">⏸ 一時停止</button>
-    <button id="btn-clear">BH消去</button>
-    <button id="btn-sound" class="wide">🔇 宇宙のサウンド：OFF</button>
-  </div>
-</div>
-
-<div id="hint"><b>クリック＆ドラッグ</b>でブラックホールを射出 ／ <b>Space</b> 一時停止 ／ <b>C</b> BH消去 ／ <b>H</b> UI表示切替</div>
-<div id="toast"></div>
 
 <script>
 "use strict";
 (() => {
-  // ============================================================
-  //  GALAXY FORGE — self-contained N-body galaxy sandbox
-  // ============================================================
-  const canvas = document.getElementById("space");
-  const ctx = canvas.getContext("2d");
+  const TAU = Math.PI * 2;
+  const rand = (a, b) => a + Math.random() * (b - a);
 
-  let W = 0, H = 0, DPR = 1;
+  // ---- ambient starfield behind everything ----
+  const sc = document.getElementById("stars");
+  const sx = sc.getContext("2d");
+  let SW, SH, stars = [];
+  function resizeStars() {
+    SW = sc.width = innerWidth; SH = sc.height = innerHeight;
+    const n = Math.round(SW * SH / 9000);
+    stars = [];
+    for (let i = 0; i < n; i++)
+      stars.push({ x: Math.random() * SW, y: Math.random() * SH, r: rand(0.4, 1.6), tw: rand(0, TAU), sp: rand(0.6, 2.2) });
+  }
+  resizeStars();
+  addEventListener("resize", resizeStars);
 
-  const settings = {
-    count: 4000,
-    gravity: 1.0,
-    timeScale: 1.0,
-    trail: 0.35,
-    paused: false,
-    sound: false,
-  };
-
-  // Gravitational constant: accel = GRAV_K * mass / d^2 (px / frame^2 units)
-  const GRAV_K = 0.09;
-
-  // Struct-of-arrays particle storage for speed.
-  const MAX_P = 12000;
-  const px = new Float32Array(MAX_P);
-  const py = new Float32Array(MAX_P);
-  const vx = new Float32Array(MAX_P);
-  const vy = new Float32Array(MAX_P);
-  const hue = new Float32Array(MAX_P);
-  const size = new Float32Array(MAX_P);
-  let pCount = 0;
-
-  // Black holes (user-created + preset cores)
-  /** @type {{x:number,y:number,vx:number,vy:number,mass:number,born:number}[]} */
-  let holes = [];
-  const MAX_HOLES = 12;
-
-  // Background starfield (static, drawn to offscreen canvas)
-  let bgCanvas = null;
-
-  // Drag state for launching black holes
-  const drag = { active: false, sx: 0, sy: 0, cx: 0, cy: 0 };
-
-  let frame = 0;
-
-  // ---------------- resize ----------------
-  function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth;
-    H = window.innerHeight;
-    canvas.width = Math.round(W * DPR);
-    canvas.height = Math.round(H * DPR);
-    canvas.style.width = W + "px";
-    canvas.style.height = H + "px";
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    buildBackground();
-    ctx.fillStyle = "#030409";
-    ctx.fillRect(0, 0, W, H);
+  // ---- tiny self-contained previews on each card ----
+  function setup(id) {
+    const cv = document.getElementById(id);
+    const c = cv.getContext("2d");
+    let w, h;
+    const ro = () => { const r = cv.getBoundingClientRect(); w = cv.width = r.width * devicePixelRatio; h = cv.height = r.height * devicePixelRatio; c.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); };
+    ro(); addEventListener("resize", ro);
+    return { cv, c, get w() { return cv.width / devicePixelRatio; }, get h() { return cv.height / devicePixelRatio; } };
   }
 
-  function buildBackground() {
-    bgCanvas = document.createElement("canvas");
-    bgCanvas.width = Math.round(W * DPR);
-    bgCanvas.height = Math.round(H * DPR);
-    const b = bgCanvas.getContext("2d");
-    b.setTransform(DPR, 0, 0, DPR, 0, 0);
-    // faint nebula washes
-    for (let i = 0; i < 5; i++) {
-      const gx = Math.random() * W, gy = Math.random() * H;
-      const r = 150 + Math.random() * 350;
-      const g = b.createRadialGradient(gx, gy, 0, gx, gy, r);
-      const h = 200 + Math.random() * 120;
-      g.addColorStop(0, `hsla(${h}, 80%, 30%, 0.05)`);
-      g.addColorStop(1, "transparent");
-      b.fillStyle = g;
-      b.fillRect(gx - r, gy - r, r * 2, r * 2);
+  // galaxy preview: spiral of orbiting stars around a dark core
+  const G = setup("art-galaxy");
+  const gStars = [];
+  for (let i = 0; i < 260; i++) {
+    const arm = Math.floor(Math.random() * 3) * (TAU / 3);
+    const rr = Math.pow(Math.random(), 0.6);
+    gStars.push({ a: arm + rr * 3.2 + rand(-0.4, 0.4), r: rr, sp: rand(0.3, 0.7), hue: 200 + Math.random() * 100, sz: Math.random() < 0.9 ? 1 : 1.8 });
+  }
+  // abyss preview: silhouette + drifting marine snow + a glowing anglerfish lure
+  const A = setup("art-abyss");
+  const snow = [];
+  for (let i = 0; i < 90; i++) snow.push({ x: Math.random(), y: Math.random(), r: rand(0.5, 1.8), s: rand(0.02, 0.08), ph: rand(0, TAU) });
+
+  let t = 0;
+  function frame() {
+    requestAnimationFrame(frame);
+    t += 0.016;
+
+    // starfield
+    sx.clearRect(0, 0, SW, SH);
+    for (const s of stars) {
+      const a = 0.35 + Math.sin(t * s.sp + s.tw) * 0.3;
+      sx.fillStyle = `rgba(200,220,255,${Math.max(a, 0.05)})`;
+      sx.fillRect(s.x, s.y, s.r, s.r);
     }
-    // distant pin-prick stars
-    const n = Math.round((W * H) / 3800);
-    for (let i = 0; i < n; i++) {
-      const s = Math.random();
-      b.fillStyle = `rgba(${200 + (Math.random() * 55) | 0}, ${210 + (Math.random() * 45) | 0}, 255, ${0.12 + s * 0.5})`;
-      b.fillRect(Math.random() * W, Math.random() * H, s < 0.92 ? 1 : 2, s < 0.92 ? 1 : 2);
-    }
-  }
 
-  // ---------------- particle spawning ----------------
-  function spawnStar(i, x, y, velX, velY) {
-    px[i] = x; py[i] = y;
-    vx[i] = velX; vy[i] = velY;
-    hue[i] = 190 + Math.random() * 100; // blue → violet
-    size[i] = Math.random() < 0.94 ? 1 : 1.8;
-  }
-
-  // Disc of stars orbiting a point mass, with spiral-arm density bias.
-  function makeGalaxy(cx, cy, radius, count, startIdx, driftX, driftY, dir, coreMass) {
-    const arms = 3;
-    for (let k = 0; k < count; k++) {
-      const i = startIdx + k;
-      if (i >= MAX_P) break;
-      let a = Math.random() * Math.PI * 2;
-      const r = 12 + Math.pow(Math.random(), 0.6) * radius;
-      // pull angle toward nearest spiral arm
-      const armAngle = r * 0.028;
-      const arm = Math.floor(Math.random() * arms) * (Math.PI * 2 / arms);
-      a = arm + armAngle + (Math.random() - 0.5) * 1.1;
-      const x = cx + Math.cos(a) * r;
-      const y = cy + Math.sin(a) * r * 0.92;
-      // circular orbital velocity around the core: v = sqrt(K * M / r)
-      const speed = dir * Math.sqrt(GRAV_K * coreMass / Math.max(r, 14));
-      spawnStar(i, x, y,
-        -Math.sin(a) * speed + driftX,
-         Math.cos(a) * speed + driftY);
-    }
-  }
-
-  // ---------------- presets ----------------
-  const presets = {
-    spiral() {
-      holes = [core(W / 2, H / 2, 2600)];
-      makeGalaxy(W / 2, H / 2, Math.min(W, H) * 0.36, settings.count, 0, 0, 0, 1, 2600);
-      pCount = Math.min(settings.count, MAX_P);
-      return "渦巻銀河を生成しました";
-    },
-    collision() {
-      const r = Math.min(W, H) * 0.2;
-      const x1 = W * 0.28, x2 = W * 0.72, y = H / 2;
-      holes = [core(x1, y - 40, 2000, 0.55, 0.1), core(x2, y + 40, 2000, -0.55, -0.1)];
-      const half = Math.floor(settings.count / 2);
-      makeGalaxy(x1, y - 40, r, half, 0, 0.55, 0.1, 1, 2000);
-      makeGalaxy(x2, y + 40, r, settings.count - half, half, -0.55, -0.1, -1, 2000);
-      pCount = Math.min(settings.count, MAX_P);
-      return "2つの銀河が衝突コースに入りました";
-    },
-    ring() {
-      holes = [core(W / 2, H / 2, 3000)];
-      const R = Math.min(W, H) * 0.3;
-      for (let i = 0; i < settings.count && i < MAX_P; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = R + (Math.random() - 0.5) * 46;
-        const speed = Math.sqrt(GRAV_K * 3000 / r);
-        spawnStar(i, W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r,
-          -Math.sin(a) * speed, Math.cos(a) * speed);
+    // ---- galaxy ----
+    {
+      const { c, w, h } = G;
+      c.clearRect(0, 0, w, h);
+      const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.52;
+      const glow = c.createRadialGradient(cx, cy, 2, cx, cy, R);
+      glow.addColorStop(0, "rgba(200,150,255,0.5)");
+      glow.addColorStop(0.4, "rgba(120,120,255,0.12)");
+      glow.addColorStop(1, "transparent");
+      c.fillStyle = glow; c.fillRect(0, 0, w, h);
+      c.globalCompositeOperation = "lighter";
+      for (const s of gStars) {
+        const ang = s.a + t * s.sp * (1.1 - s.r) * 1.4;
+        const x = cx + Math.cos(ang) * s.r * R;
+        const y = cy + Math.sin(ang) * s.r * R * 0.82;
+        c.fillStyle = `hsla(${s.hue},90%,72%,0.85)`;
+        c.fillRect(x, y, s.sz, s.sz);
       }
-      pCount = Math.min(settings.count, MAX_P);
-      return "リング星雲を生成しました";
-    },
-    chaos() {
-      holes = [];
-      for (let i = 0; i < settings.count && i < MAX_P; i++) {
-        spawnStar(i, Math.random() * W, Math.random() * H,
-          (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.8);
+      c.globalCompositeOperation = "source-over";
+      c.fillStyle = "#05040a";
+      c.beginPath(); c.arc(cx, cy, 5, 0, TAU); c.fill();
+    }
+
+    // ---- abyss ----
+    {
+      const { c, w, h } = A;
+      c.clearRect(0, 0, w, h);
+      const g = c.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, "#05243f"); g.addColorStop(1, "#020a16");
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      // marine snow
+      c.fillStyle = "rgba(200,220,240,0.5)";
+      for (const p of snow) {
+        p.y += p.s * 0.02; if (p.y > 1) p.y = 0;
+        const x = (p.x + Math.sin(t * 0.5 + p.ph) * 0.01) * w;
+        c.fillRect(x, p.y * h, p.r, p.r);
       }
-      pCount = Math.min(settings.count, MAX_P);
-      return "カオス空間 — ブラックホールを投げ込んでみてください";
-    },
-  };
-
-  function core(x, y, mass, cvx = 0, cvy = 0) {
-    return { x, y, vx: cvx, vy: cvy, mass, born: frame };
-  }
-
-  // ---------------- physics ----------------
-  const MASS_CAP = 24000;
-
-  function step(dt) {
-    const G = settings.gravity;
-    const nh = holes.length;
-
-    // black holes attract each other & merge
-    for (let a = 0; a < nh; a++) {
-      const A = holes[a];
-      for (let b = a + 1; b < nh; b++) {
-        const B = holes[b];
-        const dx = B.x - A.x, dy = B.y - A.y;
-        const d2 = dx * dx + dy * dy + 400;
-        const d = Math.sqrt(d2);
-        const f = G * GRAV_K * dt / d2;
-        A.vx += dx / d * f * B.mass; A.vy += dy / d * f * B.mass;
-        B.vx -= dx / d * f * A.mass; B.vy -= dy / d * f * A.mass;
-        if (d < (Math.sqrt(A.mass) + Math.sqrt(B.mass)) * 0.22) {
-          // merge into the heavier one
-          const [big, small] = A.mass >= B.mass ? [A, B] : [B, A];
-          const m = Math.min(big.mass + small.mass, MASS_CAP);
-          big.vx = (big.vx * big.mass + small.vx * small.mass) / (big.mass + small.mass);
-          big.vy = (big.vy * big.mass + small.vy * small.mass) / (big.mass + small.mass);
-          big.mass = m;
-          small.mass = -1; // mark dead
-          pingSound(140 - Math.min(m / 300, 90), 0.5);
-        }
-      }
-    }
-    holes = holes.filter(h => h.mass > 0);
-
-    for (const h of holes) {
-      h.x += h.vx * dt;
-      h.y += h.vy * dt;
-      // wrap so cores don't fly away forever
-      const m = 60;
-      if (h.x < -m) h.x = W + m; else if (h.x > W + m) h.x = -m;
-      if (h.y < -m) h.y = H + m; else if (h.y > H + m) h.y = -m;
-    }
-
-    // stars: pulled by every black hole
-    for (let i = 0; i < pCount; i++) {
-      let ax = 0, ay = 0;
-      for (let k = 0; k < holes.length; k++) {
-        const h = holes[k];
-        const dx = h.x - px[i], dy = h.y - py[i];
-        const r2 = dx * dx + dy * dy;
-        const d2 = r2 + 160; // softening
-        const inv = 1 / Math.sqrt(d2);
-        const f = G * GRAV_K * h.mass / d2;
-        ax += dx * inv * f;
-        ay += dy * inv * f;
-        // swallowed inside the event horizon → respawn on rim, feeding the hole
-        const horizon = 6 + Math.sqrt(h.mass) * 0.18;
-        if (r2 < horizon * horizon) {
-          if (h.mass < MASS_CAP) h.mass += 0.9;
-          respawn(i);
-        }
-      }
-      vx[i] += ax * dt;
-      vy[i] += ay * dt;
-      // very light damping keeps chaos bounded
-      vx[i] *= 0.9998; vy[i] *= 0.9998;
-      px[i] += vx[i] * dt;
-      py[i] += vy[i] * dt;
-
-      // wrap around screen edges (with margin)
-      const m = 40;
-      if (px[i] < -m) px[i] = W + m; else if (px[i] > W + m) px[i] = -m;
-      if (py[i] < -m) py[i] = H + m; else if (py[i] > H + m) py[i] = -m;
+      // anglerfish lure glow, swimming slowly
+      const lx = w * (0.5 + Math.sin(t * 0.35) * 0.32);
+      const ly = h * (0.52 + Math.cos(t * 0.5) * 0.14);
+      const pulse = 0.7 + Math.sin(t * 3) * 0.3;
+      c.globalCompositeOperation = "lighter";
+      const lg = c.createRadialGradient(lx, ly, 0, lx, ly, 46 * pulse);
+      lg.addColorStop(0, "rgba(150,225,255,0.9)");
+      lg.addColorStop(0.5, "rgba(80,180,255,0.25)");
+      lg.addColorStop(1, "transparent");
+      c.fillStyle = lg; c.beginPath(); c.arc(lx, ly, 46 * pulse, 0, TAU); c.fill();
+      c.globalCompositeOperation = "source-over";
+      // fish body silhouette trailing the lure
+      c.fillStyle = "rgba(4,10,18,0.92)";
+      c.beginPath(); c.ellipse(lx + 30, ly + 12, 26, 17, 0, 0, TAU); c.fill();
+      c.beginPath(); c.moveTo(lx + 52, ly + 12); c.lineTo(lx + 70, ly + 2); c.lineTo(lx + 70, ly + 22); c.closePath(); c.fill();
+      c.strokeStyle = "rgba(4,10,18,0.9)"; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(lx + 10, ly - 2); c.quadraticCurveTo(lx, ly - 24, lx, ly); c.stroke();
     }
   }
-
-  function respawn(i) {
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.max(W, H) * 0.55;
-    px[i] = W / 2 + Math.cos(a) * r;
-    py[i] = H / 2 + Math.sin(a) * r;
-    vx[i] = (Math.random() - 0.5) * 0.4;
-    vy[i] = (Math.random() - 0.5) * 0.4;
-  }
-
-  // ---------------- rendering ----------------
-  function render() {
-    // fade previous frame → motion trails
-    ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = `rgba(3, 4, 9, ${1 - settings.trail})`;
-    ctx.fillRect(0, 0, W, H);
-
-    // static background, faintly re-blended so it survives the fade
-    ctx.globalAlpha = 0.05;
-    ctx.drawImage(bgCanvas, 0, 0, W, H);
-    ctx.globalAlpha = 1;
-
-    ctx.globalCompositeOperation = "lighter";
-
-    // stars — batch by hue bucket to cut fillStyle switches
-    const buckets = new Map();
-    for (let i = 0; i < pCount; i++) {
-      const sp = vx[i] * vx[i] + vy[i] * vy[i];
-      // hot (fast) stars shift white-gold, slow ones stay blue/violet
-      const h = sp > 4 ? 45 : hue[i];
-      const l = Math.min(58 + sp * 6, 88);
-      const key = ((h / 12) | 0) * 100 + ((l / 8) | 0);
-      let arr = buckets.get(key);
-      if (!arr) { arr = { h, l, idx: [] }; buckets.set(key, arr); }
-      arr.idx.push(i);
-    }
-    for (const { h, l, idx } of buckets.values()) {
-      ctx.fillStyle = `hsla(${h}, 90%, ${l}%, 0.75)`;
-      for (const i of idx) {
-        const s = size[i];
-        ctx.fillRect(px[i] - s / 2, py[i] - s / 2, s, s);
-      }
-    }
-
-    // black holes — accretion glow + dark core
-    for (const h of holes) {
-      const r = 6 + Math.sqrt(h.mass) * 0.32;
-      const pulse = 1 + Math.sin((frame - h.born) * 0.07) * 0.12;
-      const R = r * 3.2 * pulse;
-      const g = ctx.createRadialGradient(h.x, h.y, r * 0.4, h.x, h.y, R);
-      g.addColorStop(0, "rgba(190, 140, 255, 0.9)");
-      g.addColorStop(0.35, "rgba(120, 170, 255, 0.45)");
-      g.addColorStop(1, "transparent");
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(h.x, h.y, R, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = "#000";
-      ctx.beginPath();
-      ctx.arc(h.x, h.y, r * 0.55, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalCompositeOperation = "lighter";
-    }
-
-    // drag aim line
-    if (drag.active) {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = "rgba(125, 211, 252, 0.8)";
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([6, 6]);
-      ctx.beginPath();
-      ctx.moveTo(drag.sx, drag.sy);
-      ctx.lineTo(drag.cx, drag.cy);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.arc(drag.sx, drag.sy, 10, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.globalCompositeOperation = "source-over";
-  }
-
-  // ---------------- ambient sound (Web Audio, all synthesized) ----------------
-  let audio = null;
-  function initAudio() {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    const acx = new AC();
-    const master = acx.createGain();
-    master.gain.value = 0;
-    master.connect(acx.destination);
-
-    const filt = acx.createBiquadFilter();
-    filt.type = "lowpass";
-    filt.frequency.value = 420;
-    filt.connect(master);
-
-    const freqs = [55, 82.5, 110.2, 164.8];
-    for (const f of freqs) {
-      const o = acx.createOscillator();
-      o.type = "sine";
-      o.frequency.value = f;
-      const g = acx.createGain();
-      g.gain.value = 0.09;
-      o.connect(g); g.connect(filt);
-      o.start();
-      // slow independent shimmer per voice
-      const lfo = acx.createOscillator();
-      lfo.frequency.value = 0.05 + Math.random() * 0.1;
-      const lg = acx.createGain();
-      lg.gain.value = 0.05;
-      lfo.connect(lg); lg.connect(g.gain);
-      lfo.start();
-    }
-    return { acx, master };
-  }
-  function setSound(on) {
-    if (on && !audio) audio = initAudio();
-    if (!audio) return;
-    if (audio.acx.state === "suspended") audio.acx.resume();
-    const t = audio.acx.currentTime;
-    audio.master.gain.cancelScheduledValues(t);
-    audio.master.gain.setTargetAtTime(on ? 0.55 : 0, t, 0.8);
-  }
-  function pingSound(freq, vol) {
-    if (!settings.sound || !audio) return;
-    const { acx, master } = audio;
-    const t = acx.currentTime;
-    const o = acx.createOscillator();
-    o.type = "sine";
-    o.frequency.setValueAtTime(freq * 3, t);
-    o.frequency.exponentialRampToValueAtTime(Math.max(freq, 30), t + 0.6);
-    const g = acx.createGain();
-    g.gain.setValueAtTime(vol * 0.4, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
-    o.connect(g); g.connect(master);
-    o.start(t); o.stop(t + 1.3);
-  }
-
-  // ---------------- input ----------------
-  function pointerPos(e) {
-    return { x: e.clientX, y: e.clientY };
-  }
-  canvas.addEventListener("pointerdown", e => {
-    const p = pointerPos(e);
-    drag.active = true;
-    drag.sx = drag.cx = p.x;
-    drag.sy = drag.cy = p.y;
-    canvas.setPointerCapture(e.pointerId);
-  });
-  canvas.addEventListener("pointermove", e => {
-    if (!drag.active) return;
-    const p = pointerPos(e);
-    drag.cx = p.x; drag.cy = p.y;
-  });
-  canvas.addEventListener("pointerup", e => {
-    if (!drag.active) return;
-    drag.active = false;
-    if (holes.length >= MAX_HOLES) { toast("ブラックホールは12個までです"); return; }
-    const lvx = (drag.sx - drag.cx) * 0.012;
-    const lvy = (drag.sy - drag.cy) * 0.012;
-    holes.push({ x: drag.sx, y: drag.sy, vx: lvx, vy: lvy, mass: 900, born: frame });
-    pingSound(90 + Math.random() * 60, 0.6);
-  });
-
-  window.addEventListener("keydown", e => {
-    if (e.code === "Space") { e.preventDefault(); togglePause(); }
-    else if (e.key === "c" || e.key === "C") clearHoles();
-    else if (e.key === "h" || e.key === "H") toggleUI();
-  });
-
-  // ---------------- UI wiring ----------------
-  const $ = id => document.getElementById(id);
-  function bindRange(id, outId, key, fmt = v => v) {
-    const input = $(id), out = $(outId);
-    input.addEventListener("input", () => {
-      const v = parseFloat(input.value);
-      settings[key] = v;
-      out.textContent = fmt(v);
-      if (key === "count") rebuildKeepingHoles();
-    });
-  }
-  bindRange("in-count", "out-count", "count", v => v.toLocaleString());
-  bindRange("in-grav", "out-grav", "gravity", v => v.toFixed(1));
-  bindRange("in-time", "out-time", "timeScale", v => v.toFixed(1));
-  bindRange("in-trail", "out-trail", "trail", v => v.toFixed(2));
-
-  let lastPreset = "spiral";
-  document.querySelectorAll("[data-preset]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      lastPreset = btn.dataset.preset;
-      toast(presets[lastPreset]());
-    });
-  });
-
-  function rebuildKeepingHoles() {
-    presets[lastPreset]();
-  }
-
-  function togglePause() {
-    settings.paused = !settings.paused;
-    $("btn-pause").textContent = settings.paused ? "▶ 再開" : "⏸ 一時停止";
-    toast(settings.paused ? "時間が停止しました" : "時間が動き出しました");
-  }
-  $("btn-pause").addEventListener("click", togglePause);
-
-  function clearHoles() {
-    holes = [];
-    toast("すべてのブラックホールが蒸発しました");
-  }
-  $("btn-clear").addEventListener("click", clearHoles);
-
-  $("btn-sound").addEventListener("click", () => {
-    settings.sound = !settings.sound;
-    setSound(settings.sound);
-    const b = $("btn-sound");
-    b.textContent = settings.sound ? "🔊 宇宙のサウンド：ON" : "🔇 宇宙のサウンド：OFF";
-    b.classList.toggle("on", settings.sound);
-  });
-
-  let uiHidden = false;
-  function toggleUI() {
-    uiHidden = !uiHidden;
-    for (const id of ["title", "stats", "panel", "hint"]) {
-      $(id).style.opacity = uiHidden ? "0" : "";
-      $(id).style.pointerEvents = uiHidden ? "none" : "";
-    }
-  }
-  $("toggle-panel").addEventListener("click", () => {
-    $("panel").classList.toggle("hidden");
-  });
-  if (window.innerWidth <= 720) $("panel").classList.add("hidden");
-
-  let toastTimer = 0;
-  function toast(msg) {
-    const t = $("toast");
-    t.textContent = msg;
-    t.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
-  }
-
-  // ---------------- main loop ----------------
-  let lastT = performance.now();
-  let fpsShown = 60, fpsFrames = 0, fpsStart = performance.now();
-
-  function loop(now) {
-    requestAnimationFrame(loop);
-    let dt = (now - lastT) / 16.667; // normalize to 60fps units
-    lastT = now;
-    dt = Math.min(dt, 3);
-
-    if (!settings.paused && settings.timeScale > 0) {
-      // substep large timesteps so fast orbits stay stable
-      const total = dt * settings.timeScale;
-      const n = Math.min(Math.ceil(total / 1.5), 4);
-      for (let s = 0; s < n; s++) step(total / n);
-    }
-    render();
-    frame++;
-    fpsFrames++;
-
-    if (now - fpsStart >= 500) {
-      fpsShown = Math.round(fpsFrames / ((now - fpsStart) / 1000));
-      fpsFrames = 0; fpsStart = now;
-    }
-
-    // stats (throttled)
-    if (frame % 15 === 0) {
-      $("st-stars").textContent = pCount.toLocaleString();
-      $("st-bh").textContent = holes.length;
-      $("st-fps").textContent = fpsShown;
-    }
-  }
-
-  // ---------------- boot ----------------
-  window.addEventListener("resize", resize);
-  resize();
-  presets.spiral();
-  requestAnimationFrame(loop);
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
