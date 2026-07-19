@@ -1,0 +1,2201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ABYSS — 深海10,000mの旅</title>
+<style>
+  :root {
+    --aq: #48e0d0;
+    --aq2: #4fa8f7;
+    --panel: rgba(4, 12, 22, 0.72);
+    --line: rgba(72, 224, 208, 0.18);
+    --tx: #d7ecf5;
+    --dim: #6e8fa3;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #010409;
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+    color: var(--tx);
+    -webkit-user-select: none; user-select: none;
+    touch-action: none;
+  }
+  #sea { position: fixed; inset: 0; display: block; cursor: none; }
+
+  .glass {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; transition: opacity .4s; }
+  #hud.off { opacity: 0; }
+
+  #depth-box {
+    position: absolute; top: 18px; left: 20px;
+    padding: 12px 18px 10px;
+  }
+  #depth-val {
+    font-size: 34px; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    color: #eafcff;
+    text-shadow: 0 0 16px rgba(72, 224, 208, 0.5);
+  }
+  #depth-val small { font-size: 16px; color: var(--aq); margin-left: 2px; }
+  #depth-sub {
+    display: flex; gap: 14px; margin-top: 4px;
+    font-size: 11px; color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  #depth-sub b { color: var(--tx); font-weight: 600; }
+
+  #zone-label {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    padding: 8px 22px;
+    font-size: 12px; letter-spacing: 0.28em; color: var(--aq);
+  }
+
+  #right-hud {
+    position: absolute; top: 18px; right: 20px;
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    pointer-events: auto;
+  }
+  .hbtn {
+    font-family: inherit; font-size: 12px; letter-spacing: 0.08em;
+    color: var(--tx);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 9px 18px;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: all .18s;
+  }
+  .hbtn:hover { border-color: var(--aq); box-shadow: 0 0 14px rgba(72,224,208,.35); }
+  .hbtn b { color: var(--aq); font-variant-numeric: tabular-nums; }
+  .hbtn.pulse { animation: discPulse .7s ease; }
+  @keyframes discPulse {
+    0% { transform: scale(1); } 35% { transform: scale(1.14); border-color: var(--aq); }
+    100% { transform: scale(1); }
+  }
+
+  #hint-bar {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    padding: 8px 20px; border-radius: 999px;
+    font-size: 11px; letter-spacing: 0.06em; color: var(--dim);
+    white-space: nowrap;
+  }
+  #hint-bar b { color: var(--aq); }
+
+  /* zone banner */
+  #banner {
+    position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%);
+    text-align: center; opacity: 0; pointer-events: none;
+    transition: opacity 1.2s ease;
+  }
+  #banner.show { opacity: 1; }
+  #banner h2 {
+    font-size: 30px; font-weight: 800; letter-spacing: 0.3em;
+    color: #eafcff; text-shadow: 0 0 30px rgba(79, 168, 247, 0.8);
+  }
+  #banner p { margin-top: 10px; font-size: 13px; letter-spacing: 0.2em; color: var(--dim); }
+
+  /* milestone ticker */
+  #mile {
+    position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; letter-spacing: 0.12em; color: #bfe9ff;
+    padding: 8px 22px; border-radius: 999px;
+    opacity: 0; transition: opacity .8s;
+  }
+  #mile.show { opacity: 1; }
+
+  /* toast */
+  #toast {
+    position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: var(--tx);
+    padding: 7px 18px; border-radius: 999px;
+    opacity: 0; transition: opacity .3s;
+  }
+  #toast.show { opacity: 1; }
+
+  /* discovery card */
+  #card {
+    position: absolute; left: 20px; bottom: 20px;
+    width: 300px; padding: 16px;
+    transform: translateY(160%); opacity: 0;
+    transition: transform .6s cubic-bezier(.2,.9,.25,1), opacity .4s;
+    pointer-events: auto; cursor: pointer;
+  }
+  #card.show { transform: translateY(0); opacity: 1; }
+  #card .new {
+    font-size: 10px; letter-spacing: 0.3em; color: #041016;
+    background: linear-gradient(90deg, var(--aq), var(--aq2));
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-weight: 800; margin-bottom: 8px;
+  }
+  #card canvas { width: 100%; height: 96px; display: block; border-radius: 8px; background: rgba(2,10,18,.6); }
+  #card h3 { margin-top: 10px; font-size: 17px; color: #eafcff; }
+  #card .en { font-size: 10.5px; letter-spacing: 0.14em; color: var(--aq); margin-top: 2px; }
+  #card .rng { font-size: 11px; color: var(--dim); margin-top: 6px; }
+  #card .fact { font-size: 12px; line-height: 1.7; margin-top: 8px; color: var(--tx); }
+
+  /* flash */
+  #flash {
+    position: fixed; inset: 0; background: #dff4ff; opacity: 0;
+    pointer-events: none; z-index: 40;
+  }
+  #flash.go { animation: flashA .45s ease-out; }
+  @keyframes flashA { 0% { opacity: .75; } 100% { opacity: 0; } }
+
+  /* ---------- encyclopedia modal ---------- */
+  #dex {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(1, 6, 12, 0.82);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    display: none; overflow-y: auto;
+    padding: 44px 5vw 60px;
+  }
+  #dex.open { display: block; }
+  #dex header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px; }
+  #dex h2 { font-size: 20px; letter-spacing: 0.24em; color: #eafcff; }
+  #dex h2 span { font-size: 12px; color: var(--aq); margin-left: 12px; letter-spacing: 0.1em; }
+  #dex-close {
+    font-family: inherit; font-size: 13px; color: var(--tx);
+    background: none; border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 20px; cursor: pointer;
+  }
+  #dex-close:hover { border-color: var(--aq); }
+  #dex-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+  }
+  .dex-cell {
+    border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(6, 16, 28, 0.7);
+    padding: 12px; min-height: 120px;
+    transition: border-color .2s;
+  }
+  .dex-cell.got:hover { border-color: var(--aq); }
+  .dex-cell canvas { width: 100%; height: 74px; display: block; border-radius: 6px; background: rgba(2,8,16,.7); }
+  .dex-cell .nm { margin-top: 8px; font-size: 13px; color: #eafcff; font-weight: 600; }
+  .dex-cell .nm.unk { color: #3d5566; letter-spacing: .2em; }
+  .dex-cell .dp { font-size: 10.5px; color: var(--dim); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .dex-cell .fc { font-size: 11px; line-height: 1.65; color: #a9c6d4; margin-top: 6px; }
+
+  /* ---------- title screen ---------- */
+  #title-screen {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 120%, rgba(2, 20, 40, 0.35), rgba(1, 4, 9, 0.78));
+    transition: opacity 1.4s ease;
+  }
+  #title-screen.hide { opacity: 0; pointer-events: none; }
+  #title-screen h1 {
+    font-size: clamp(52px, 10vw, 96px);
+    font-weight: 800; letter-spacing: 0.34em; text-indent: 0.34em;
+    background: linear-gradient(180deg, #eafcff 0%, var(--aq) 55%, #1b5f8a 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 34px rgba(72, 224, 208, 0.35));
+    animation: breathe 5s ease-in-out infinite;
+  }
+  @keyframes breathe { 50% { filter: drop-shadow(0 0 50px rgba(72,224,208,.55)); } }
+  #title-screen .sub {
+    margin-top: 14px; font-size: 14px; letter-spacing: 0.5em; text-indent: .5em; color: var(--dim);
+  }
+  #title-screen .ctr {
+    margin-top: 44px; padding: 18px 26px; border-radius: 14px;
+    font-size: 12.5px; line-height: 2.1; color: var(--tx); text-align: center;
+  }
+  #title-screen .ctr b { color: var(--aq); font-weight: 600; }
+  #dive-btn {
+    margin-top: 34px;
+    font-family: inherit; font-size: 16px; letter-spacing: 0.4em; text-indent: .4em;
+    color: #041016; font-weight: 800;
+    background: linear-gradient(90deg, var(--aq), var(--aq2));
+    border: none; border-radius: 999px;
+    padding: 16px 52px; cursor: pointer;
+    box-shadow: 0 0 30px rgba(72, 224, 208, 0.4);
+    transition: transform .2s, box-shadow .2s;
+  }
+  #dive-btn:hover { transform: translateY(-2px); box-shadow: 0 0 46px rgba(72, 224, 208, 0.65); }
+  #title-note { margin-top: 18px; font-size: 11px; color: var(--dim); letter-spacing: .1em; }
+
+  /* ---------- ending ---------- */
+  #ending {
+    position: fixed; inset: 0; z-index: 45;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0, 2, 5, 0.72);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    text-align: center; opacity: 0; transition: opacity 2s;
+  }
+  #ending.show { display: flex; opacity: 1; }
+  #ending h2 { font-size: clamp(24px, 4.5vw, 40px); letter-spacing: 0.3em; color: #eafcff; text-shadow: 0 0 30px rgba(79,168,247,.7); }
+  #ending .poem { margin-top: 22px; font-size: 14px; line-height: 2.4; color: #bfe0ee; letter-spacing: .18em; }
+  #ending .stats { margin-top: 26px; font-size: 13px; color: var(--dim); letter-spacing: .1em; line-height: 2; }
+  #ending .stats b { color: var(--aq); font-size: 16px; }
+  #ending .btns { margin-top: 34px; display: flex; gap: 14px; }
+
+  /* mobile dive buttons */
+  #mctl { position: fixed; right: 14px; bottom: 18px; z-index: 12; display: none; flex-direction: column; gap: 10px; }
+  #mctl button {
+    width: 56px; height: 56px; border-radius: 50%;
+    font-size: 20px; color: var(--aq);
+    background: var(--panel); border: 1px solid var(--line);
+  }
+  @media (pointer: coarse) {
+    #mctl { display: flex; }
+    #hint-bar { display: none; }
+    #sea { cursor: default; }
+  }
+  @media (max-width: 720px) {
+    #depth-val { font-size: 24px; }
+    #zone-label { display: none; }
+    #card { width: min(300px, calc(100vw - 100px)); }
+  }
+</style>
+</head>
+<body>
+<canvas id="sea"></canvas>
+
+<div id="hud">
+  <div id="depth-box" class="glass">
+    <div id="depth-val">0<small>m</small></div>
+    <div id="depth-sub">
+      <span>水圧 <b id="hud-atm">1</b> atm</span>
+      <span>水温 <b id="hud-tmp">24.0</b>°C</span>
+      <span>速度 <b id="hud-spd">0.0</b> m/s</span>
+    </div>
+  </div>
+  <div id="zone-label" class="glass">EPIPELAGIC ZONE</div>
+  <div id="right-hud">
+    <button class="hbtn" id="btn-dex">📖 図鑑 <b id="dex-count">0</b>/<b id="dex-total">26</b></button>
+    <button class="hbtn" id="btn-snd">🔊 サウンド ON</button>
+  </div>
+  <div id="banner"><h2></h2><p></p></div>
+  <div id="mile" class="glass"></div>
+  <div id="toast" class="glass"></div>
+  <div id="card" class="glass">
+    <span class="new">NEW DISCOVERY</span>
+    <canvas id="card-cv" width="536" height="192"></canvas>
+    <h3 id="card-nm"></h3>
+    <div class="en" id="card-en"></div>
+    <div class="rng" id="card-rng"></div>
+    <div class="fact" id="card-fc"></div>
+  </div>
+  <div id="hint-bar" class="glass"><b>マウス</b> ライト操作 ／ <b>ホイール・W/S</b> 潜航速度 ／ <b>クリック</b> 撮影 ／ <b>Space</b> 停止 ／ <b>H</b> UI非表示</div>
+</div>
+
+<div id="mctl">
+  <button id="m-up">▲</button>
+  <button id="m-dn">▼</button>
+</div>
+
+<div id="flash"></div>
+
+<div id="dex">
+  <header>
+    <h2>深海図鑑<span id="dex-sub"></span></h2>
+    <button id="dex-close">閉じる ✕</button>
+  </header>
+  <div id="dex-grid"></div>
+</div>
+
+<div id="title-screen">
+  <h1>ABYSS</h1>
+  <div class="sub">深海 10,911m への潜航</div>
+  <div class="ctr glass">
+    <b>マウス</b> … 探照灯と機体の操作　<b>ホイール / W・S</b> … 潜航・浮上<br>
+    <b>クリック</b> … 生物を撮影して図鑑に記録　<b>Space</b> … その場で停止<br>
+    光を怖がる生物もいます。ゆっくり近づいてみてください。
+  </div>
+  <button id="dive-btn">潜 航 開 始</button>
+  <div id="title-note"></div>
+</div>
+
+<div id="ending">
+  <h2>チャレンジャー海淵 ― 最深部 ―</h2>
+  <div class="poem">水深 10,911m。<br>ここは、月面よりも訪れた人類が少ない場所。<br>あなたはいま、地球でいちばん深い夜に立っている。</div>
+  <div class="stats" id="end-stats"></div>
+  <div class="btns">
+    <button class="hbtn" id="end-dex">図鑑を見る</button>
+    <button class="hbtn" id="end-cont">探索を続ける</button>
+    <button class="hbtn" id="end-up">浮上する</button>
+  </div>
+</div>
+<script>
+"use strict";
+(() => {
+  // ============================================================
+  //  ABYSS — a descent to the deepest point on Earth
+  // ============================================================
+  const canvas = document.getElementById("sea");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+
+  const PXM = 7;              // pixels per meter
+  const MAX_DEPTH = 10911;    // Challenger Deep
+  const LIGHT_RANGE = 560;
+  const LIGHT_SPREAD = 0.42;
+
+  const state = {
+    started: false,
+    depth: 2,
+    speed: 0,          // m/s, + = down
+    speedTarget: 0,
+    time: 0,
+    hudTime: 0,
+    ended: false,
+    surfacing: false,
+    paused: false,
+  };
+
+  const sub = { x: 0, y: 0, aim: Math.PI / 2, tilt: 0, prop: 0 };
+  const mouse = { x: 0, y: 0, active: false };
+
+  let cameraY = 0;
+
+  // ---------- persistence ----------
+  const store = {
+    load(k, d) { try { const v = localStorage.getItem("abyss." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    save(k, v) { try { localStorage.setItem("abyss." + k, JSON.stringify(v)); } catch {} },
+  };
+  const discovered = new Set(store.load("discovered", []));
+  let maxDepthEver = store.load("maxDepth", 0);
+
+  // ---------- utils ----------
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const frac = x => x - Math.floor(x);
+  const n1 = s => frac(Math.sin(s * 127.1 + 311.7) * 43758.5453); // deterministic noise
+  const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
+  const $ = id => document.getElementById(id);
+
+  // ---------- environment curves ----------
+  function darknessAlpha(d) {
+    if (d < 80) return 0;
+    if (d < 400) return (d - 80) / 320 * 0.55;
+    if (d < 900) return 0.55 + (d - 400) / 500 * 0.3;
+    if (d < 1600) return 0.85 + (d - 900) / 700 * 0.09;
+    return Math.min(0.94 + (d - 1600) / 6000 * 0.025, 0.965);
+  }
+  function waterTemp(d) {
+    if (d < 200) return 24 - d * 0.05;
+    if (d < 1000) return 14 - (d - 200) / 800 * 10;
+    return Math.max(4 - (d - 1000) / 9000 * 2.6, 1.4);
+  }
+  // background gradient stops [depth, top color, bottom color]
+  const BG_STOPS = [
+    [0,    [30, 116, 190], [10, 74, 138]],
+    [150,  [12, 74, 134],  [7, 48, 96]],
+    [400,  [6, 40, 82],    [4, 26, 58]],
+    [800,  [3, 18, 40],    [2, 11, 26]],
+    [1400, [2, 9, 20],     [1, 5, 13]],
+    [3000, [1, 5, 11],     [0, 3, 7]],
+    [7000, [1, 3, 7],      [0, 1, 4]],
+    [10911,[0, 2, 5],      [0, 1, 3]],
+  ];
+  function bgColors(d) {
+    let i = 0;
+    while (i < BG_STOPS.length - 2 && BG_STOPS[i + 1][0] < d) i++;
+    const [d0, t0, b0] = BG_STOPS[i], [d1, t1, b1] = BG_STOPS[i + 1];
+    const t = clamp((d - d0) / (d1 - d0), 0, 1);
+    const mix = (a, b) => `rgb(${Math.round(lerp(a[0],b[0],t))},${Math.round(lerp(a[1],b[1],t))},${Math.round(lerp(a[2],b[2],t))})`;
+    return [mix(t0, t1), mix(b0, b1)];
+  }
+
+  const ZONES = [
+    { d: 0,    en: "EPIPELAGIC ZONE",    jp: "表層 ― 光の海",       note: "太陽の光が満ちる、生命あふれる世界" },
+    { d: 200,  en: "TWILIGHT ZONE",      jp: "トワイライトゾーン",   note: "光がわずかに届く、薄明の世界" },
+    { d: 1000, en: "MIDNIGHT ZONE",      jp: "ミッドナイトゾーン",   note: "太陽の光が完全に途絶えた、永遠の闇" },
+    { d: 4000, en: "ABYSSAL ZONE",       jp: "深海層 ― アビス",     note: "水温2°C。ここまで来た人類はごくわずか" },
+    { d: 6000, en: "HADAL ZONE",         jp: "超深海 ― 海溝の中へ", note: "地球でもっとも深い、最後の秘境" },
+  ];
+
+  const MILESTONES = [
+    { d: 100,  t: "水深100m ― フリーダイビング(素潜り)の世界記録に迫る深さ" },
+    { d: 332,  t: "水深332m ― スキューバ潜水の世界最深記録" },
+    { d: 535,  t: "水深535m ― コウテイペンギンの最深潜水記録" },
+    { d: 1000, t: "水深1,000m ― ここから先、太陽の光は一切届かない" },
+    { d: 2000, t: "水深2,000m ― マッコウクジラの狩り場。巨大イカとの戦いの跡が体に残る" },
+    { d: 3800, t: "水深3,800m ― タイタニック号が眠る深さ" },
+    { d: 6500, t: "水深6,500m ― 有人潜水調査船「しんかい6500」の潜航限界" },
+    { d: 8178, t: "水深8,178m ― 魚類が確認された最深記録(シンカイクサウオ)" },
+    { d: 10000,t: "水深10,000m ― エベレストを沈めても、まだ底には届かない" },
+  ];
+  const firedMilestones = new Set();
+
+  // ============================================================
+  //  AUDIO — fully synthesized underwater soundscape
+  // ============================================================
+  let AU = null;
+  let soundOn = true;
+
+  function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const acx = new AC();
+    const master = acx.createGain();
+    master.gain.value = 0;
+    master.connect(acx.destination);
+
+    // ambient: looped noise through a depth-controlled lowpass
+    const len = acx.sampleRate * 2;
+    const buf = acx.createBuffer(1, len, acx.sampleRate);
+    const ch = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { // brown-ish noise
+      last = (last + (Math.random() * 2 - 1) * 0.04) * 0.985;
+      ch[i] = last * 6;
+    }
+    const noise = acx.createBufferSource();
+    noise.buffer = buf; noise.loop = true;
+    const nFilt = acx.createBiquadFilter();
+    nFilt.type = "lowpass"; nFilt.frequency.value = 400;
+    const nGain = acx.createGain(); nGain.gain.value = 0.12;
+    noise.connect(nFilt); nFilt.connect(nGain); nGain.connect(master);
+    noise.start();
+
+    // deep drone
+    const drone = acx.createOscillator();
+    drone.type = "sine"; drone.frequency.value = 48;
+    const dGain = acx.createGain(); dGain.gain.value = 0.05;
+    const lfo = acx.createOscillator(); lfo.frequency.value = 0.07;
+    const lfoG = acx.createGain(); lfoG.gain.value = 0.025;
+    lfo.connect(lfoG); lfoG.connect(dGain.gain);
+    drone.connect(dGain); dGain.connect(master);
+    drone.start(); lfo.start();
+
+    // echo bus for pings
+    const delay = acx.createDelay(1); delay.delayTime.value = 0.37;
+    const fb = acx.createGain(); fb.gain.value = 0.38;
+    const wet = acx.createGain(); wet.gain.value = 0.5;
+    delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(master);
+
+    AU = { acx, master, nFilt, delay };
+    setSound(soundOn);
+  }
+  function setSound(on) {
+    soundOn = on;
+    if (!AU) return;
+    if (AU.acx.state === "suspended") AU.acx.resume();
+    AU.master.gain.setTargetAtTime(on ? 0.8 : 0, AU.acx.currentTime, 0.6);
+  }
+  function tone(freq, dur, vol, type = "sine", glideTo = null, echo = false) {
+    if (!AU || !soundOn) return;
+    const { acx, master, delay } = AU;
+    const t = acx.currentTime;
+    const o = acx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(Math.max(glideTo, 20), t + dur);
+    const g = acx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    if (echo) g.connect(delay);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noiseBurst(dur, vol, freq, type = "highpass") {
+    if (!AU || !soundOn) return;
+    const { acx, master } = AU;
+    const t = acx.currentTime;
+    const len = Math.ceil(acx.sampleRate * dur);
+    const buf = acx.createBuffer(1, len, acx.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = acx.createBufferSource(); src.buffer = buf;
+    const f = acx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+    const g = acx.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start(t);
+  }
+  const sfx = {
+    shutter() { noiseBurst(0.07, 0.5, 2500); tone(1150, 0.5, 0.12, "sine", 900, true); },
+    chime() { tone(660, 0.7, 0.14); setTimeout(() => tone(990, 1.0, 0.12), 130); },
+    creak() { tone(rand(70, 160), rand(0.5, 1.1), 0.12, "sawtooth", rand(40, 80)); },
+    whale() {
+      tone(70, 2.6, 0.22, "sine", 190);
+      setTimeout(() => tone(180, 3.2, 0.18, "sine", 55), 1400);
+    },
+    rumble() { tone(30, 3, 0.3, "sine", 22); noiseBurst(2, 0.12, 90, "lowpass"); },
+    denied() { tone(220, 0.15, 0.08, "square"); },
+  };
+  let creakTimer = 10;
+
+  // ============================================================
+  //  SPECIES — 26 real deep-sea inhabitants & landmarks
+  // ============================================================
+  function ell(c, x, y, rx, ry, fill, rot = 0) {
+    c.save(); c.translate(x, y); if (rot) c.rotate(rot);
+    c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, TAU);
+    c.fillStyle = fill; c.fill(); c.restore();
+  }
+  function poly(c, pts, fill, close = true) {
+    c.beginPath(); c.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+    if (close) c.closePath();
+    c.fillStyle = fill; c.fill();
+  }
+  // generic small fish, facing +x, length L
+  function fishlet(c, L, col, belly, tailT) {
+    ell(c, 0, 0, L * 0.5, L * 0.16, col);
+    if (belly) ell(c, 0, L * 0.05, L * 0.44, L * 0.1, belly);
+    poly(c, [[-L * 0.42, 0], [-L * 0.62, -L * 0.18 * Math.cos(tailT)], [-L * 0.62, L * 0.18 * Math.cos(tailT)]], col);
+    c.fillStyle = "#06131f";
+    c.beginPath(); c.arc(L * 0.34, -L * 0.03, Math.max(L * 0.04, 1.2), 0, TAU); c.fill();
+  }
+  function glowDot(c, x, y, r, col) {
+    const g = c.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = g;
+    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+  }
+  function segPath(c, segs, ox, oy, widthFn, fill) {
+    // ribbon body through chain segments (relative to entity origin)
+    c.beginPath();
+    const n = segs.length;
+    for (let i = 0; i < n; i++) {
+      const w = widthFn(i / (n - 1));
+      const p = segs[i], q = segs[Math.min(i + 1, n - 1)];
+      let dx = q.x - p.x, dy = q.y - p.y;
+      const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+      const px_ = -dy * w, py_ = dx * w;
+      if (i === 0) c.moveTo(p.x - ox + px_, p.y - oy + py_);
+      else c.lineTo(p.x - ox + px_, p.y - oy + py_);
+    }
+    for (let i = n - 1; i >= 0; i--) {
+      const w = widthFn(i / (n - 1));
+      const p = segs[i], q = segs[Math.min(i + 1, n - 1)];
+      let dx = q.x - p.x, dy = q.y - p.y;
+      const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+      c.lineTo(p.x - ox - (-dy * w), p.y - oy - (dx * w));
+    }
+    c.closePath(); c.fillStyle = fill; c.fill();
+  }
+
+  const SPECIES = [
+  // ---------------- sunlit & twilight ----------------
+  {
+    id: "iwashi", name: "マイワシの群れ", en: "Sardine School",
+    min: 5, max: 130, w: 3, r: 70, move: "school", skit: true, cool: 8, maxA: 2,
+    fact: "群れ全体がひとつの生き物のように動き、光の壁「ベイトボール」を作って捕食者を混乱させる。",
+    draw(c, e, t) {
+      for (const m of e.members) {
+        c.save();
+        c.translate(m.ox + Math.sin(t * 3 + m.ph) * 6, m.oy + Math.cos(t * 2.2 + m.ph) * 4);
+        fishlet(c, 24, "#9fb8cc", "#dfe9f2", t * 10 + m.ph);
+        c.restore();
+      }
+    },
+  },
+  {
+    id: "kurage", name: "ミズクラゲ", en: "Moon Jelly",
+    min: 5, max: 220, w: 2.2, r: 46, move: "drift", cool: 6, maxA: 3, noflip: true,
+    fact: "体の95%以上が水分。4つの輪はクローバーではなく生殖腺。5億年前から姿を変えず海を漂いつづけている。",
+    draw(c, e, t) {
+      const p = 1 + Math.sin(t * 2.4) * 0.1;
+      c.globalAlpha = 0.85;
+      const g = c.createRadialGradient(0, -6, 4, 0, 0, 42 * p);
+      g.addColorStop(0, "rgba(210,235,255,0.75)");
+      g.addColorStop(0.8, "rgba(160,200,240,0.35)");
+      g.addColorStop(1, "rgba(140,190,240,0.05)");
+      c.fillStyle = g;
+      c.beginPath(); c.arc(0, 0, 42 * p, Math.PI, 0);
+      c.quadraticCurveTo(30 * p, 14, 0, 12);
+      c.quadraticCurveTo(-30 * p, 14, -42 * p, 0);
+      c.fill();
+      for (let i = 0; i < 4; i++)
+        ell(c, Math.cos(i * TAU / 4 + 0.8) * 12, -8 + Math.sin(i * TAU / 4 + 0.8) * 7, 6, 4.5, "rgba(190,160,220,0.5)");
+      c.strokeStyle = "rgba(200,225,250,0.4)"; c.lineWidth = 1.4;
+      for (let i = -3; i <= 3; i++) {
+        c.beginPath(); c.moveTo(i * 10, 10);
+        c.quadraticCurveTo(i * 10 + Math.sin(t * 2 + i) * 7, 30, i * 8 + Math.sin(t * 1.6 + i * 2) * 10, 46);
+        c.stroke();
+      }
+      c.globalAlpha = 1;
+    },
+  },
+  {
+    id: "umigame", name: "アオウミガメ", en: "Green Sea Turtle",
+    min: 8, max: 160, w: 1.6, r: 60, move: "cruise", sp0: 0.9, cool: 12, maxA: 1,
+    fact: "地磁気を読んで数千kmの海を旅し、自分が生まれた砂浜に正確に戻って産卵する。",
+    draw(c, e, t) {
+      const s = Math.sin(t * 2.6);
+      ell(c, -18, -14 + s * 3, 26, 9, "#3f6b52", 0.5 + s * 0.25);   // front flipper (far)
+      ell(c, 0, 0, 40, 26, "#2e5643");                               // shell
+      ell(c, 0, -3, 32, 19, "#3d7057");
+      c.strokeStyle = "rgba(20,40,30,0.5)"; c.lineWidth = 1.5;
+      for (let i = -1; i <= 1; i++) { c.beginPath(); c.arc(i * 16, -2, 9, 0, TAU); c.stroke(); }
+      ell(c, 44, -2, 13, 8.5, "#4a7d63");                            // head
+      c.fillStyle = "#0a1a12"; c.beginPath(); c.arc(50, -4, 1.8, 0, TAU); c.fill();
+      ell(c, -14, -16 + s * 4, 27, 9, "#4a7d63", 0.45 + s * 0.3);    // front flipper (near)
+      ell(c, -34, 12, 14, 6, "#3f6b52", -0.4 - s * 0.2);             // rear flipper
+    },
+  },
+  {
+    id: "manbou", name: "マンボウ", en: "Ocean Sunfish",
+    min: 30, max: 420, w: 1.4, r: 80, move: "cruise", sp0: 0.5, cool: 14, maxA: 1,
+    fact: "一度に3億個の卵を産む、世界最大級の硬骨魚。日光浴のように海面に横たわる姿から「Sunfish」と呼ばれる。",
+    draw(c, e, t) {
+      const f = Math.sin(t * 3.2) * 0.3;
+      ell(c, 0, 0, 52, 40, "#7d8fa0");
+      ell(c, 6, 4, 42, 30, "#93a5b5");
+      poly(c, [[8, -34], [26, -78], [34, -34]], "#6c7e90");          // top fin
+      c.save(); c.translate(24, 36); c.rotate(f);
+      poly(c, [[-14, 0], [6, 44], [12, -2]], "#6c7e90"); c.restore(); // bottom fin
+      poly(c, [[46, -18], [58, -8], [58, 10], [46, 20]], "#8ba0b0"); // clavus
+      c.fillStyle = "#0c1822"; c.beginPath(); c.arc(38, -10, 4, 0, TAU); c.fill();
+      c.beginPath(); c.arc(52, 2, 3, 0, Math.PI * 0.9); c.strokeStyle = "#3c4c5a"; c.lineWidth = 2; c.stroke();
+    },
+  },
+  {
+    id: "shumoku", name: "シュモクザメ", en: "Hammerhead Shark",
+    min: 60, max: 320, w: 1.5, r: 95, move: "cruise", sp0: 1.7, cool: 14, maxA: 1,
+    fact: "T字型の頭部に並んだ電気センサーで、砂の中に隠れた獲物のかすかな電場を感知して狩りをする。",
+    draw(c, e, t) {
+      const s = Math.sin(t * 5) * 0.18;
+      c.save(); c.rotate(s * 0.08);
+      poly(c, [[-70, 0], [-96, -20 - s * 16], [-88, 0], [-96, 14]], "#5d7180"); // tail
+      ell(c, 0, 0, 74, 17, "#687c8b");
+      ell(c, 4, 5, 68, 11, "#94a6b2");
+      poly(c, [[-6, -14], [10, -40], [22, -14]], "#5d7180");          // dorsal
+      ell(c, 12, 14, 18, 6, "#5d7180", 0.5);                          // pectoral
+      poly(c, [[62, -4], [86, -16], [90, -8], [70, 2], [90, 4], [86, 12], [62, 6]], "#687c8b"); // hammer
+      c.fillStyle = "#0a141c";
+      c.beginPath(); c.arc(87, -11, 2.4, 0, TAU); c.fill();
+      c.beginPath(); c.arc(87, 8, 2.4, 0, TAU); c.fill();
+      c.restore();
+    },
+  },
+  {
+    id: "hotaru", name: "ホタルイカの群れ", en: "Firefly Squid",
+    min: 200, max: 620, w: 2.4, r: 60, move: "school", biolum: true, cool: 9, maxA: 2, noflip: true,
+    fact: "体中の発光器で青白く輝く。富山湾では産卵期の春、海岸が数百万匹の青い光で埋め尽くされる。",
+    draw(c, e, t) {
+      for (const m of e.members) {
+        const x = m.ox + Math.sin(t * 1.8 + m.ph) * 8, y = m.oy + Math.cos(t * 1.4 + m.ph) * 8;
+        c.save(); c.translate(x, y); c.rotate(Math.sin(t + m.ph) * 0.4);
+        ell(c, 0, 0, 4, 8, "rgba(150,120,180,0.8)");
+        ell(c, 0, 9, 3, 4, "rgba(130,100,160,0.8)");
+        c.restore();
+      }
+    },
+    glow(c, e, t) {
+      for (const m of e.members) {
+        if (Math.sin(t * 2.6 + m.ph * 7) > 0.2)
+          glowDot(c, m.ox + Math.sin(t * 1.8 + m.ph) * 8, m.oy + Math.cos(t * 1.4 + m.ph) * 8, 9, "rgba(110,200,255,0.8)");
+      }
+    },
+  },
+  {
+    id: "ryugu", name: "リュウグウノツカイ", en: "Oarfish",
+    min: 210, max: 1000, w: 1.1, r: 190, move: "ribbonV", segN: 26, segSp: 15, cool: 25, maxA: 1, noflip: true, rare: true,
+    fact: "全長11mに達する世界最長の硬骨魚。銀色の体を立てたまま漂い、古来「竜宮の使い」として伝説になった。",
+    draw(c, e, t) {
+      segPath(c, e.segs, e.x, e.y, u => 12 - u * 9, "#c9d4e4");
+      // red dorsal fringe
+      c.strokeStyle = "rgba(230,70,70,0.85)"; c.lineWidth = 4; c.lineCap = "round";
+      c.beginPath();
+      for (let i = 0; i < e.segs.length; i += 2) {
+        const p = e.segs[i];
+        c.moveTo(p.x - e.x - 10, p.y - e.y);
+        c.lineTo(p.x - e.x - 17 - Math.sin(t * 3 + i) * 3, p.y - e.y + 3);
+      }
+      c.stroke();
+      // head crest
+      const h = e.segs[0];
+      c.strokeStyle = "rgba(235,60,60,0.9)"; c.lineWidth = 3;
+      for (let i = 0; i < 4; i++) {
+        c.beginPath();
+        c.moveTo(h.x - e.x, h.y - e.y - 4);
+        c.quadraticCurveTo(h.x - e.x - 8 - i * 7, h.y - e.y - 26 - i * 9, h.x - e.x - 16 - i * 9, h.y - e.y - 20 - i * 10);
+        c.stroke();
+      }
+      c.fillStyle = "#111c28"; c.beginPath(); c.arc(h.x - e.x + 4, h.y - e.y + 2, 3, 0, TAU); c.fill();
+    },
+  },
+  {
+    id: "demenigisu", name: "デメニギス", en: "Barreleye",
+    min: 400, max: 830, w: 1.6, r: 55, move: "hover", skit: true, cool: 12, maxA: 1,
+    fact: "透明なドーム状の頭の中に、緑色の筒型の目が入っている。目は上を向き、頭上を通る獲物の影を探す。",
+    draw(c, e, t) {
+      ell(c, -8, 2, 34, 15, "#37505f");
+      ell(c, -6, 6, 30, 9, "#22343f");
+      poly(c, [[-36, 2], [-52, -8], [-52, 12]], "#37505f");
+      ell(c, -22, -12 + Math.sin(t * 4) * 2, 10, 4, "#2c4552", 0.4); // fin
+      // transparent dome
+      c.beginPath(); c.arc(16, -8, 17, Math.PI * 1.05, Math.PI * 2.1);
+      c.fillStyle = "rgba(140,200,235,0.16)"; c.fill();
+      c.strokeStyle = "rgba(170,220,250,0.5)"; c.lineWidth = 1.4; c.stroke();
+      // tube eyes inside, looking up
+      ell(c, 10, -10, 4, 6.5, "#4fe089");
+      ell(c, 20, -10, 4, 6.5, "#4fe089");
+      ell(c, 10, -14, 3, 2.4, "#0d2417");
+      ell(c, 20, -14, 3, 2.4, "#0d2417");
+      c.fillStyle = "#0a141c"; c.beginPath(); c.arc(28, 4, 1.6, 0, TAU); c.fill(); // tiny mouth-area
+    },
+  },
+  {
+    id: "sarupa", name: "クダクラゲの群体", en: "Siphonophore",
+    min: 300, max: 1300, w: 1.2, r: 160, move: "ribbonH", segN: 22, segSp: 15, biolum: true, cool: 20, maxA: 1, noflip: true,
+    fact: "無数の小さな個体が連なってひとつの体として生きる群体。全長40mを超え、シロナガスクジラより長い個体も見つかっている。",
+    draw(c, e, t) {
+      c.globalAlpha = 0.8;
+      for (let i = 0; i < e.segs.length; i++) {
+        const p = e.segs[i];
+        const r = 7 + Math.sin(i * 1.7) * 2;
+        ell(c, p.x - e.x, p.y - e.y, r, r * 0.72, "rgba(200,190,235,0.28)");
+        if (i % 3 === 0) ell(c, p.x - e.x, p.y - e.y + 5, 2.4, 5, "rgba(240,150,170,0.5)");
+      }
+      c.strokeStyle = "rgba(250,170,190,0.55)"; c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(e.segs[0].x - e.x, e.segs[0].y - e.y);
+      for (const p of e.segs) c.lineTo(p.x - e.x, p.y - e.y);
+      c.stroke();
+      c.globalAlpha = 1;
+    },
+    glow(c, e, t) {
+      for (let i = 0; i < e.segs.length; i += 2) {
+        const p = e.segs[i];
+        if (Math.sin(t * 3 + i * 1.3) > 0.55)
+          glowDot(c, p.x - e.x, p.y - e.y, 8, "rgba(150,190,255,0.7)");
+      }
+    },
+  },
+  {
+    id: "hourai", name: "ホウライエソ", en: "Viperfish",
+    min: 480, max: 1600, w: 1.7, r: 75, move: "cruise", sp0: 1.1, biolum: true, cool: 10, maxA: 2,
+    fact: "牙が大きすぎて口を閉じることができない。長い背びれの先の発光器を振って獲物をおびき寄せる。",
+    draw(c, e, t) {
+      poly(c, [[-52, 0], [-66, -10], [-66, 10]], "#1d2b36");
+      ell(c, 0, 0, 54, 11, "#233543");
+      ell(c, 2, 3, 48, 7, "#2f4453");
+      // gaping jaw with fangs
+      poly(c, [[40, -4], [64, -14], [58, -2]], "#233543");
+      poly(c, [[40, 2], [62, 14], [56, 3]], "#1b2933");
+      c.strokeStyle = "#cfe4ee"; c.lineWidth = 1.6; c.lineCap = "round";
+      for (let i = 0; i < 4; i++) {
+        c.beginPath(); c.moveTo(48 + i * 4, -8 + i); c.lineTo(46 + i * 4, 2 + i * 0.5); c.stroke();
+        c.beginPath(); c.moveTo(47 + i * 4, 9 - i * 0.5); c.lineTo(45 + i * 4, -1); c.stroke();
+      }
+      c.fillStyle = "#9adcff"; c.beginPath(); c.arc(38, -5, 3, 0, TAU); c.fill();
+      c.fillStyle = "#08121a"; c.beginPath(); c.arc(39, -5, 1.7, 0, TAU); c.fill();
+      // dorsal ray with lure
+      c.strokeStyle = "rgba(160,200,230,0.5)"; c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(10, -10);
+      c.quadraticCurveTo(30, -42, 52 + Math.sin(t * 2.5) * 8, -34); c.stroke();
+    },
+    glow(c, e, t) {
+      glowDot(c, (52 + Math.sin(t * 2.5) * 8) * e.dir, -34, 10, "rgba(140,220,255,0.9)");
+      for (let i = -4; i <= 4; i++) glowDot(c, i * 10 * e.dir, 8, 3.5, "rgba(90,180,255,0.5)");
+    },
+  },
+  {
+    id: "coelacanth", name: "シーラカンス", en: "Coelacanth",
+    min: 150, max: 720, w: 0.9, r: 95, move: "cruise", sp0: 0.7, skit: true, cool: 22, maxA: 1, rare: true,
+    fact: "「生きた化石」。4億年前からほぼ姿を変えていない。肉厚のヒレは、陸へ上がった生物の足の起源に近いとされる。",
+    draw(c, e, t) {
+      const s = Math.sin(t * 2.2);
+      poly(c, [[-62, 0], [-84, -16], [-80, 0], [-84, 16]], "#31506b");
+      ell(c, -66, 0, 8, 5, "#3c6080");
+      ell(c, 0, 0, 64, 22, "#33546f");
+      ell(c, 4, 6, 56, 14, "#41678a");
+      // white speckles
+      c.fillStyle = "rgba(220,235,245,0.6)";
+      for (let i = 0; i < 12; i++) {
+        const a = n1(e.seed + i * 3), b = n1(e.seed + i * 7);
+        c.beginPath(); c.arc(-40 + a * 90, -12 + b * 24, 1.6, 0, TAU); c.fill();
+      }
+      // lobed fins
+      ell(c, 8, 18, 14, 6, "#2b4a63", 0.7 + s * 0.3);
+      ell(c, -18, 16, 12, 5, "#2b4a63", 0.5 - s * 0.3);
+      poly(c, [[-8, -18], [4, -34], [16, -18]], "#2b4a63");
+      ell(c, 46, -4, 4, 4, "#dff2ff");
+      c.fillStyle = "#0a1622"; c.beginPath(); c.arc(47, -4, 2.2, 0, TAU); c.fill();
+      c.strokeStyle = "#22394e"; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(58, 6); c.quadraticCurveTo(48, 10, 40, 8); c.stroke();
+    },
+  },
+  {
+    id: "makko", name: "マッコウクジラ", en: "Sperm Whale",
+    min: 300, max: 2300, w: 0.8, r: 380, move: "whale", sp0: 0.9, cool: 45, maxA: 1, rare: true,
+    fact: "ダイオウイカを求めて2,000m以上まで潜り、90分間息を止める。巨大な頭には音のレンズ「脳油」が詰まっている。",
+    draw(c, e, t) {
+      const f = Math.sin(t * 1.6);
+      c.save(); c.rotate(f * 0.02);
+      // fluke
+      c.save(); c.translate(-330, 0); c.rotate(f * 0.3);
+      poly(c, [[0, 0], [-64, -40], [-46, 0], [-64, 40]], "#46586a"); c.restore();
+      // body: blocky head tapering tail
+      c.beginPath();
+      c.moveTo(190, -58);
+      c.quadraticCurveTo(230, -54, 232, -10);
+      c.quadraticCurveTo(232, 30, 190, 40);
+      c.lineTo(40, 52);
+      c.quadraticCurveTo(-160, 46, -280, 16);
+      c.quadraticCurveTo(-330, 6, -330, 0);
+      c.quadraticCurveTo(-320, -20, -240, -34);
+      c.quadraticCurveTo(-60, -66, 190, -58);
+      c.closePath();
+      c.fillStyle = "#51647a"; c.fill();
+      c.fillStyle = "rgba(255,255,255,0.07)";
+      c.beginPath(); c.ellipse(-20, 30, 200, 22, -0.03, 0, TAU); c.fill();
+      // jaw
+      c.strokeStyle = "#2e3d4d"; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(226, 26); c.quadraticCurveTo(150, 44, 60, 46); c.stroke();
+      // eye + scars
+      c.fillStyle = "#0d151d"; c.beginPath(); c.arc(178, 18, 5, 0, TAU); c.fill();
+      c.strokeStyle = "rgba(220,230,240,0.25)"; c.lineWidth = 2;
+      for (let i = 0; i < 5; i++) {
+        const a = n1(e.seed + i * 11);
+        c.beginPath(); c.moveTo(120 + a * 80, -40 + a * 30);
+        c.lineTo(150 + a * 80, -34 + a * 30); c.stroke();
+      }
+      ell(c, 60, 40, 26, 10, "#3c4d5f", 0.5 + f * 0.1); // pectoral
+      c.restore();
+    },
+  },
+  {
+    id: "onikinme", name: "オニキンメ", en: "Fangtooth",
+    min: 500, max: 2100, w: 1.7, r: 48, move: "hover", cool: 10, maxA: 2,
+    fact: "体長に対する歯の比率は魚類で最大級。あまりに長い下の牙を収めるため、脳の左右に「鞘」の穴がある。",
+    draw(c, e, t) {
+      poly(c, [[-28, 0], [-40, -8], [-40, 8]], "#231d28");
+      ell(c, 0, 0, 30, 17, "#2c2433");
+      ell(c, 2, 4, 26, 11, "#3a3044");
+      // big head jaw open
+      poly(c, [[14, -6], [34, -2], [30, 6], [12, 8]], "#241d2b");
+      c.strokeStyle = "#e8eef4"; c.lineWidth = 1.8; c.lineCap = "round";
+      c.beginPath(); c.moveTo(26, -1); c.lineTo(24, 6); c.stroke();
+      c.beginPath(); c.moveTo(30, 0); c.lineTo(28, 5); c.stroke();
+      c.beginPath(); c.moveTo(24, 9); c.lineTo(22, 2); c.stroke();
+      c.beginPath(); c.moveTo(28, 8); c.lineTo(27, 3); c.stroke();
+      c.fillStyle = "#0a0d12"; c.beginPath(); c.arc(16, -7, 2.6, 0, TAU); c.fill();
+      ell(c, -6, -15 + Math.sin(t * 5) * 2, 8, 3.5, "#241d2b", -0.3);
+    },
+  },
+  {
+    id: "koumori", name: "コウモリダコ", en: "Vampire Squid",
+    min: 600, max: 1300, w: 1.3, r: 60, move: "flap", biolum: true, cool: 14, maxA: 1, noflip: true,
+    fact: "名前は怖いが吸血はせず、海に降る「マリンスノー」を食べる穏やかな生き物。敵には光る粘液を吐いて姿を消す。",
+    draw(c, e, t) {
+      const fl = Math.sin(t * 2.8);
+      // webbed arms (umbrella)
+      c.beginPath(); c.moveTo(-26, 6);
+      for (let i = 0; i <= 8; i++) {
+        const a = Math.PI * 0.15 + (i / 8) * Math.PI * 0.7;
+        const r = 34 + Math.sin(t * 2.8 + i) * 5;
+        c.quadraticCurveTo(Math.cos(a - 0.1) * r * 1.15, 6 + Math.sin(a - 0.1) * r * 1.15,
+                           Math.cos(a) * r * ((i % 2) ? 1 : 0.82), 6 + Math.sin(a) * r * ((i % 2) ? 1 : 0.82));
+      }
+      c.closePath(); c.fillStyle = "#4d1f2a"; c.fill();
+      ell(c, 0, -6, 24, 27, "#6b2735");
+      ell(c, -14 - fl * 3, -22, 10, 15, "#5a2230", -0.5); // ear fins
+      ell(c, 14 + fl * 3, -22, 10, 15, "#5a2230", 0.5);
+      c.fillStyle = "#bdd8ea"; c.beginPath(); c.arc(-9, -6, 6, 0, TAU); c.fill();
+      c.fillStyle = "#0d151d"; c.beginPath(); c.arc(-9, -6, 3.4, 0, TAU); c.fill();
+    },
+    glow(c, e, t) {
+      if (e.litT > 0.4) {
+        for (let i = 0; i <= 8; i++) {
+          const a = Math.PI * 0.15 + (i / 8) * Math.PI * 0.7;
+          glowDot(c, Math.cos(a) * 36, 6 + Math.sin(a) * 36, 7, "rgba(140,210,255,0.75)");
+        }
+      }
+      glowDot(c, 14, -30, 5, "rgba(150,220,255,0.5)");
+    },
+  },
+  {
+    id: "daiou", name: "ダイオウイカ", en: "Giant Squid",
+    min: 620, max: 1150, w: 0.55, r: 240, move: "jet", biolum: false, cool: 60, maxA: 1, rare: true,
+    fact: "全長18m、目の直径は約30cm ― 動物界最大の目を持つ。生きた姿が撮影されたのは2004年、人類史上初めてのことだった。",
+    draw(c, e, t) {
+      const sw = Math.sin(t * 1.8);
+      // mantle (facing +x = mantle forward)
+      poly(c, [[120, 0], [180, -14], [204, 0], [180, 14]], "#8c3b34");   // fins
+      ell(c, 90, 0, 96, 27, "#a34a40");
+      ell(c, 92, 5, 88, 18, "#b85c50");
+      // head & eye
+      ell(c, -16, 0, 26, 22, "#a34a40");
+      c.fillStyle = "#dff0fa"; c.beginPath(); c.arc(-18, -2, 12, 0, TAU); c.fill();
+      c.fillStyle = "#0a1219"; c.beginPath(); c.arc(-16, -2, 6.5, 0, TAU); c.fill();
+      // 8 arms
+      c.lineCap = "round";
+      for (let i = 0; i < 8; i++) {
+        const off = (i - 3.5) * 7;
+        c.strokeStyle = i % 2 ? "#8c3b34" : "#a34a40";
+        c.lineWidth = 7 - Math.abs(i - 3.5);
+        c.beginPath(); c.moveTo(-34, off * 0.6);
+        c.quadraticCurveTo(-90, off + Math.sin(sw + i) * 10, -150 - Math.abs(off) * 1.5, off * 2 + Math.sin(t * 1.3 + i) * 16);
+        c.stroke();
+      }
+      // two long feeding tentacles
+      c.strokeStyle = "#c76a58"; c.lineWidth = 3.5;
+      for (const s of [-1, 1]) {
+        c.beginPath(); c.moveTo(-34, s * 8);
+        c.quadraticCurveTo(-140, s * 30 + sw * 12, -250, s * 14 + Math.sin(t + s) * 22);
+        c.stroke();
+        ell(c, -250, s * 14 + Math.sin(t + s) * 22, 12, 5, "#c76a58", s * 0.3);
+      }
+    },
+  },
+
+  // ---------------- midnight & abyssal ----------------
+  {
+    id: "chouchin", name: "チョウチンアンコウ", en: "Anglerfish",
+    min: 800, max: 2700, w: 1.6, r: 70, move: "hover", biolum: true, lure: true, cool: 14, maxA: 1,
+    fact: "提灯の中に発光バクテリアを住まわせ、闇に灯りをともして獲物を誘う。光に近づいてきたものは、一瞬で丸呑みにされる。",
+    draw(c, e, t) {
+      poly(c, [[-36, 0], [-50, -12], [-50, 12]], "#1c2733");
+      ell(c, 0, 2, 40, 26, "#243240");
+      ell(c, 2, 8, 34, 17, "#2e4152");
+      // giant mouth
+      c.beginPath(); c.moveTo(14, -8);
+      c.quadraticCurveTo(40, -6, 42, 2);
+      c.quadraticCurveTo(38, 16, 10, 18);
+      c.quadraticCurveTo(26, 8, 14, -8);
+      c.fillStyle = "#131c26"; c.fill();
+      c.strokeStyle = "#dfeaf2"; c.lineWidth = 1.6; c.lineCap = "round";
+      for (let i = 0; i < 5; i++) {
+        c.beginPath(); c.moveTo(18 + i * 5, -4 + i * 0.8); c.lineTo(15 + i * 5, 3 + i * 0.8); c.stroke();
+        c.beginPath(); c.moveTo(16 + i * 5, 16 - i * 0.4); c.lineTo(14 + i * 5, 9); c.stroke();
+      }
+      c.fillStyle = "#9adcff"; c.beginPath(); c.arc(8, -10, 4, 0, TAU); c.fill();
+      c.fillStyle = "#08121a"; c.beginPath(); c.arc(9, -10, 2.2, 0, TAU); c.fill();
+      // illicium (lure stalk)
+      c.strokeStyle = "rgba(180,210,235,0.6)"; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(4, -22);
+      c.quadraticCurveTo(14, -48, 34, -40 + Math.sin(t * 2) * 4);
+      c.stroke();
+      ell(c, -6, -26 + Math.sin(t * 4.5) * 1.5, 9, 4, "#1c2733", -0.25);
+    },
+    glow(c, e, t) {
+      const y = -40 + Math.sin(t * 2) * 4;
+      const pulse = 0.75 + Math.sin(t * 5.2) * 0.25;
+      glowDot(c, 34 * e.dir, y, 16 * pulse, "rgba(160,225,255,0.95)");
+      glowDot(c, 34 * e.dir, y, 42 * pulse, "rgba(90,170,255,0.28)");
+    },
+  },
+  {
+    id: "fukuro", name: "フクロウナギ", en: "Gulper Eel",
+    min: 1000, max: 3100, w: 1.4, r: 130, move: "ribbonH", segN: 18, segSp: 12, biolum: true, cool: 16, maxA: 1, noflip: true,
+    fact: "体のほとんどが口。傘のように開く巨大な顎で、自分より大きな獲物さえ袋のような胃に丸呑みする。尾の先は赤く光る。",
+    draw(c, e, t) {
+      // tail chain first
+      segPath(c, e.segs, e.x, e.y, u => 6 - u * 4.5, "#1f2530");
+      // huge balloon jaw at head
+      const h = e.segs[0], hx = h.x - e.x, hy = h.y - e.y;
+      const open = 0.55 + Math.sin(t * 1.4) * 0.25;
+      c.save(); c.translate(hx, hy); c.rotate(e.hAng || 0);
+      c.beginPath();
+      c.moveTo(0, -4);
+      c.quadraticCurveTo(34, -20 - open * 14, 56, -6 - open * 10);
+      c.quadraticCurveTo(44, 0, 56, 8 + open * 16);
+      c.quadraticCurveTo(30, 26 + open * 10, 0, 8);
+      c.closePath();
+      c.fillStyle = "#252c3a"; c.fill();
+      c.beginPath();
+      c.moveTo(4, -2);
+      c.quadraticCurveTo(34, -12 - open * 10, 52, -4 - open * 8);
+      c.quadraticCurveTo(40, 2, 30, 4);
+      c.fillStyle = "#11161f"; c.fill();
+      c.fillStyle = "#9adcff"; c.beginPath(); c.arc(6, -6, 2.6, 0, TAU); c.fill();
+      c.restore();
+    },
+    glow(c, e, t) {
+      const tl = e.segs[e.segs.length - 1];
+      glowDot(c, tl.x - e.x, tl.y - e.y, 8 + Math.sin(t * 6) * 2, "rgba(255,90,90,0.85)");
+    },
+  },
+  {
+    id: "yumenamako", name: "ユメナマコ", en: "Sea Pig (Swimming Sea Cucumber)",
+    min: 900, max: 5600, w: 1.5, r: 55, move: "drift", biolum: true, cool: 12, maxA: 2, noflip: true,
+    fact: "「夢のように」漂いながら泳ぐ深海のナマコ。体はほぼ透明で、食べたばかりの泥が入った腸まで透けて見える。",
+    draw(c, e, t) {
+      const p = Math.sin(t * 2.2);
+      c.globalAlpha = 0.85;
+      ell(c, 0, 0, 34 + p * 3, 22 - p * 2, "rgba(240,140,170,0.45)");
+      ell(c, 0, 2, 28, 16, "rgba(250,170,195,0.35)");
+      // visible gut
+      c.strokeStyle = "rgba(150,60,90,0.5)"; c.lineWidth = 5; c.lineCap = "round";
+      c.beginPath(); c.moveTo(-18, 2);
+      c.bezierCurveTo(-6, -8, 8, 10, 20, 0);
+      c.stroke();
+      // veil / papillae
+      c.strokeStyle = "rgba(250,160,190,0.5)"; c.lineWidth = 3;
+      for (let i = -2; i <= 2; i++) {
+        c.beginPath(); c.moveTo(i * 12, 18);
+        c.lineTo(i * 12 + Math.sin(t * 3 + i) * 4, 30 + p * 3); c.stroke();
+        c.beginPath(); c.moveTo(i * 12, -16 - p * 3);
+        c.lineTo(i * 12 + Math.sin(t * 2.4 + i) * 3, -26 - p * 4); c.stroke();
+      }
+      c.globalAlpha = 1;
+    },
+    glow(c, e, t) { glowDot(c, 0, 0, 26, "rgba(255,150,190,0.22)"); },
+  },
+  {
+    id: "atolla", name: "クロカムリクラゲ", en: "Atolla Jellyfish",
+    min: 1000, max: 4200, w: 1.4, r: 50, move: "drift", biolum: true, cool: 12, maxA: 2, noflip: true,
+    fact: "襲われると青い光を稲妻のように回転させて点滅させ、より大きな捕食者を呼び寄せる。深海の「防犯ベル」と呼ばれる。",
+    draw(c, e, t) {
+      const p = 1 + Math.sin(t * 2.6) * 0.08;
+      ell(c, 0, 0, 30 * p, 24 * p, "rgba(150,30,40,0.75)");
+      ell(c, 0, -4, 20 * p, 14 * p, "rgba(190,50,55,0.7)");
+      c.strokeStyle = "rgba(220,90,90,0.5)"; c.lineWidth = 1.4;
+      for (let i = 0; i < 12; i++) {
+        const a = i / 12 * TAU;
+        c.beginPath(); c.moveTo(Math.cos(a) * 28 * p, Math.sin(a) * 22 * p);
+        c.lineTo(Math.cos(a) * (34 + Math.sin(t * 2 + i) * 4), Math.sin(a) * (28 + Math.sin(t * 2 + i) * 4));
+        c.stroke();
+      }
+      // one long trailing tentacle
+      c.strokeStyle = "rgba(230,110,110,0.6)"; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(0, 20);
+      c.quadraticCurveTo(Math.sin(t) * 20, 60, Math.sin(t * 0.7) * 30, 95);
+      c.stroke();
+    },
+    glow(c, e, t) {
+      const alarm = Math.min(e.litT * 1.5, 1);
+      if (alarm > 0.05) {
+        for (let i = 0; i < 12; i++) {
+          const a = i / 12 * TAU + t * 9;
+          const on = Math.sin(a * 2 + t * 14) > 0;
+          if (on) glowDot(c, Math.cos(a) * 28, Math.sin(a) * 23, 9, `rgba(90,170,255,${0.85 * alarm})`);
+        }
+      }
+    },
+  },
+  {
+    id: "dumbo", name: "ジュウモンジダコ", en: "Dumbo Octopus",
+    min: 1400, max: 5600, w: 1.4, r: 55, move: "flap", cool: 14, maxA: 1, noflip: true,
+    fact: "耳のようなヒレで羽ばたくように泳ぐ「ダンボオクトパス」。タコとして世界でもっとも深い場所に棲む。",
+    draw(c, e, t) {
+      const fl = Math.sin(t * 3.2);
+      ell(c, -16 - fl * 4, -20, 12, 18, "#c98897", -0.6); // ear fins
+      ell(c, 16 + fl * 4, -20, 12, 18, "#c98897", 0.6);
+      ell(c, 0, 0, 30, 26, "#e0a3b1");                    // mantle
+      ell(c, 0, 4, 24, 18, "#eab8c4");
+      // curled web arms
+      c.beginPath(); c.moveTo(-24, 14);
+      c.quadraticCurveTo(0, 34 + fl * 3, 24, 14);
+      c.quadraticCurveTo(12, 26, 0, 26);
+      c.quadraticCurveTo(-12, 26, -24, 14);
+      c.fillStyle = "#c98897"; c.fill();
+      c.fillStyle = "#2b1720";
+      c.beginPath(); c.arc(-10, -2, 3.4, 0, TAU); c.fill();
+      c.beginPath(); c.arc(10, -2, 3.4, 0, TAU); c.fill();
+      c.fillStyle = "rgba(255,255,255,0.55)";
+      c.beginPath(); c.arc(-11, -3, 1.2, 0, TAU); c.fill();
+      c.beginPath(); c.arc(9, -3, 1.2, 0, TAU); c.fill();
+    },
+  },
+  {
+    id: "snailfish", name: "シンカイクサウオ", en: "Hadal Snailfish",
+    min: 6000, max: 8250, w: 2.6, r: 60, move: "cruise", sp0: 0.6, cool: 8, maxA: 2,
+    fact: "水深8,000mを泳ぐ、確認されている中で世界最深の魚。体は柔らかいゼリー状で、800気圧の水圧を受け流して生きる。",
+    draw(c, e, t) {
+      c.globalAlpha = 0.9;
+      const wig = Math.sin(t * 4);
+      segPathLite(c, 0, 0, 74, u => 15 * (1 - u * 0.85), t, "rgba(228,205,220,0.75)");
+      ell(c, 26, -2, 15, 11, "rgba(240,220,232,0.8)");   // head
+      c.fillStyle = "#1b1420";
+      c.beginPath(); c.arc(32, -5, 2, 0, TAU); c.fill();
+      ell(c, 12, 8 + wig, 10, 4, "rgba(215,190,205,0.6)", 0.4);
+      c.globalAlpha = 1;
+    },
+  },
+  {
+    id: "kaikou", name: "カイコウオオソコエビ", en: "Hadal Amphipod",
+    min: 6800, max: 10911, w: 3, r: 30, move: "skitter", cool: 5, maxA: 4,
+    fact: "チャレンジャー海淵の最深部にも棲む白い甲殻類。体表をアルミニウムの膜で覆い、1,000気圧の水圧下で殻を守っている。",
+    draw(c, e, t) {
+      c.save(); c.rotate(Math.sin(t * 6) * 0.15);
+      c.beginPath(); c.ellipse(0, 0, 15, 8, -0.3, 0, TAU);
+      c.fillStyle = "#ded9d2"; c.fill();
+      c.beginPath(); c.ellipse(3, -3, 10, 5, -0.3, 0, TAU);
+      c.fillStyle = "#efece6"; c.fill();
+      c.strokeStyle = "#c9c2b8"; c.lineWidth = 1.4; c.lineCap = "round";
+      for (let i = 0; i < 6; i++) {
+        c.beginPath(); c.moveTo(-8 + i * 3, 5);
+        c.lineTo(-10 + i * 3 + Math.sin(t * 14 + i) * 2, 11); c.stroke();
+      }
+      c.beginPath(); c.moveTo(13, -4); c.lineTo(20, -8 + Math.sin(t * 8) * 2); c.stroke();
+      c.beginPath(); c.moveTo(13, -2); c.lineTo(21, -3); c.stroke();
+      c.fillStyle = "#3a352e"; c.beginPath(); c.arc(11, -4, 1.4, 0, TAU); c.fill();
+      c.restore();
+    },
+  },
+  // ---------------- landmarks ----------------
+  {
+    id: "vent", name: "熱水噴出孔", en: "Hydrothermal Vent", cat: "landmark",
+    min: 2500, max: 2500, r: 260, move: "static", lm: true, side: "left",
+    fact: "300°Cを超える熱水が噴き出す海底の温泉。太陽のエネルギーに一切頼らず、化学合成だけで生きる生態系がここにある。",
+    draw(c, e, t) {
+      // rock ledge from the left
+      poly(c, [[-360, 150], [-360, 40], [-240, 26], [-140, 60], [-20, 44], [120, 70], [200, 130], [200, 150]], "#101820");
+      // chimneys
+      for (const [cx, chH, cw] of [[-180, 120, 26], [-60, 160, 32], [60, 100, 22]]) {
+        poly(c, [[cx - cw, 60], [cx - cw * 0.45, 60 - chH], [cx + cw * 0.45, 60 - chH], [cx + cw, 60]], "#1a232e");
+        poly(c, [[cx - cw * 0.45, 60 - chH], [cx + cw * 0.45, 60 - chH], [cx + cw * 0.3, 52 - chH], [cx - cw * 0.3, 52 - chH]], "#242f3c");
+        // smoke
+        c.globalAlpha = 0.5;
+        for (let i = 0; i < 9; i++) {
+          const ph = frac(t * 0.12 + i / 9 + n1(cx + i));
+          const y = 52 - chH - ph * 180;
+          const sway = Math.sin(t * 0.8 + i * 2 + cx) * (8 + ph * 26);
+          ell(c, cx + sway, y, 6 + ph * 26, 5 + ph * 20, `rgba(90,100,115,${0.4 * (1 - ph)})`);
+        }
+        c.globalAlpha = 1;
+      }
+      // tube worms
+      for (let i = 0; i < 14; i++) {
+        const wx = -300 + n1(i * 3.7) * 380, wy = 46 + n1(i * 9.1) * 24;
+        const sway2 = Math.sin(t * 1.6 + i) * 3;
+        c.strokeStyle = "#e8e2d8"; c.lineWidth = 5; c.lineCap = "round";
+        c.beginPath(); c.moveTo(wx, wy + 18); c.lineTo(wx + sway2, wy - 16); c.stroke();
+        c.strokeStyle = "#d5453c"; c.lineWidth = 5;
+        c.beginPath(); c.moveTo(wx + sway2, wy - 16); c.lineTo(wx + sway2 * 1.3, wy - 26); c.stroke();
+      }
+    },
+    glow(c, e, t) {
+      for (const [cx, chH] of [[-180, 120], [-60, 160], [60, 100]])
+        glowDot(c, cx, 56 - chH, 34, "rgba(255,120,40,0.35)");
+      glowDot(c, -60, 40, 180, "rgba(255,90,30,0.08)");
+    },
+  },
+  {
+    id: "wreck", name: "沈没船", en: "Shipwreck", cat: "landmark",
+    min: 3800, max: 3800, r: 300, move: "static", lm: true, side: "right",
+    fact: "深海は冷たく酸素が乏しいため、沈んだ船は何十年も原形を保つ。闇の中の人工物は、やがて深海生物の岩礁になる。",
+    draw(c, e, t) {
+      // rock shelf from the right
+      poly(c, [[380, 170], [380, 70], [260, 54], [150, 84], [30, 66], [-120, 96], [-220, 150], [-220, 170]], "#0e151d");
+      // listing hull
+      c.save(); c.translate(40, 40); c.rotate(-0.14);
+      poly(c, [[-240, 30], [-210, -30], [180, -30], [230, 4], [200, 30]], "#1d232c");   // hull
+      poly(c, [[-210, -30], [180, -30], [175, -44], [-190, -44]], "#232a34");           // deck
+      poly(c, [[-60, -44], [-60, -92], [-20, -92], [-20, -44]], "#1a2028");             // superstructure
+      poly(c, [[30, -44], [30, -76], [58, -76], [58, -44]], "#1a2028");
+      c.strokeStyle = "#151a22"; c.lineWidth = 5;
+      c.beginPath(); c.moveTo(-140, -44); c.lineTo(-150, -120); c.stroke();             // broken mast
+      c.beginPath(); c.moveTo(-150, -120); c.lineTo(-190, -100); c.stroke();
+      // portholes
+      c.fillStyle = "#2e3b49";
+      for (let i = 0; i < 7; i++) { c.beginPath(); c.arc(-160 + i * 52, -6, 5, 0, TAU); c.fill(); }
+      // hull breach
+      poly(c, [[60, 30], [80, -6], [120, 2], [138, 30]], "#05080c");
+      c.restore();
+      // debris
+      for (let i = 0; i < 6; i++)
+        ell(c, -140 + n1(i * 5.3) * 320, 120 + n1(i * 8.1) * 30, 14 + n1(i) * 12, 5, "#141a22", n1(i * 2) * 3);
+    },
+  },
+  {
+    id: "whalefall", name: "鯨骨生物群集", en: "Whale Fall", cat: "landmark",
+    min: 5200, max: 5200, r: 260, move: "sinker", lm: true,
+    fact: "一頭のクジラの亡骸は、闇の海底で数十年にわたり無数の生命を養う「オアシス」になる。骨だけを食べる生物さえいる。",
+    draw(c, e, t) {
+      // decaying whale silhouette
+      ell(c, 40, 0, 150, 44, "#2c333c");
+      ell(c, 150, 6, 46, 30, "#333b45");
+      poly(c, [[-110, 0], [-170, -26], [-150, 2], [-170, 24]], "#2c333c");
+      // exposed ribs
+      c.strokeStyle = "#cfc9bd"; c.lineWidth = 5; c.lineCap = "round";
+      for (let i = 0; i < 6; i++) {
+        c.beginPath();
+        c.arc(-40 + i * 26, -6, 30, Math.PI * 1.15, Math.PI * 1.85);
+        c.stroke();
+      }
+      // hagfish wriggling
+      c.strokeStyle = "#7d7f74"; c.lineWidth = 4;
+      for (let i = 0; i < 4; i++) {
+        c.beginPath();
+        const bx = -60 + i * 60, by = 34 + n1(i * 7) * 14;
+        c.moveTo(bx, by);
+        for (let k = 1; k <= 4; k++)
+          c.lineTo(bx + k * 12, by + Math.sin(t * 3 + i * 2 + k * 1.8) * 6);
+        c.stroke();
+      }
+      // small scavenger dots
+      c.fillStyle = "rgba(220,215,205,0.7)";
+      for (let i = 0; i < 10; i++) {
+        const a = t * (0.3 + n1(i) * 0.4) + i;
+        c.beginPath();
+        c.arc(-80 + n1(i * 3) * 240 + Math.sin(a) * 8, -20 + n1(i * 13) * 60, 2, 0, TAU);
+        c.fill();
+      }
+    },
+    glow(c, e, t) { glowDot(c, 20, 10, 160, "rgba(120,220,180,0.05)"); },
+  },
+  {
+    id: "kaitei", name: "チャレンジャー海淵・海底", en: "Challenger Deep", cat: "landmark",
+    min: 10911, max: 10911, r: 400, move: "static", lm: true, hidden: true,
+    fact: "水深10,911m、地球のいちばん深い場所。エベレストをまるごと沈めても、山頂はまだ2,000m以上も水面下にある。",
+    draw() {}, // rendered by the seafloor pass
+  },
+  ];
+
+  // tadpole-like wiggling body used by snailfish
+  function segPathLite(c, x, y, len, widthFn, t, fill) {
+    c.beginPath();
+    const N = 10;
+    for (let i = 0; i <= N; i++) {
+      const u = i / N;
+      const wx = x + 26 - u * len;
+      const wy = y + Math.sin(t * 4 - u * 5) * 6 * u;
+      const w = widthFn(u);
+      if (i === 0) c.moveTo(wx, wy - w); else c.lineTo(wx, wy - w);
+    }
+    for (let i = N; i >= 0; i--) {
+      const u = i / N;
+      const wx = x + 26 - u * len;
+      const wy = y + Math.sin(t * 4 - u * 5) * 6 * u;
+      c.lineTo(wx, wy + widthFn(u));
+    }
+    c.closePath(); c.fillStyle = fill; c.fill();
+  }
+
+  const SP_BY_ID = {};
+  for (const sp of SPECIES) SP_BY_ID[sp.id] = sp;
+  const DEX_TOTAL = SPECIES.length;
+
+  // ============================================================
+  //  ENTITIES
+  // ============================================================
+  let ents = [];
+  let spawnTimer = 1.5;
+
+  function makeEnt(sp, x, y) {
+    const e = {
+      sp, x, y,
+      vx: 0, vy: 0, dir: 1,
+      t: rand(0, 10), seed: rand(0, 100),
+      litT: 0, sx: 0, sy: 0,
+      panic: 0, jetT: rand(1, 3),
+      wpX: x, wpY: y, wpT: 0,
+    };
+    if (sp.segN) {
+      e.segs = [];
+      for (let i = 0; i < sp.segN; i++)
+        e.segs.push(sp.move === "ribbonV"
+          ? { x, y: y + i * sp.segSp }
+          : { x: x - i * sp.segSp, y });
+    }
+    if (sp.move === "school") {
+      e.members = [];
+      const n = sp.id === "iwashi" ? 12 : 10;
+      for (let i = 0; i < n; i++)
+        e.members.push({ ox: rand(-55, 55), oy: rand(-38, 38), ph: rand(0, TAU) });
+    }
+    return e;
+  }
+
+  function spawn(sp, forceX, forceY) {
+    const fromLeft = Math.random() < 0.5;
+    let x, y;
+    if (sp.lm) {
+      // landmark: anchored in the world
+      x = sp.side === "left" ? W * 0.32 : sp.side === "right" ? W * 0.62 : W * 0.5;
+      y = sp.min * PXM;
+    } else if (sp.move === "drift" || sp.move === "flap" || sp.move === "skitter") {
+      x = rand(W * 0.1, W * 0.9);
+      y = cameraY + (state.speed >= 0 ? H + rand(60, 260) : -rand(60, 260));
+    } else {
+      x = fromLeft ? -sp.r - 60 : W + sp.r + 60;
+      y = cameraY + rand(H * 0.25, H * 1.1);
+    }
+    if (forceX !== undefined) { x = forceX; y = forceY; }
+    const e = makeEnt(sp, x, y);
+    if (!sp.lm && sp.move !== "drift" && sp.move !== "flap" && sp.move !== "skitter") {
+      e.dir = fromLeft ? 1 : -1;
+      e.vx = (sp.sp0 || 0.8) * e.dir;
+    }
+    if (sp.segN) {
+      for (let i = 0; i < e.segs.length; i++) {
+        if (sp.move === "ribbonV") { e.segs[i].x = e.x; e.segs[i].y = e.y + i * sp.segSp; }
+        else { e.segs[i].x = e.x - i * sp.segSp * e.dir; e.segs[i].y = e.y; }
+      }
+    }
+    sp.lastSpawn = state.time;
+    ents.push(e);
+    if (sp.id === "makko") sfx.whale();
+    if (sp.id === "daiou") sfx.rumble();
+    return e;
+  }
+
+  const FORCED = [
+    { d: 470, id: "ryugu" }, { d: 860, id: "daiou" }, { d: 1230, id: "makko" },
+    { d: 1520, id: "chouchin" }, { d: 1850, id: "atolla" }, { d: 2150, id: "fukuro" },
+    { d: 3450, id: "dumbo" }, { d: 4450, id: "yumenamako" },
+    { d: 6900, id: "snailfish" }, { d: 8400, id: "kaikou" },
+  ];
+  let prevDepth = 0;
+
+  function director(dt) {
+    // forced iconic encounters when crossing depths
+    for (const f of FORCED) {
+      if (prevDepth < f.d && state.depth >= f.d) {
+        const sp = SP_BY_ID[f.id];
+        if (!ents.some(e => e.sp === sp)) spawn(sp);
+      }
+    }
+    // landmarks anchor in/out
+    for (const sp of SPECIES) {
+      if (!sp.lm || sp.hidden) continue;
+      const near = Math.abs(state.depth - sp.min) < 180;
+      const active = ents.find(e => e.sp === sp);
+      if (near && !active) spawn(sp);
+    }
+    spawnTimer -= dt;
+    if (spawnTimer > 0) return;
+    spawnTimer = 0.85;
+    const d = state.depth;
+    const active = ents.filter(e => !e.sp.lm).length;
+    const target = d < 250 ? 6 : d < 1000 ? 5 : d < 3000 ? 4 : d < 6000 ? 3 : 2.6;
+    if (active >= target) return;
+    const pool = SPECIES.filter(sp =>
+      !sp.lm && d >= sp.min - 40 && d <= sp.max + 40 &&
+      ents.filter(e => e.sp === sp).length < (sp.maxA || 2) &&
+      state.time - (sp.lastSpawn || -99) > (sp.cool || 6));
+    if (!pool.length) return;
+    let total = 0;
+    for (const sp of pool) total += sp.w * (discovered.has(sp.id) ? 1 : 2.3);
+    let pick = Math.random() * total;
+    for (const sp of pool) {
+      pick -= sp.w * (discovered.has(sp.id) ? 1 : 2.3);
+      if (pick <= 0) { spawn(sp); break; }
+    }
+  }
+
+  function followChain(segs, spacing, biasY) {
+    for (let i = 1; i < segs.length; i++) {
+      let dx = segs[i].x - segs[i - 1].x, dy = segs[i].y - segs[i - 1].y;
+      let d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+      if (biasY) {
+        dx = dx * (1 - biasY); dy = dy * (1 - biasY) + biasY;
+        const n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n;
+      }
+      segs[i].x = segs[i - 1].x + dx * spacing;
+      segs[i].y = segs[i - 1].y + dy * spacing;
+    }
+  }
+
+  function updateEnt(e, dt) {
+    const sp = e.sp;
+    e.t += dt;
+    e.sx = e.x; e.sy = e.y - cameraY;
+    const lit = isLit(e.sx, e.sy);
+    e.litT = lit ? e.litT + dt : Math.max(0, e.litT - dt * 2);
+
+    const F = dt * 60;
+    switch (sp.move) {
+      case "cruise": case "whale":
+        if (sp.skit && e.litT > 1.1 && Math.hypot(e.sx - sub.x, e.sy - sub.y) < 340) e.panic = 1.6;
+        if (e.panic > 0) { e.panic -= dt; e.x += e.vx * 3.2 * F; }
+        else e.x += e.vx * F;
+        e.y += Math.sin(e.t * 1.1 + e.seed) * 0.35 * F;
+        break;
+      case "school": {
+        if (e.litT > 0.9) e.panic = Math.min(e.panic + dt * 2, 1);
+        else e.panic = Math.max(0, e.panic - dt);
+        e.x += e.vx * (1 + e.panic * 1.6) * F;
+        e.y += Math.sin(e.t * 0.9 + e.seed) * 0.5 * F;
+        const spread = 1 + e.panic * 0.9;
+        for (const m of e.members) { m.dx = m.ox * spread; }
+        break;
+      }
+      case "drift":
+        e.x += Math.sin(e.t * 0.4 + e.seed) * 0.25 * F;
+        e.y += Math.cos(e.t * 0.3 + e.seed) * 0.2 * F - 0.06 * F;
+        break;
+      case "hover": {
+        e.wpT -= dt;
+        if (e.wpT <= 0) {
+          e.wpT = rand(2.5, 5);
+          let tx = e.x + rand(-140, 140), ty = e.y + rand(-90, 90);
+          if (sp.lure && Math.hypot(sub.x - e.sx, sub.y - e.sy) < 330) {
+            tx = e.x + (sub.x - e.sx) * 0.4; ty = e.y + (sub.y - e.sy) * 0.4;
+          }
+          e.wpX = tx; e.wpY = ty;
+        }
+        if (sp.skit && e.litT > 1.4) { e.wpX = e.x + (e.sx > sub.x ? 400 : -400); e.wpT = 2; }
+        e.x += (e.wpX - e.x) * 0.008 * F;
+        e.y += (e.wpY - e.y) * 0.008 * F;
+        e.dir = e.wpX > e.x ? 1 : -1;
+        break;
+      }
+      case "ribbonV": {
+        const h = e.segs[0];
+        h.x += Math.sin(e.t * 0.5 + e.seed) * 0.5 * F;
+        h.y += Math.cos(e.t * 0.35 + e.seed) * 0.3 * F;
+        followChain(e.segs, sp.segSp, 0.22);
+        e.x = h.x; e.y = h.y;
+        break;
+      }
+      case "ribbonH": {
+        const h = e.segs[0];
+        h.x += e.vx * F;
+        h.y += Math.sin(e.t * 0.8 + e.seed) * 0.5 * F;
+        e.hAng = Math.atan2(Math.cos(e.t * 0.8 + e.seed) * 0.5, e.vx) * (e.vx < 0 ? -1 : 1);
+        followChain(e.segs, sp.segSp, 0);
+        e.x = h.x; e.y = h.y;
+        break;
+      }
+      case "jet": {
+        e.jetT -= dt;
+        if (e.jetT <= 0) { e.jetT = rand(2.2, 4); e.vx = e.dir * rand(1.6, 2.4); }
+        e.vx *= Math.pow(0.985, F);
+        e.x += e.vx * F;
+        e.y += Math.sin(e.t * 0.6) * 0.3 * F;
+        break;
+      }
+      case "flap":
+        e.x += Math.sin(e.t * 0.35 + e.seed) * 0.35 * F;
+        e.y += Math.sin(e.t * 3.2) * 0.25 * F - 0.05 * F;
+        break;
+      case "skitter": {
+        e.wpT -= dt;
+        if (e.wpT <= 0) { e.wpT = rand(0.5, 1.6); e.vx = rand(-1.6, 1.6); e.vy = rand(-1.2, 1.2); }
+        e.x += e.vx * F; e.y += e.vy * F;
+        break;
+      }
+      case "sinker":
+        e.y += 0.12 * F;
+        e.x += Math.sin(e.t * 0.3) * 0.1 * F;
+        break;
+    }
+    if ((sp.move === "cruise" || sp.move === "whale" || sp.move === "school") && !sp.noflip)
+      e.dir = e.vx >= 0 ? 1 : -1;
+    e.sx = e.x; e.sy = e.y - cameraY;
+  }
+
+  function pruneEnts() {
+    ents = ents.filter(e => {
+      if (e.sp.lm) return Math.abs(state.depth - e.sp.min) < 420;
+      const mg = e.sp.r > 200 ? 900 : 460;
+      return e.sx > -mg && e.sx < W + mg && e.sy > -mg && e.sy < H + mg;
+    });
+  }
+
+  // ---------------- lighting ----------------
+  function isLit(sx, sy) {
+    if (darknessAlpha(state.depth) < 0.5) return true;
+    const dx = sx - sub.x, dy = sy - sub.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 235) return true;
+    if (d < LIGHT_RANGE) {
+      if (Math.abs(angDiff(Math.atan2(dy, dx), sub.aim)) < LIGHT_SPREAD + 0.16) return true;
+    }
+    return false;
+  }
+
+  // ---------------- particles ----------------
+  const snow = [];
+  function initSnow() {
+    snow.length = 0;
+    const n = Math.round(W * H / 11000);
+    for (let i = 0; i < n; i++)
+      snow.push({ x: rand(0, W), y: rand(0, H), r: rand(0.6, 2.2), s: rand(0.1, 0.5), ph: rand(0, TAU) });
+  }
+  const bubbles = [];
+  function emitBubble() {
+    bubbles.push({ x: sub.x - 30 * Math.cos(sub.aim) * 0 - 34 * (sub.face || 1), y: sub.y - 6, r: rand(1.5, 4), vy: rand(-1.4, -0.8), vx: rand(-0.3, 0.3), life: rand(1.5, 3) });
+  }
+
+  // ============================================================
+  //  RENDERING
+  // ============================================================
+  let darkCanvas = null, dctx = null;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    darkCanvas = document.createElement("canvas");
+    darkCanvas.width = canvas.width; darkCanvas.height = canvas.height;
+    dctx = darkCanvas.getContext("2d");
+    initSnow();
+    if (!mouse.active) { mouse.x = W * 0.6; mouse.y = H * 0.6; }
+    sub.x = sub.x || W * 0.45; sub.y = sub.y || H * 0.42;
+  }
+
+  function drawBackground(t) {
+    const [top, bot] = bgColors(state.depth);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, top); g.addColorStop(1, bot);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // above-water sky when near the surface
+    const surfY = -cameraY;
+    if (surfY > -60) {
+      if (surfY > 0) {
+        const sky = ctx.createLinearGradient(0, Math.min(surfY - 240, 0), 0, surfY);
+        sky.addColorStop(0, "#8ecae6"); sky.addColorStop(1, "#dff3fb");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, surfY);
+      }
+      // waves
+      ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 3; ctx.lineCap = "round";
+      ctx.beginPath();
+      for (let x = -20; x <= W + 20; x += 14)
+        ctx.lineTo(x, surfY + Math.sin(x * 0.028 + t * 2.1) * 5 + Math.sin(x * 0.011 - t * 1.3) * 4);
+      ctx.stroke();
+      glowDot(ctx, W * 0.72, Math.max(surfY, 0) - 130, 160, "rgba(255,244,200,0.5)");
+    }
+
+    // god rays fade out by ~260m
+    const rayA = clamp(1 - state.depth / 260, 0, 1) * 0.22;
+    if (rayA > 0.01) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < 5; i++) {
+        const bx = W * (0.1 + i * 0.2) + Math.sin(t * 0.24 + i * 2.4) * 70;
+        const sk = Math.sin(t * 0.18 + i) * 120;
+        const rg = ctx.createLinearGradient(bx, Math.max(-cameraY, -40), bx + sk, H);
+        rg.addColorStop(0, `rgba(190,235,255,${rayA})`);
+        rg.addColorStop(1, "rgba(190,235,255,0)");
+        ctx.fillStyle = rg;
+        ctx.beginPath();
+        ctx.moveTo(bx - 26, Math.max(-cameraY, -40));
+        ctx.lineTo(bx + 26, Math.max(-cameraY, -40));
+        ctx.lineTo(bx + sk + 90, H); ctx.lineTo(bx + sk - 90, H);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawSnow(dt) {
+    const d = state.depth;
+    const density = clamp((d - 120) / 500, 0, 1);
+    if (density <= 0) return;
+    ctx.fillStyle = `rgba(205,220,235,${0.5 * density})`;
+    const scroll = state.speed * PXM * dt; // world moves up as we descend
+    for (const p of snow) {
+      p.y -= scroll - p.s * dt * 60 * 0.4;
+      p.x += Math.sin(p.ph + state.time * 0.7) * 0.2;
+      if (p.y < -10) { p.y = H + 10; p.x = rand(0, W); }
+      if (p.y > H + 10) { p.y = -10; p.x = rand(0, W); }
+      ctx.fillRect(p.x, p.y, p.r, p.r);
+    }
+  }
+
+  function drawTrenchWalls() {
+    const d = state.depth;
+    if (d < 6400) return;
+    const grow = clamp((d - 6400) / 800, 0, 1);
+    const maxW = grow * W * 0.14;
+    ctx.fillStyle = "#020509";
+    for (const side of [0, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(side ? W : 0, -60);
+      for (let sy = -60; sy <= H + 60; sy += 56) {
+        const chunk = Math.floor((cameraY + sy) / 56);
+        const n = n1(chunk * 1.7 + side * 977);
+        const wallW = maxW * (0.5 + 0.5 * n);
+        ctx.lineTo(side ? W - wallW : wallW, sy);
+      }
+      ctx.lineTo(side ? W : 0, H + 60);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  const FLOOR_Y = MAX_DEPTH * PXM + 120; // world y of the seafloor line (sub sits ~120px above at max depth)
+  function drawFloor() {
+    const fy = FLOOR_Y - cameraY;
+    if (fy > H + 80) return;
+    ctx.fillStyle = "#0b1016";
+    ctx.beginPath();
+    ctx.moveTo(-20, fy + 30);
+    for (let x = -20; x <= W + 20; x += 60) {
+      const n = n1(Math.floor(x / 60) * 3.3);
+      ctx.lineTo(x, fy + n * 26 - 8);
+    }
+    ctx.lineTo(W + 20, H + 40); ctx.lineTo(-20, H + 40);
+    ctx.closePath(); ctx.fill();
+    // sediment mounds & rocks
+    for (let i = 0; i < 9; i++) {
+      const rx = n1(i * 7.7) * W;
+      ell(ctx, rx, fy + 26 + n1(i) * 10, 40 + n1(i * 3) * 50, 10, "#0e141c");
+    }
+    for (let i = 0; i < 6; i++) {
+      const rx = n1(i * 13.1) * W;
+      ell(ctx, rx, fy + 14, 8 + n1(i * 5) * 14, 6 + n1(i * 9) * 8, "#131a24", n1(i) * 3);
+    }
+  }
+
+  function drawEnts(pass) {
+    // big ones behind
+    const sorted = [...ents].sort((a, b) => b.sp.r - a.sp.r);
+    for (const e of sorted) {
+      const fn = pass === "glow" ? e.sp.glow : e.sp.draw;
+      if (!fn) continue;
+      ctx.save();
+      ctx.translate(e.sx, e.sy);
+      if (pass !== "glow" && !e.sp.noflip && e.dir < 0) ctx.scale(-1, 1);
+      fn(ctx, e, e.t);
+      ctx.restore();
+    }
+  }
+
+  function drawSub(t) {
+    const face = Math.abs(angDiff(sub.aim, 0)) < Math.PI / 2 ? 1 : -1;
+    sub.face = face;
+    sub.prop += (0.15 + Math.abs(state.speed) * 0.02);
+    ctx.save();
+    ctx.translate(sub.x, sub.y);
+    ctx.rotate(sub.tilt);
+    ctx.scale(face, 1);
+    // skids
+    ctx.strokeStyle = "#5c5347"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(-24, 22); ctx.lineTo(20, 22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-18, 14); ctx.lineTo(-20, 22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(14, 14); ctx.lineTo(16, 22); ctx.stroke();
+    // hull
+    ctx.beginPath(); ctx.ellipse(0, 0, 44, 19, 0, 0, TAU);
+    ctx.fillStyle = "#e8b93c"; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 5, 40, 12, 0, 0, Math.PI);
+    ctx.fillStyle = "#c79a28"; ctx.fill();
+    // sail
+    ctx.beginPath(); ctx.moveTo(-16, -16); ctx.quadraticCurveTo(-14, -30, -2, -30);
+    ctx.quadraticCurveTo(8, -30, 10, -16); ctx.closePath();
+    ctx.fillStyle = "#d5a832"; ctx.fill();
+    // viewport
+    ctx.beginPath(); ctx.arc(24, -2, 10, 0, TAU);
+    ctx.fillStyle = "#0d2436"; ctx.fill();
+    ctx.beginPath(); ctx.arc(24, -2, 10, 0, TAU);
+    ctx.strokeStyle = "#8a7326"; ctx.lineWidth = 2.5; ctx.stroke();
+    const vg = ctx.createRadialGradient(22, -4, 1, 24, -2, 9);
+    vg.addColorStop(0, "rgba(140,220,255,0.9)"); vg.addColorStop(1, "rgba(60,140,200,0.1)");
+    ctx.fillStyle = vg; ctx.beginPath(); ctx.arc(24, -2, 8, 0, TAU); ctx.fill();
+    // headlight housing
+    ctx.fillStyle = "#3d3428";
+    ctx.fillRect(38, -9, 9, 12);
+    // propeller
+    ctx.save(); ctx.translate(-46, 0);
+    ctx.fillStyle = "#4c4438";
+    ctx.fillRect(-2, -12, 3, 24);
+    const pr = Math.sin(sub.prop);
+    ell(ctx, 0, -8 * pr, 3, 7 * Math.abs(pr) + 1, "#6b6152");
+    ell(ctx, 0, 8 * pr, 3, 7 * Math.abs(pr) + 1, "#6b6152");
+    ctx.restore();
+    // name & marker light
+    ctx.fillStyle = "#5c4d1a";
+    ctx.font = "700 7px sans-serif";
+    ctx.fillText("ABYSS-01", -18, 3);
+    if (Math.sin(t * 5) > 0) { ctx.fillStyle = "#ff5c5c"; ctx.beginPath(); ctx.arc(-4, -32, 2, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+
+  function drawBubbles(dt) {
+    ctx.strokeStyle = "rgba(200,230,250,0.5)";
+    ctx.lineWidth = 1.2;
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i];
+      b.life -= dt;
+      b.y += b.vy * dt * 60 - state.speed * PXM * dt;
+      b.x += b.vx * dt * 60 + Math.sin(b.life * 8) * 0.4;
+      if (b.life <= 0 || b.y < -20) { bubbles.splice(i, 1); continue; }
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.stroke();
+    }
+  }
+
+  function drawDarkness() {
+    const a = darknessAlpha(state.depth);
+    dctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    dctx.clearRect(0, 0, W, H);
+    if (a > 0.01) {
+      dctx.globalCompositeOperation = "source-over";
+      dctx.fillStyle = `rgba(1,3,10,${a})`;
+      dctx.fillRect(0, 0, W, H);
+      dctx.globalCompositeOperation = "destination-out";
+      // glow around the sub
+      let g = dctx.createRadialGradient(sub.x, sub.y, 8, sub.x, sub.y, 165);
+      g.addColorStop(0, "rgba(0,0,0,0.9)"); g.addColorStop(1, "rgba(0,0,0,0)");
+      dctx.fillStyle = g;
+      dctx.beginPath(); dctx.arc(sub.x, sub.y, 165, 0, TAU); dctx.fill();
+      // headlight cone
+      dctx.save();
+      dctx.beginPath();
+      dctx.moveTo(sub.x, sub.y);
+      dctx.arc(sub.x, sub.y, LIGHT_RANGE, sub.aim - LIGHT_SPREAD, sub.aim + LIGHT_SPREAD);
+      dctx.closePath(); dctx.clip();
+      g = dctx.createRadialGradient(sub.x, sub.y, 30, sub.x, sub.y, LIGHT_RANGE);
+      g.addColorStop(0, "rgba(0,0,0,0.97)");
+      g.addColorStop(0.72, "rgba(0,0,0,0.8)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      dctx.fillStyle = g;
+      dctx.fillRect(sub.x - LIGHT_RANGE, sub.y - LIGHT_RANGE, LIGHT_RANGE * 2, LIGHT_RANGE * 2);
+      dctx.restore();
+      // faint holes around bioluminescent creatures
+      for (const e of ents) {
+        if (!e.sp.biolum && !e.sp.glow) continue;
+        const r = Math.max(e.sp.r * 0.8, 40);
+        g = dctx.createRadialGradient(e.sx, e.sy, 2, e.sx, e.sy, r);
+        g.addColorStop(0, "rgba(0,0,0,0.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
+        dctx.fillStyle = g;
+        dctx.beginPath(); dctx.arc(e.sx, e.sy, r, 0, TAU); dctx.fill();
+      }
+    }
+    ctx.drawImage(darkCanvas, 0, 0, W, H);
+    // visible beam shaft
+    if (a > 0.1) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.beginPath();
+      ctx.moveTo(sub.x, sub.y);
+      ctx.arc(sub.x, sub.y, LIGHT_RANGE, sub.aim - LIGHT_SPREAD, sub.aim + LIGHT_SPREAD);
+      ctx.closePath();
+      const g = ctx.createRadialGradient(sub.x, sub.y, 20, sub.x, sub.y, LIGHT_RANGE);
+      g.addColorStop(0, `rgba(150,210,255,${0.14 * a})`);
+      g.addColorStop(1, "rgba(150,210,255,0)");
+      ctx.fillStyle = g; ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawGlowPass() {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    drawEnts("glow");
+    ctx.restore();
+  }
+
+  function drawVignette() {
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.42, W / 2, H / 2, Math.max(W, H) * 0.75);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,2,6,0.5)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawRail() {
+    const x = W - 24, y0 = 78, y1 = H - 78;
+    ctx.strokeStyle = "rgba(110,143,163,0.4)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    const yOf = d => y0 + (y1 - y0) * (d / MAX_DEPTH);
+    for (const z of ZONES) {
+      ctx.strokeStyle = "rgba(110,143,163,0.5)";
+      ctx.beginPath(); ctx.moveTo(x - 4, yOf(z.d)); ctx.lineTo(x + 4, yOf(z.d)); ctx.stroke();
+    }
+    for (const sp of SPECIES) {
+      if (!sp.lm) continue;
+      ctx.fillStyle = discovered.has(sp.id) ? "rgba(72,224,208,0.9)" : "rgba(110,143,163,0.6)";
+      ctx.save(); ctx.translate(x, yOf(sp.min)); ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-2.6, -2.6, 5.2, 5.2); ctx.restore();
+    }
+    if (maxDepthEver > 50) {
+      ctx.fillStyle = "rgba(190,220,240,0.35)";
+      ctx.beginPath(); ctx.moveTo(x - 7, yOf(maxDepthEver)); ctx.lineTo(x - 2, yOf(maxDepthEver) - 3); ctx.lineTo(x - 2, yOf(maxDepthEver) + 3); ctx.closePath(); ctx.fill();
+    }
+    // current position
+    ctx.fillStyle = "#48e0d0";
+    ctx.beginPath(); ctx.moveTo(x - 9, yOf(state.depth)); ctx.lineTo(x - 3, yOf(state.depth) - 4); ctx.lineTo(x - 3, yOf(state.depth) + 4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(215,236,245,0.75)";
+    ctx.font = "9px sans-serif"; ctx.textAlign = "right";
+    ctx.fillText("0m", x - 10, y0 + 3);
+    ctx.fillText("10,911m", x - 10, y1 + 3);
+    ctx.textAlign = "left";
+  }
+
+  function drawReticle() {
+    if (!mouse.active || !state.started) return;
+    const tgt = findTarget();
+    ctx.strokeStyle = "rgba(140,220,255,0.7)"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 9, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mouse.x - 15, mouse.y); ctx.lineTo(mouse.x - 5, mouse.y);
+    ctx.moveTo(mouse.x + 5, mouse.y); ctx.lineTo(mouse.x + 15, mouse.y);
+    ctx.moveTo(mouse.x, mouse.y - 15); ctx.lineTo(mouse.x, mouse.y - 5);
+    ctx.moveTo(mouse.x, mouse.y + 5); ctx.lineTo(mouse.x, mouse.y + 15);
+    ctx.stroke();
+    if (tgt) {
+      const r = Math.max(tgt.sp.r * 0.75, 34);
+      const nw = !discovered.has(tgt.sp.id);
+      ctx.strokeStyle = nw ? "rgba(72,224,208,0.95)" : "rgba(160,200,230,0.6)";
+      ctx.lineWidth = 2;
+      const L = 12;
+      for (const [mx, my] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        ctx.beginPath();
+        ctx.moveTo(tgt.sx + mx * r, tgt.sy + my * r - my * L);
+        ctx.lineTo(tgt.sx + mx * r, tgt.sy + my * r);
+        ctx.lineTo(tgt.sx + mx * r - mx * L, tgt.sy + my * r);
+        ctx.stroke();
+      }
+      if (nw) {
+        ctx.fillStyle = "rgba(72,224,208,0.95)";
+        ctx.font = "700 10px sans-serif";
+        ctx.fillText("未発見の生物", tgt.sx + r + 8, tgt.sy - r);
+      }
+    }
+  }
+
+  // ============================================================
+  //  PHOTOGRAPHY & DISCOVERY
+  // ============================================================
+  let shotCooldown = 0;
+  const cardQueue = [];
+  let cardTimer = 0;
+
+  function findTarget() {
+    let best = null, bestD = 1e9;
+    for (const e of ents) {
+      const range = Math.max(e.sp.r * 1.1, 120);
+      const d = Math.hypot(mouse.x - e.sx, mouse.y - e.sy);
+      if (d < range && d < bestD && isLit(e.sx, e.sy)) { best = e; bestD = d; }
+    }
+    return best;
+  }
+
+  function photograph() {
+    if (!state.started || shotCooldown > 0) return;
+    shotCooldown = 0.55;
+    const fl = $("flash");
+    fl.classList.remove("go"); void fl.offsetWidth; fl.classList.add("go");
+    sfx.shutter();
+    const tgt = findTarget();
+    if (!tgt) { toast("何も写っていない…"); return; }
+    discover(tgt.sp, false);
+  }
+
+  function discover(sp, silent) {
+    if (discovered.has(sp.id)) {
+      if (!silent) toast(`撮影済み：${sp.name}`);
+      return;
+    }
+    discovered.add(sp.id);
+    store.save("discovered", [...discovered]);
+    sfx.chime();
+    cardQueue.push(sp);
+    const btn = $("btn-dex");
+    btn.classList.remove("pulse"); void btn.offsetWidth; btn.classList.add("pulse");
+    updateDexCount();
+  }
+
+  function processCards(dt) {
+    cardTimer -= dt;
+    const card = $("card");
+    if (cardTimer <= 0 && card.classList.contains("show")) card.classList.remove("show");
+    if (cardTimer <= -0.6 && cardQueue.length) {
+      const sp = cardQueue.shift();
+      $("card-nm").textContent = sp.name;
+      $("card-en").textContent = sp.en.toUpperCase();
+      $("card-rng").textContent = sp.lm ? `水深 ${sp.min.toLocaleString()}m` : `生息水深 ${sp.min.toLocaleString()}〜${sp.max.toLocaleString()}m`;
+      $("card-fc").textContent = sp.fact;
+      renderThumb(sp, $("card-cv"));
+      card.classList.add("show");
+      cardTimer = 7;
+    }
+  }
+  $("card").addEventListener("click", () => { cardTimer = 0; });
+
+  function renderThumb(sp, cv) {
+    const tc = cv.getContext("2d");
+    const cw = cv.width, chh = cv.height;
+    tc.setTransform(1, 0, 0, 1, 0, 0);
+    const g = tc.createLinearGradient(0, 0, 0, chh);
+    g.addColorStop(0, "#07131f"); g.addColorStop(1, "#030a12");
+    tc.fillStyle = g; tc.fillRect(0, 0, cw, chh);
+    const fake = makeEnt(sp, 0, 0);
+    fake.sx = 0; fake.sy = 0; fake.dir = 1;
+    tc.save();
+    if (sp.move === "ribbonV") {
+      // vertical ribbon species: lay them horizontally in the frame
+      const L = (sp.segN - 1) * sp.segSp;
+      const sc = Math.min(cw * 0.8 / L, chh * 0.55 / 60, 2.2);
+      tc.translate(cw / 2 - sc * L / 2, chh / 2);
+      tc.rotate(-Math.PI / 2);
+      tc.scale(sc, sc);
+    } else {
+      const span = sp.lm ? sp.r * 2.4 : sp.r * 2.2;
+      const sc = Math.min(cw * 0.82 / span, chh * 0.8 / (sp.r * 1.4), 2.2);
+      tc.translate(cw / 2, chh / 2 + (sp.lm ? -chh * 0.1 : 0));
+      tc.scale(sc, sc);
+      if (sp.segN) {
+        // recenter horizontal chains (they extend toward -x from the head)
+        tc.translate((sp.segN - 1) * sp.segSp / 2, 0);
+      }
+    }
+    try {
+      sp.draw(tc, fake, 1.4);
+      if (sp.glow) { tc.globalCompositeOperation = "lighter"; sp.glow(tc, fake, 1.4); }
+    } catch (err) { /* never break UI on a draw hiccup */ }
+    tc.restore();
+    return tc;
+  }
+
+  // ---------------- dex modal ----------------
+  function updateDexCount() {
+    $("dex-count").textContent = discovered.size;
+    $("dex-total").textContent = DEX_TOTAL;
+  }
+  function openDex() {
+    const grid = $("dex-grid");
+    grid.innerHTML = "";
+    $("dex-sub").textContent = `${discovered.size} / ${DEX_TOTAL} 発見`;
+    const sorted = [...SPECIES].sort((a, b) => a.min - b.min);
+    for (const sp of sorted) {
+      const got = discovered.has(sp.id);
+      const cell = document.createElement("div");
+      cell.className = "dex-cell" + (got ? " got" : "");
+      const cv = document.createElement("canvas");
+      cv.width = 380; cv.height = 148;
+      cell.appendChild(cv);
+      const tc = renderThumb(sp, cv);
+      if (!got) {
+        tc.globalCompositeOperation = "source-atop";
+        tc.fillStyle = "rgba(5,14,24,0.94)";
+        tc.fillRect(0, 0, cv.width, cv.height);
+      }
+      const nm = document.createElement("div");
+      nm.className = "nm" + (got ? "" : " unk");
+      nm.textContent = got ? sp.name : "？？？";
+      cell.appendChild(nm);
+      const dp = document.createElement("div");
+      dp.className = "dp";
+      dp.textContent = sp.lm ? `水深 ${sp.min.toLocaleString()}m` : `水深 ${sp.min.toLocaleString()}〜${sp.max.toLocaleString()}m`;
+      cell.appendChild(dp);
+      if (got) {
+        const fc = document.createElement("div");
+        fc.className = "fc"; fc.textContent = sp.fact;
+        cell.appendChild(fc);
+      }
+      grid.appendChild(cell);
+    }
+    $("dex").classList.add("open");
+  }
+  $("btn-dex").addEventListener("click", openDex);
+  $("dex-close").addEventListener("click", () => $("dex").classList.remove("open"));
+  $("end-dex").addEventListener("click", openDex);
+
+  // ---------------- banners / toasts ----------------
+  let bannerTimer = 0, mileTimer = 0, toastTimer2 = 0;
+  function showZone(z) {
+    $("banner").querySelector("h2").textContent = z.jp;
+    $("banner").querySelector("p").textContent = z.note;
+    $("banner").classList.add("show");
+    bannerTimer = 4.5;
+    $("zone-label").textContent = z.en;
+  }
+  function showMile(txt) {
+    $("mile").textContent = txt;
+    $("mile").classList.add("show");
+    mileTimer = 6;
+  }
+  function toast(txt) {
+    $("toast").textContent = txt;
+    $("toast").classList.add("show");
+    toastTimer2 = 2.2;
+  }
+
+  function checkDepthEvents() {
+    for (const z of ZONES) {
+      if (prevDepth < z.d && state.depth >= z.d) showZone(z);
+    }
+    for (const m of MILESTONES) {
+      if (!firedMilestones.has(m.d) && prevDepth < m.d && state.depth >= m.d) {
+        firedMilestones.add(m.d);
+        showMile(m.t);
+      }
+    }
+  }
+
+  // ---------------- HUD ----------------
+  function updateHUD() {
+    $("depth-val").innerHTML = `${Math.round(state.depth).toLocaleString()}<small>m</small>`;
+    let zone = ZONES[0];
+    for (const z of ZONES) if (state.depth >= z.d) zone = z;
+    $("zone-label").textContent = zone.en;
+    $("hud-atm").textContent = Math.round(1 + state.depth / 10).toLocaleString();
+    let tmp = waterTemp(state.depth);
+    const vent = ents.find(e => e.sp.id === "vent");
+    if (vent && Math.hypot(vent.sx - sub.x, vent.sy - sub.y) < 340) tmp = 64 + Math.sin(state.time * 3) * 18;
+    $("hud-tmp").textContent = tmp.toFixed(1);
+    $("hud-spd").textContent = (state.speed >= 0 ? "▼" : "▲") + Math.abs(state.speed).toFixed(1);
+  }
+
+  // ============================================================
+  //  INPUT
+  // ============================================================
+  canvas.addEventListener("pointermove", e => {
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true;
+  });
+  canvas.addEventListener("pointerdown", e => {
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true;
+    photograph();
+  });
+  window.addEventListener("wheel", e => {
+    if (!state.started || $("dex").classList.contains("open")) return;
+    state.speedTarget = clamp(state.speedTarget + (e.deltaY > 0 ? 3 : -3), -12, 36);
+  }, { passive: true });
+  window.addEventListener("keydown", e => {
+    if (e.code === "KeyH") { $("hud").classList.toggle("off"); return; }
+    if (!state.started) return;
+    if (e.code === "KeyS" || e.code === "ArrowDown") state.speedTarget = clamp(state.speedTarget + 3, -12, 36);
+    else if (e.code === "KeyW" || e.code === "ArrowUp") state.speedTarget = clamp(state.speedTarget - 3, -12, 36);
+    else if (e.code === "Space") { e.preventDefault(); state.speedTarget = 0; toast("停止 ― その場でホバリング"); }
+    else if (e.code === "Escape") $("dex").classList.remove("open");
+  });
+  // mobile buttons
+  const mHold = { up: false, dn: false };
+  for (const [id, key] of [["m-up", "up"], ["m-dn", "dn"]]) {
+    const b = $(id);
+    b.addEventListener("pointerdown", ev => { ev.preventDefault(); mHold[key] = true; });
+    b.addEventListener("pointerup", () => mHold[key] = false);
+    b.addEventListener("pointercancel", () => mHold[key] = false);
+    b.addEventListener("pointerleave", () => mHold[key] = false);
+  }
+
+  $("btn-snd").addEventListener("click", () => {
+    setSound(!soundOn);
+    $("btn-snd").textContent = soundOn ? "🔊 サウンド ON" : "🔇 サウンド OFF";
+  });
+
+  // ============================================================
+  //  ENDING
+  // ============================================================
+  function triggerEnding() {
+    if (state.ended) return;
+    state.ended = true;
+    state.speedTarget = 0; state.speed = 0;
+    discover(SP_BY_ID.kaitei, true);
+    store.save("completed", true);
+    const mins = Math.floor(state.time / 60), secs = Math.round(state.time % 60);
+    $("end-stats").innerHTML =
+      `潜航時間 <b>${mins}分${secs}秒</b>　発見 <b>${discovered.size} / ${DEX_TOTAL}</b><br>` +
+      (discovered.size >= DEX_TOTAL ? "図鑑コンプリート ― 深海のすべてがあなたに敬意を表します" : "まだ出会っていない生物が、この海のどこかにいます");
+    setTimeout(() => $("ending").classList.add("show"), 1600);
+    sfx.whale();
+  }
+  $("end-cont").addEventListener("click", () => { $("ending").classList.remove("show"); state.ended = false; state.speedTarget = -6; });
+  $("end-up").addEventListener("click", () => {
+    $("ending").classList.remove("show");
+    state.ended = false; state.surfacing = true;
+    toast("浮上開始 ― 光の世界へ");
+  });
+
+  // ============================================================
+  //  MAIN LOOP
+  // ============================================================
+  let lastT = performance.now();
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    let dt = Math.min((now - lastT) / 1000, 0.05);
+    lastT = now;
+    const t = state.time;
+
+    prevDepth = state.depth;
+    if (state.started) {
+      state.time += dt;
+      if (state.surfacing) {
+        state.speed = lerp(state.speed, -70, dt * 1.2);
+        if (state.depth < 8) { state.surfacing = false; state.speed = 0; state.speedTarget = 0; }
+      } else {
+        if (mHold.dn) state.speedTarget = clamp(state.speedTarget + dt * 24, -12, 30);
+        if (mHold.up) state.speedTarget = clamp(state.speedTarget - dt * 24, -12, 30);
+        state.speed = lerp(state.speed, state.speedTarget, dt * 2.2);
+      }
+      state.depth = clamp(state.depth + state.speed * dt, 1, MAX_DEPTH);
+      if (state.depth >= MAX_DEPTH - 1 && !state.ended) triggerEnding();
+      if (state.depth > maxDepthEver) {
+        maxDepthEver = state.depth;
+        if (Math.floor(t) % 10 === 0) store.save("maxDepth", Math.round(maxDepthEver));
+      }
+    }
+    cameraY = state.depth * PXM - H * 0.42;
+
+    // sub follows the cursor
+    const targetX = clamp(mouse.x, 70, W - 70);
+    const targetY = clamp(mouse.y, H * 0.22, H * 0.68);
+    sub.x += (targetX - sub.x) * Math.min(dt * 1.6, 1);
+    sub.y += (targetY - sub.y) * Math.min(dt * 1.0, 1);
+    sub.aim = Math.atan2(mouse.y - sub.y, mouse.x - sub.x);
+    if (!mouse.active) sub.aim = Math.PI / 2 + Math.sin(t * 0.4) * 0.5;
+    sub.tilt = clamp((targetX - sub.x) * 0.0012, -0.18, 0.18) + clamp(state.speed * 0.004, -0.12, 0.16);
+    if (Math.abs(state.speed) > 2 && Math.random() < dt * 8) emitBubble();
+
+    if (state.started) {
+      director(dt);
+      checkDepthEvents();
+    }
+    for (const e of ents) updateEnt(e, dt);
+    pruneEnts();
+    shotCooldown = Math.max(0, shotCooldown - dt);
+    processCards(dt);
+
+    // ambient audio evolution + hull creaks
+    if (AU && soundOn) {
+      AU.nFilt.frequency.value = lerp(430, 110, clamp(state.depth / 3000, 0, 1));
+      creakTimer -= dt;
+      if (creakTimer <= 0) {
+        creakTimer = rand(7, 22) * clamp(1 - (state.depth - 1200) / 9000, 0.25, 1);
+        if (state.depth > 1200) sfx.creak();
+      }
+    }
+
+    // banners lifetime
+    if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) $("banner").classList.remove("show");
+    if (mileTimer > 0 && (mileTimer -= dt) <= 0) $("mile").classList.remove("show");
+    if (toastTimer2 > 0 && (toastTimer2 -= dt) <= 0) $("toast").classList.remove("show");
+
+    // ---------- render ----------
+    drawBackground(t);
+    drawSnow(dt);
+    drawTrenchWalls();
+    drawEnts("main");
+    drawFloor();
+    drawSub(t);
+    drawBubbles(dt);
+    drawDarkness();
+    drawGlowPass();
+    drawVignette();
+    drawRail();
+    drawReticle();
+
+    state.hudTime -= dt;
+    if (state.hudTime <= 0) { state.hudTime = 0.1; updateHUD(); }
+  }
+
+  // ============================================================
+  //  BOOT
+  // ============================================================
+  $("dive-btn").addEventListener("click", () => {
+    initAudio();
+    $("title-screen").classList.add("hide");
+    state.started = true;
+    state.speedTarget = 4;
+    toast("潜航開始 ― ゆっくり沈んでいきます");
+  });
+  if (discovered.size > 0) {
+    $("title-note").textContent = `これまでの記録：発見 ${discovered.size}/${DEX_TOTAL} ・ 最深 ${Math.round(maxDepthEver).toLocaleString()}m(記録は引き継がれます)`;
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+  updateDexCount();
+  requestAnimationFrame(loop);
+
+  // debug / test hook
+  window.__abyss = {
+    state, sub, get ents() { return ents; },
+    setDepth(d) { state.depth = clamp(d, 1, MAX_DEPTH); prevDepth = state.depth; cameraY = state.depth * PXM - H * 0.42; ents = ents.filter(e => e.sp.lm); },
+    spawn(id, x, y) { return spawn(SP_BY_ID[id], x, y); },
+    discovered,
+  };
+})();
+</script>
+</body>
+</html>
