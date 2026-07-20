@@ -1,0 +1,1593 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TERRA — 生きている大地</title>
+<style>
+  :root {
+    --grn: #8fe388;
+    --amb: #ffd07a;
+    --panel: rgba(8, 16, 12, 0.66);
+    --line: rgba(143, 227, 136, 0.22);
+    --tx: #eef7ea;
+    --dim: #9ab8a0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #0a1410;
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+    color: var(--tx);
+    -webkit-user-select: none; user-select: none;
+    touch-action: none;
+  }
+  #land { position: fixed; inset: 0; display: block; cursor: crosshair; }
+
+  .glass {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; transition: opacity .4s; }
+  #hud.off { opacity: 0; }
+
+  /* ---------- info (top-left) ---------- */
+  #info-box { position: absolute; top: 14px; left: 14px; padding: 10px 16px 9px; }
+  #info-year { font-size: 19px; font-weight: 800; letter-spacing: 0.06em; color: #fdfaf0; }
+  #info-year b { color: var(--amb); }
+  #info-sub { margin-top: 3px; font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+  #info-sub b { color: var(--tx); font-weight: 600; }
+
+  /* ---------- stats (top-right) ---------- */
+  #stats-box {
+    position: absolute; top: 14px; right: 14px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 14px;
+    font-size: 12.5px; font-variant-numeric: tabular-nums;
+    pointer-events: auto;
+  }
+  #stats-box span { white-space: nowrap; }
+  #stats-box b { color: var(--grn); font-weight: 700; }
+  #btn-sound {
+    font-family: inherit; font-size: 12px;
+    color: var(--tx); background: none;
+    border: none; border-left: 1px solid var(--line);
+    padding: 2px 0 2px 12px; cursor: pointer;
+  }
+
+  /* ---------- toolbar (bottom) ---------- */
+  #toolbar {
+    position: absolute; bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 20px);
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px;
+    pointer-events: auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #toolbar::-webkit-scrollbar { display: none; }
+  .tool {
+    flex: 0 0 auto;
+    font-family: inherit;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    min-width: 52px;
+    padding: 7px 6px 6px;
+    font-size: 10px; letter-spacing: 0.04em;
+    color: var(--dim);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .tool .ic { font-size: 17px; line-height: 1; }
+  .tool:hover { color: var(--tx); background: rgba(143, 227, 136, 0.08); }
+  .tool.on {
+    color: #eafff0;
+    background: rgba(143, 227, 136, 0.16);
+    border-color: var(--grn);
+    box-shadow: 0 0 12px rgba(143, 227, 136, 0.25);
+  }
+  .tb-sep { flex: 0 0 1px; align-self: stretch; margin: 4px 3px; background: var(--line); }
+  .tool.ctrl { min-width: 46px; }
+  .tool.ctrl .ic { font-size: 14px; padding-top: 2px; }
+
+  /* ---------- toast ---------- */
+  #toast {
+    position: absolute; top: 68px; left: 50%;
+    transform: translate(-50%, -6px);
+    padding: 8px 20px;
+    font-size: 12.5px; letter-spacing: 0.08em;
+    color: #fdfaf0;
+    opacity: 0; transition: opacity .4s, transform .4s;
+    max-width: calc(100vw - 40px);
+    text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- title screen ---------- */
+  #title-screen {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 115%, rgba(30, 60, 30, 0.35), rgba(4, 10, 7, 0.72));
+    transition: opacity 1.2s ease;
+    padding: 20px;
+  }
+  #title-screen.hide { opacity: 0; pointer-events: none; }
+  #title-screen h1 {
+    font-size: clamp(52px, 10vw, 92px);
+    font-weight: 800; letter-spacing: 0.3em; text-indent: 0.3em;
+    background: linear-gradient(180deg, #fdfaf0 0%, var(--grn) 55%, #2e7d4f 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 30px rgba(143, 227, 136, 0.3));
+  }
+  #title-screen .sub { margin-top: 12px; font-size: 14px; letter-spacing: 0.45em; text-indent: .45em; color: var(--dim); }
+  #title-screen .ctr {
+    margin-top: 38px; padding: 16px 24px;
+    font-size: 12.5px; line-height: 2.1; color: var(--tx); text-align: center;
+  }
+  #title-screen .ctr b { color: var(--grn); font-weight: 600; }
+  #start-btn {
+    margin-top: 30px;
+    font-family: inherit; font-size: 16px; letter-spacing: 0.4em; text-indent: .4em;
+    color: #08140c; font-weight: 800;
+    background: linear-gradient(90deg, var(--grn), var(--amb));
+    border: none; border-radius: 999px;
+    padding: 15px 48px; cursor: pointer;
+    box-shadow: 0 0 30px rgba(143, 227, 136, 0.35);
+    transition: transform .2s, box-shadow .2s;
+  }
+  #start-btn:hover { transform: translateY(-2px); box-shadow: 0 0 46px rgba(143, 227, 136, 0.55); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 720px) {
+    #info-box { padding: 8px 12px 7px; max-width: 46vw; }
+    #info-year { font-size: 15px; }
+    #info-sub { font-size: 10px; }
+    #stats-box { font-size: 11px; gap: 8px; padding: 7px 10px; max-width: 50vw; flex-wrap: wrap; justify-content: flex-end; row-gap: 2px; }
+    #toolbar { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); justify-content: flex-start; }
+    .tool { min-width: 47px; padding: 6px 4px 5px; font-size: 9.5px; }
+    #toast { top: auto; bottom: 84px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="land"></canvas>
+
+<div id="hud">
+  <div id="info-box" class="glass">
+    <div id="info-year"><b>1年目</b> 春</div>
+    <div id="info-sub">朝 ・ <b id="hud-temp">14</b>°C ・ <span id="hud-wx">☀️</span></div>
+  </div>
+  <div id="stats-box" class="glass">
+    <span>🌿<b id="st-grass">0</b>%</span>
+    <span>🌳<b id="st-tree">0</b></span>
+    <span>🐇<b id="st-rabbit">0</b></span>
+    <span>🦌<b id="st-deer">0</b></span>
+    <span>🦊<b id="st-fox">0</b></span>
+    <button id="btn-sound">🔊</button>
+  </div>
+
+  <div id="toolbar" class="glass">
+    <button class="tool on" data-tool="raise"><span class="ic">🏔</span>隆起</button>
+    <button class="tool" data-tool="dig"><span class="ic">⛏</span>掘削</button>
+    <button class="tool" data-tool="rain"><span class="ic">🌧</span>雨</button>
+    <button class="tool" data-tool="grass"><span class="ic">🌱</span>草</button>
+    <button class="tool" data-tool="tree"><span class="ic">🌳</span>木</button>
+    <div class="tb-sep"></div>
+    <button class="tool" data-tool="rabbit"><span class="ic">🐇</span>ウサギ</button>
+    <button class="tool" data-tool="deer"><span class="ic">🦌</span>シカ</button>
+    <button class="tool" data-tool="fox"><span class="ic">🦊</span>キツネ</button>
+    <button class="tool" data-tool="bird"><span class="ic">🐦</span>トリ</button>
+    <div class="tb-sep"></div>
+    <button class="tool" data-tool="bolt"><span class="ic">⚡</span>雷</button>
+    <button class="tool" data-tool="meteor"><span class="ic">☄️</span>隕石</button>
+    <div class="tb-sep"></div>
+    <button class="tool ctrl" id="ct-brush"><span class="ic">◐</span>筆:中</button>
+    <button class="tool ctrl" id="ct-speed"><span class="ic">▶▶</span>1×</button>
+    <button class="tool ctrl" id="ct-pause"><span class="ic">⏸</span>停止</button>
+  </div>
+
+  <div id="toast" class="glass"></div>
+</div>
+
+<div id="title-screen">
+  <h1>TERRA</h1>
+  <div class="sub">生きている大地</div>
+  <div class="ctr glass">
+    <b>地形を隆起</b>させ、<b>雨</b>を降らせ、<b>木</b>を植え、<b>動物</b>を放つ。<br>
+    あとは眺めるだけ。草が茂り、ウサギが増え、キツネが狩り、季節が巡ります。<br>
+    下のツールバーで道具を選び、大地をドラッグ ／ <b>H</b> UI非表示
+  </div>
+  <button id="start-btn">大地をつくる</button>
+</div>
+<script>
+"use strict";
+(() => {
+  // ============================================================
+  //  TERRA — a living-land terrarium
+  // ============================================================
+  const canvas = document.getElementById("land");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const frac = x => x - Math.floor(x);
+  const n1 = s => frac(Math.sin(s * 127.1 + 311.7) * 43758.5453);
+  const $ = id => document.getElementById(id);
+
+  // ---------------- world grid ----------------
+  const COLS = 340;
+  let colW = 4;
+  const ground = new Float32Array(COLS);  // px height above screen bottom
+  const water  = new Float32Array(COLS);  // water depth px
+  const snow   = new Float32Array(COLS);  // snow depth px
+  const moist  = new Float32Array(COLS);  // 0..1 soil moisture
+  const grass  = new Float32Array(COLS);  // 0..1 grass cover
+
+  const state = {
+    started: false,
+    paused: false,
+    speed: 1,
+    time: 0,             // sim seconds
+    dayT: 0.32,          // 0..1 (0 = midnight)
+    yearT: 0.03,         // 0..1 (0 = start of spring)
+    year: 1,
+    wind: 0.2,           // -1..1
+    windTarget: 0.2,
+    weather: "clear",    // clear | cloudy | rain
+    wxTimer: 26,
+    rainInt: 0,          // 0..1 rain intensity
+    shake: 0,
+  };
+
+  const DAY_LEN = 40;    // seconds per day at 1x
+  const YEAR_LEN = 360;  // seconds per year at 1x
+  const SEASONS = ["春", "夏", "秋", "冬"];
+
+  function seasonIdx() { return Math.floor(state.yearT * 4) % 4; }
+  function baseTemp() {
+    return 11 + 16 * Math.sin(TAU * (state.yearT - 0.125)) + 4 * Math.sin(TAU * (state.dayT - 0.25));
+  }
+  function tempAt(i) {
+    const alt = Math.max(0, ground[i] - H * 0.30);
+    return baseTemp() - alt / H * 26;
+  }
+  // daylight 0..1
+  function dayLight() {
+    const s = Math.sin(TAU * (state.yearT - 0.125));
+    const sunrise = 0.25 - s * 0.035, sunset = 0.75 + s * 0.035;
+    const w = 0.055;
+    const up = clamp((state.dayT - (sunrise - w)) / (2 * w), 0, 1);
+    const dn = clamp(((sunset + w) - state.dayT) / (2 * w), 0, 1);
+    return Math.min(up, dn);
+  }
+
+  // ---------------- terrain ----------------
+  function genTerrain() {
+    const b = H * 0.30;
+    for (let i = 0; i < COLS; i++) {
+      const u = i / (COLS - 1);
+      let h = b;
+      h += Math.sin(u * 5.1 + 1.7) * H * 0.05;
+      h += Math.sin(u * 11.3 + 4.2) * H * 0.025;
+      h += Math.sin(u * 23 + 2.1) * H * 0.012;
+      // one proper mountain on the right, a valley basin left-of-center
+      h += Math.exp(-Math.pow((u - 0.82) / 0.09, 2)) * H * 0.34;
+      h += Math.exp(-Math.pow((u - 0.60) / 0.05, 2)) * H * 0.10;
+      h -= Math.exp(-Math.pow((u - 0.30) / 0.11, 2)) * H * 0.075;
+      ground[i] = Math.max(h, H * 0.10);
+      water[i] = 0; snow[i] = 0;
+      moist[i] = 0.35 + n1(i * 3.1) * 0.2;
+      // less grass at rocky altitude
+      const altF = clamp(1 - (ground[i] - H * 0.45) / (H * 0.14), 0, 1);
+      grass[i] = (0.25 + n1(i * 7.7) * 0.35) * altF;
+    }
+    // a starting pond in the valley
+    for (let i = 0; i < COLS; i++) {
+      const u = i / (COLS - 1);
+      if (u > 0.16 && u < 0.45) {
+        const lvl = H * 0.262;
+        if (ground[i] < lvl) water[i] = lvl - ground[i];
+      }
+    }
+  }
+
+  function groundYpx(x) { // screen y of terrain surface at screen x
+    const f = clamp(x / colW, 0, COLS - 1.001);
+    const i = Math.floor(f), t = f - i;
+    return H - lerp(ground[i], ground[Math.min(i + 1, COLS - 1)], t);
+  }
+
+  // ---------------- water flow ----------------
+  function flowWater(dt) {
+    const k = 0.26;
+    for (let pass = 0; pass < 2; pass++) {
+      const dirRight = (pass + (state.time | 0)) % 2 === 0;
+      for (let s = 0; s < COLS - 1; s++) {
+        const i = dirRight ? s : COLS - 2 - s;
+        const hA = ground[i] + water[i], hB = ground[i + 1] + water[i + 1];
+        let d = (hA - hB) * k;
+        if (d > 0) d = Math.min(d, water[i] * 0.5);
+        else d = -Math.min(-d, water[i + 1] * 0.5);
+        water[i] -= d; water[i + 1] += d;
+      }
+    }
+    // evaporation & soil wetting
+    const evap = (0.0025 + Math.max(baseTemp(), 0) * 0.00035) * dt;
+    for (let i = 0; i < COLS; i++) {
+      if (water[i] > 0) {
+        water[i] = Math.max(0, water[i] - evap * 6);
+        moist[i] = Math.min(1, moist[i] + dt * 0.25);
+      }
+      moist[i] = Math.max(0.05, moist[i] - dt * 0.006);
+    }
+    // moisture diffusion
+    for (let i = 1; i < COLS - 1; i++) {
+      moist[i] += ((moist[i - 1] + moist[i + 1]) / 2 - moist[i]) * dt * 0.35;
+    }
+  }
+
+  // ---------------- weather ----------------
+  function stepWeather(dt) {
+    state.windTarget += (Math.random() - 0.5) * dt * 0.3;
+    state.windTarget = clamp(state.windTarget, -1, 1);
+    state.wind = lerp(state.wind, state.windTarget, dt * 0.4);
+
+    state.wxTimer -= dt;
+    if (state.wxTimer <= 0) {
+      if (state.weather === "clear") { state.weather = "cloudy"; state.wxTimer = rand(10, 24); }
+      else if (state.weather === "cloudy") {
+        if (Math.random() < 0.62) { state.weather = "rain"; state.wxTimer = rand(14, 34); }
+        else { state.weather = "clear"; state.wxTimer = rand(22, 55); }
+      } else { state.weather = "clear"; state.wxTimer = rand(24, 60); }
+    }
+    state.rainInt = lerp(state.rainInt, state.weather === "rain" ? 1 : 0, dt * 0.8);
+
+    // physical precipitation (independent of the visual particles, so it
+    // scales with simulation speed)
+    if (state.rainInt > 0.05) {
+      const warm = baseTemp() >= 1.5;
+      for (let k = 0; k < 30; k++) {
+        const i = (Math.random() * COLS) | 0;
+        if (warm) {
+          water[i] += state.rainInt * dt * 4;
+          moist[i] = Math.min(1, moist[i] + dt * 0.5);
+        } else {
+          snow[i] = Math.min(snow[i] + state.rainInt * dt * 3.4, 30);
+        }
+      }
+    }
+
+    // natural lightning during storms (can even start a fire)
+    if (state.weather === "rain" && Math.random() < dt * 0.02) {
+      strikeLightning(rand(W * 0.05, W * 0.95), true);
+    }
+    // snow accumulates / melts
+    for (let i = 0; i < COLS; i++) {
+      const t = tempAt(i);
+      if (t > 1.5 && snow[i] > 0) {
+        const m = Math.min(snow[i], dt * (1.2 + t * 0.5));
+        snow[i] -= m;
+        water[i] += m * 0.55;   // snowmelt feeds the lakes
+        moist[i] = Math.min(1, moist[i] + m * 0.02);
+      }
+    }
+  }
+
+  // ============================================================
+  //  AUDIO — synthesized countryside
+  // ============================================================
+  let AU = null, soundOn = true;
+  function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const acx = new AC();
+    const master = acx.createGain(); master.gain.value = 0;
+    master.connect(acx.destination);
+
+    const mkNoise = () => {
+      const len = acx.sampleRate * 2;
+      const buf = acx.createBuffer(1, len, acx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+      const src = acx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      return src;
+    };
+    // wind
+    const wind = mkNoise();
+    const wf = acx.createBiquadFilter(); wf.type = "lowpass"; wf.frequency.value = 260;
+    const wg = acx.createGain(); wg.gain.value = 0.05;
+    wind.connect(wf); wf.connect(wg); wg.connect(master); wind.start();
+    // rain
+    const rain = mkNoise();
+    const rf = acx.createBiquadFilter(); rf.type = "bandpass"; rf.frequency.value = 2400; rf.Q.value = 0.4;
+    const rg = acx.createGain(); rg.gain.value = 0;
+    rain.connect(rf); rf.connect(rg); rg.connect(master); rain.start();
+
+    AU = { acx, master, wg, rg };
+    setSound(soundOn);
+  }
+  function setSound(on) {
+    soundOn = on;
+    $("btn-sound").textContent = on ? "🔊" : "🔇";
+    if (!AU) return;
+    if (AU.acx.state === "suspended") AU.acx.resume();
+    AU.master.gain.setTargetAtTime(on ? 0.75 : 0, AU.acx.currentTime, 0.5);
+  }
+  function tone(freq, dur, vol, type = "sine", glideTo = null) {
+    if (!AU || !soundOn) return;
+    const { acx, master } = AU;
+    const t = acx.currentTime;
+    const o = acx.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(Math.max(glideTo, 20), t + dur);
+    const g = acx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function boom(vol = 0.5, dur = 1.6) {
+    if (!AU || !soundOn) return;
+    const { acx, master } = AU;
+    const t = acx.currentTime;
+    const len = Math.ceil(acx.sampleRate * dur);
+    const buf = acx.createBuffer(1, len, acx.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const src = acx.createBufferSource(); src.buffer = buf;
+    const f = acx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 160;
+    const g = acx.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(master); src.start(t);
+    tone(46, dur, vol * 0.5, "sine", 26);
+  }
+  const sfx = {
+    chirp() {
+      const f0 = rand(2200, 3600);
+      tone(f0, 0.09, 0.05, "sine", f0 * rand(1.2, 1.5));
+      setTimeout(() => tone(f0 * 0.9, 0.1, 0.04, "sine", f0 * 1.3), 120);
+      if (Math.random() < 0.5) setTimeout(() => tone(f0 * 1.1, 0.08, 0.035, "sine", f0 * 0.8), 260);
+    },
+    cricket() { for (let k = 0; k < 3; k++) setTimeout(() => tone(4300, 0.05, 0.022, "square"), k * 90); },
+    chime() { tone(740, 0.6, 0.1); setTimeout(() => tone(1108, 0.9, 0.08), 120); },
+    pop() { tone(rand(500, 700), 0.12, 0.08, "triangle", 220); },
+  };
+  let chirpTimer = 3, cricketTimer = 5;
+
+  function ambientAudio(dt) {
+    if (!AU || !soundOn) return;
+    AU.wg.gain.value = 0.028 + Math.abs(state.wind) * 0.06;
+    AU.rg.gain.setTargetAtTime(state.rainInt * 0.075, AU.acx.currentTime, 0.4);
+    const light = dayLight();
+    chirpTimer -= dt;
+    if (chirpTimer <= 0) {
+      chirpTimer = rand(2, 7);
+      if (light > 0.5 && counts.bird > 0 && state.rainInt < 0.4) sfx.chirp();
+    }
+    cricketTimer -= dt;
+    if (cricketTimer <= 0) {
+      cricketTimer = rand(0.7, 1.8);
+      if (light < 0.15 && baseTemp() > 10) sfx.cricket();
+    }
+  }
+
+  // ============================================================
+  //  PLANTS
+  // ============================================================
+  /** trees: {col,x,species,stage,age,burn,dead,seed,sway} species: oak|sakura|pine */
+  let trees = [];
+  const TREE_MAX = 150;
+
+  function plantTree(x, species, stage = 0.06) {
+    if (trees.length >= TREE_MAX) return null;
+    const col = clamp(Math.round(x / colW), 2, COLS - 3);
+    if (water[col] > 3) return null;
+    const t = { col, x: col * colW, species, stage, age: 0, burn: 0, burning: false, dead: false, seed: rand(0, 99), sway: rand(0, TAU) };
+    trees.push(t);
+    return t;
+  }
+  function autoSpecies(col) {
+    const t = tempAt(col);
+    if (ground[col] > H * 0.52 || t < 4) return "pine";
+    return Math.random() < 0.3 ? "sakura" : "oak";
+  }
+
+  function stepPlants(dt) {
+    // grass
+    const sun = dayLight();
+    for (let i = 0; i < COLS; i++) {
+      const t = tempAt(i);
+      if (water[i] > 2) { grass[i] = Math.max(0, grass[i] - dt * 0.3); continue; }
+      if (t > 4 && moist[i] > 0.22) grass[i] = Math.min(1, grass[i] + dt * 0.045 * sun * moist[i]);
+      if (t < -2) grass[i] = Math.max(0.13, grass[i] - dt * 0.004);
+    }
+    // trees
+    for (const tr of trees) {
+      tr.age += dt;
+      const t = tempAt(tr.col);
+      if (tr.burning) {
+        tr.burn += dt * 0.25;
+        if (state.rainInt > 0.5 && Math.random() < dt * 0.7) tr.burning = false; // rain douses
+        if (tr.burn >= 1) { tr.dead = true; grass[tr.col] *= 0.25; }
+        // spread
+        if (Math.random() < dt * 1.6) {
+          for (const o of trees) {
+            if (o === tr || o.burning || o.dead) continue;
+            const dx = o.x - tr.x;
+            if (Math.abs(dx) < 46 + state.wind * dx * 0.4) {
+              const dry = 1 - moist[o.col];
+              if (Math.random() < 0.28 + dry * 0.4) igniteTree(o);
+              break;
+            }
+          }
+        }
+        if (Math.random() < dt * 8) spawnP("smoke", tr.x + rand(-6, 6), H - ground[tr.col] - tr.stage * 60);
+        continue;
+      }
+      if (t > 2 && moist[tr.col] > 0.14 && tr.stage < 1) tr.stage = Math.min(1, tr.stage + dt / 75);
+      // seeding
+      if (tr.stage > 0.85 && Math.random() < dt * 0.018) {
+        const nc = clamp(tr.col + Math.round(rand(-16, 16)), 2, COLS - 3);
+        if (moist[nc] > 0.3 && water[nc] < 2) {
+          let crowd = 0;
+          for (const o of trees) if (Math.abs(o.col - nc) < 8 && !o.dead) crowd++;
+          if (crowd < 2) plantTree(nc * colW, autoSpecies(nc));
+        }
+      }
+      // sakura petals in spring
+      if (tr.species === "sakura" && seasonIdx() === 0 && tr.stage > 0.5 && Math.random() < dt * 2.2) {
+        spawnP("petal", tr.x + rand(-18, 18) * tr.stage, H - ground[tr.col] - tr.stage * rand(48, 78));
+      }
+    }
+    trees = trees.filter(t => !t.dead || (t.deadT = (t.deadT || 0) + dt) < 6);
+  }
+
+  function igniteTree(tr) {
+    if (tr.burning || tr.dead) return;
+    tr.burning = true; tr.burn = 0;
+    events.fire();
+  }
+
+  // ============================================================
+  //  ANIMALS
+  // ============================================================
+  /** {sp,x,y,vx,dir,age,hunger,cool,hop,state,scale,fly...} */
+  let animals = [];
+  const CAPS = { rabbit: 45, deer: 14, fox: 5, bird: 22 };
+  const counts = { rabbit: 0, deer: 0, fox: 0, bird: 0, tree: 0 };
+
+  function spawnAnimal(sp, x, baby = false) {
+    const n = animals.filter(a => a.sp === sp).length;
+    if (n >= CAPS[sp]) return null;
+    const a = {
+      sp, x: clamp(x, 10, W - 10), y: 0, vx: 0, dir: Math.random() < 0.5 ? 1 : -1,
+      age: baby ? 0 : rand(10, 30), hunger: 0.3, cool: rand(6, 14),
+      life: SPEC[sp].life * rand(0.75, 1.35),
+      hop: rand(0, TAU), state: "wander", tgt: null, scale: baby ? 0.5 : 1,
+      wanderT: rand(1, 4), seed: rand(0, 99),
+      flyY: rand(H * 0.25, H * 0.5), perch: null,
+    };
+    a.y = groundYpx(a.x);
+    animals.push(a);
+    return a;
+  }
+
+  const SPEC = {
+    rabbit: { speed: 32, flee: 1.9, eatN: 0.07, life: 160, mature: 14, repro: 0.42, reproT: 9 },
+    deer:   { speed: 24, flee: 1.7, eatN: 0.12, life: 300, mature: 25, repro: 0.45, reproT: 22 },
+    fox:    { speed: 36, flee: 1,   eatN: 0,    life: 260, mature: 22, repro: 0.2,  reproT: 62 },
+    bird:   { speed: 46, flee: 1,   eatN: 0,    life: 400, mature: 10, repro: 0.3,  reproT: 40 },
+  };
+
+  function stepAnimals(dt) {
+    const light = dayLight();
+    for (const a of animals) {
+      const S = SPEC[a.sp];
+      a.age += dt;
+      a.scale = Math.min(1, a.scale + dt * 0.02);
+      a.cool -= dt;
+      a.hop += dt * 8;
+
+      if (a.sp === "bird") { stepBird(a, dt); continue; }
+
+      const col = clamp(Math.round(a.x / colW), 0, COLS - 1);
+      // winter torpor: metabolism slows in the cold, or nobody survives to spring
+      const coldF = tempAt(col) < 2 ? 0.4 : 1;
+      a.hunger += dt * (a.sp === "fox" ? 0.014 : 0.012) * coldF;
+      // freeze/hide at night (rabbits & deer sleep, foxes hunt at night too)
+      const active = a.sp === "fox" ? 1 : (0.35 + light * 0.65);
+
+      if (a.sp !== "fox") {
+        // flee nearby fox
+        let danger = null, dd = 1e9;
+        for (const f of animals) {
+          if (f.sp !== "fox") continue;
+          const d = Math.abs(f.x - a.x);
+          if (d < 70 && d < dd) { danger = f; dd = d; }
+        }
+        if (danger) { a.state = "flee"; a.dir = a.x > danger.x ? 1 : -1; }
+        else if (a.state === "flee") a.state = "wander";
+      }
+
+      if (a.state === "flee") {
+        a.vx = a.dir * S.speed * S.flee;
+      } else if (a.sp === "fox" && a.hunger > 0.5) {
+        // hunt nearest prey
+        let prey = null, pd = 1e9;
+        for (const p of animals) {
+          if (p.sp !== "rabbit" && !(p.sp === "deer" && p.scale < 0.75)) continue;
+          const d = Math.abs(p.x - a.x);
+          if (d < 120 && d < pd) { prey = p; pd = d; }
+        }
+        if (prey) {
+          a.state = "hunt";
+          a.dir = prey.x > a.x ? 1 : -1;
+          a.vx = a.dir * S.speed * 1.75; // slightly faster than fleeing prey
+          if (pd < 12) { prey.dead = true; a.hunger = 0.1; a.state = "wander"; spawnP("soul", prey.x, prey.y - 8); }
+        } else { a.state = "wander"; }
+      } else if (a.sp !== "fox" && a.hunger > 0.35 && grass[col] > 0.1 && water[col] < 2) {
+        a.state = "eat";
+        a.vx = 0;
+        grass[col] = Math.max(0, grass[col] - S.eatN * dt);
+        a.hunger = Math.max(0, a.hunger - dt * 0.12);
+      } else {
+        a.state = "wander";
+        a.wanderT -= dt;
+        if (a.wanderT <= 0) { a.wanderT = rand(1.5, 5); a.dir = Math.random() < 0.5 ? -1 : 1; if (Math.random() < 0.35) a.dir = 0; }
+        a.vx = a.dir * S.speed * 0.45 * active;
+      }
+
+      // move; avoid deep water & world edges
+      const nx = a.x + a.vx * dt;
+      const ncol = clamp(Math.round(nx / colW), 0, COLS - 1);
+      if (water[ncol] > 5 || nx < 8 || nx > W - 8) { a.dir *= -1; a.vx = 0; }
+      else a.x = nx;
+      a.y = groundYpx(a.x);
+
+      // reproduce (foxes need an abundant prey base, or they starve the land)
+      if (a.hunger < S.repro && a.age > S.mature && a.cool <= 0) {
+        const preyOK = a.sp !== "fox" || (counts.rabbit + counts.deer) > counts.fox * 10;
+        if (preyOK) {
+          a.cool = S.reproT + rand(0, 8);
+          spawnAnimal(a.sp, a.x + rand(-14, 14), true);
+          events.birth(a.sp);
+        } else a.cool = 10;
+      }
+      // death
+      if (a.hunger > 1.25 || a.age > a.life) { a.dead = true; spawnP("soul", a.x, a.y - 8); }
+    }
+    const before = { rabbit: counts.rabbit, deer: counts.deer, fox: counts.fox };
+    animals = animals.filter(a => !a.dead);
+    counts.rabbit = animals.filter(a => a.sp === "rabbit").length;
+    counts.deer = animals.filter(a => a.sp === "deer").length;
+    counts.fox = animals.filter(a => a.sp === "fox").length;
+    counts.bird = animals.filter(a => a.sp === "bird").length;
+    counts.tree = trees.filter(t => !t.dead && t.stage > 0.15).length;
+    for (const sp of ["rabbit", "deer", "fox"]) {
+      if (before[sp] > 0 && counts[sp] === 0) events.extinct(sp);
+    }
+  }
+
+  function stepBird(a, dt) {
+    // birds fly between trees; scatter from fire and storms
+    const scared = trees.some(t => t.burning && Math.abs(t.x - a.x) < 120);
+    if (a.perch && !scared && state.rainInt < 0.6) {
+      const t = a.perch;
+      if (t.dead || t.burning) { a.perch = null; return; }
+      a.x = t.x + Math.sin(a.seed) * 8;
+      a.y = H - ground[t.col] - t.stage * 62;
+      if (Math.random() < dt * 0.1) a.perch = null; // take off sometimes
+      return;
+    }
+    a.perch = null;
+    const tgt = a.tgt;
+    if (!tgt || Math.random() < dt * 0.2) {
+      const cand = trees.filter(t => t.stage > 0.5 && !t.burning && !t.dead);
+      a.tgt = cand.length ? cand[(Math.random() * cand.length) | 0] : null;
+    }
+    let tx = a.tgt ? a.tgt.x : W / 2 + Math.sin(state.time * 0.3 + a.seed) * W * 0.3;
+    let ty = a.tgt ? H - ground[a.tgt.col] - a.tgt.stage * 62 : a.flyY;
+    if (scared) { tx = a.x + (a.x > W / 2 ? -200 : 200); ty = a.y - 80; }
+    a.dir = tx > a.x ? 1 : -1;
+    a.x += (tx - a.x) * dt * 0.8 + Math.sin(state.time * 2 + a.seed) * 0.4;
+    a.y += (ty - a.y) * dt * 0.8 + Math.cos(state.time * 1.6 + a.seed) * 0.5;
+    if (a.tgt && Math.abs(a.x - a.tgt.x) < 10 && Math.abs(a.y - (H - ground[a.tgt.col] - a.tgt.stage * 62)) < 12 && !scared) {
+      a.perch = a.tgt;
+    }
+  }
+
+  // ============================================================
+  //  PARTICLES
+  // ============================================================
+  /** {kind,x,y,vx,vy,life,max,r,seed} */
+  let parts = [];
+  const P_MAX = 460;
+  function spawnP(kind, x, y) {
+    if (parts.length >= P_MAX) return;
+    const p = { kind, x, y, vx: 0, vy: 0, life: 0, max: 1, r: 2, seed: rand(0, 9) };
+    switch (kind) {
+      case "rain":  p.vy = rand(340, 430); p.vx = state.wind * 90; p.max = 3; break;
+      case "snow":  p.vy = rand(46, 78); p.vx = state.wind * 30; p.max = 9; p.r = rand(1, 2.4); break;
+      case "petal": p.vy = rand(9, 20); p.vx = state.wind * 26 + rand(-6, 6); p.max = rand(5, 9); p.r = rand(1.6, 2.6); break;
+      case "smoke": p.vy = rand(-26, -14); p.vx = state.wind * 20; p.max = rand(2.5, 4.5); p.r = rand(3, 7); break;
+      case "soul":  p.vy = -16; p.max = 2.2; p.r = 2.2; break;
+      case "fire":  p.vy = rand(-40, -20); p.vx = rand(-8, 8); p.max = rand(0.4, 0.9); p.r = rand(1.5, 3); break;
+      case "leaf":  p.vy = rand(12, 26); p.vx = state.wind * 34 + rand(-8, 8); p.max = rand(4, 7); p.r = rand(1.5, 2.4); break;
+      case "dust":  p.vy = rand(-70, -30); p.vx = rand(-60, 60); p.max = rand(0.6, 1.4); p.r = rand(2, 5); break;
+      case "firefly": p.max = rand(4, 8); p.r = 1.6; break;
+    }
+    parts.push(p);
+  }
+  function stepParts(dt) {
+    for (const p of parts) {
+      p.life += dt;
+      if (p.kind === "firefly") {
+        p.x += Math.sin(p.life * 1.7 + p.seed * 4) * 26 * dt;
+        p.y += Math.cos(p.life * 2.1 + p.seed * 3) * 20 * dt;
+      } else {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.kind === "petal" || p.kind === "leaf") p.x += Math.sin(p.life * 3 + p.seed) * 14 * dt;
+        if (p.kind === "smoke") { p.r += dt * 5; p.vx = state.wind * 20; }
+      }
+      // ground / water hits for precipitation
+      if (p.kind === "rain" || p.kind === "snow") {
+        const gy = groundYpx(p.x);
+        const col = clamp(Math.round(p.x / colW), 0, COLS - 1);
+        const surfY = gy - water[col] - snow[col];
+        if (p.y >= surfY) {
+          if (p.kind === "rain") { water[col] += 0.05; moist[col] = Math.min(1, moist[col] + 0.008); }
+          else snow[col] = Math.min(snow[col] + 0.2, 30);
+          p.life = p.max + 1;
+        }
+      }
+      if (p.x < -20 || p.x > W + 20 || p.y > H + 20) p.life = p.max + 1;
+    }
+    parts = parts.filter(p => p.life < p.max);
+
+    // ambient emitters
+    const s = seasonIdx(), light = dayLight(), tmp = baseTemp();
+    if (state.rainInt > 0.05) {
+      const n = Math.round(state.rainInt * 6 * (tmp < 1.5 ? 0.6 : 1));
+      for (let k = 0; k < n; k++) spawnP(tmp < 1.5 ? "snow" : "rain", rand(-30, W + 30), -14);
+    }
+    if (s === 2 && Math.random() < dt * 3) { // autumn leaves from broadleaf trees
+      const cand = trees.filter(t => t.species !== "pine" && t.stage > 0.5 && !t.dead && !t.burning);
+      if (cand.length) { const t = cand[(Math.random() * cand.length) | 0]; spawnP("leaf", t.x + rand(-16, 16), H - ground[t.col] - t.stage * rand(45, 70)); }
+    }
+    if (s === 1 && light < 0.12 && Math.random() < dt * 2.4) { // summer-night fireflies
+      const i = (Math.random() * COLS) | 0;
+      if (grass[i] > 0.4) spawnP("firefly", i * colW, H - ground[i] - rand(8, 42));
+    }
+    for (const tr of trees) if (tr.burning && Math.random() < dt * 20) {
+      spawnP("fire", tr.x + rand(-8, 8), H - ground[tr.col] - rand(6, tr.stage * 66));
+    }
+  }
+
+  // ============================================================
+  //  EVENTS / MILESTONES
+  // ============================================================
+  const fired = new Set();
+  function once(key, msg) { if (fired.has(key)) return; fired.add(key); toast(msg); sfx.chime(); }
+  const events = {
+    fire() { once("fire" + Math.floor(state.time / 60), "🔥 山火事だ！　雨が降れば消えるかもしれない"); },
+    birth(sp) {
+      if (sp === "rabbit") once("b-rabbit", "🐇 最初の子ウサギが生まれた");
+      if (sp === "deer") once("b-deer", "🦌 シカの赤ちゃんが生まれた");
+      if (sp === "fox") once("b-fox", "🦊 キツネの子が生まれた");
+    },
+    extinct(sp) {
+      const nm = { rabbit: "ウサギ", deer: "シカ", fox: "キツネ" }[sp];
+      toast(`💀 ${nm}が絶滅してしまった…`);
+    },
+  };
+  // extinct herbivores/birds wander back in from beyond the edges of the world
+  const zeroT = { rabbit: 0, deer: 0, bird: 0, fox: 0 };
+  function stepMigration(dt) {
+    let g = 0; for (let i = 0; i < COLS; i++) g += grass[i];
+    const gAvg = g / COLS;
+    for (const sp of ["rabbit", "deer", "bird", "fox"]) {
+      if (counts[sp] === 0) zeroT[sp] += dt; else zeroT[sp] = 0;
+    }
+    if (zeroT.rabbit > 30 && gAvg > 0.18) { migrate("rabbit", 4, "🐇 ウサギの群れが移住してきた"); zeroT.rabbit = 0; }
+    if (zeroT.deer > 55 && gAvg > 0.24) { migrate("deer", 2, "🦌 シカの親子が移住してきた"); zeroT.deer = 0; }
+    if (zeroT.bird > 40 && counts.tree > 4) { migrate("bird", 2, "🐦 鳥の群れが渡ってきた"); zeroT.bird = 0; }
+    if (zeroT.fox > 45 && counts.rabbit >= 15) { migrate("fox", 1, "🦊 獲物を求めてキツネがやってきた"); zeroT.fox = 0; }
+  }
+  function migrate(sp, n, msg) {
+    const side = Math.random() < 0.5 ? 0.03 : 0.97;
+    for (let k = 0; k < n; k++) spawnAnimal(sp, W * side + rand(-24, 24));
+    toast(msg);
+  }
+
+  function checkMilestones() {
+    if (counts.tree >= 1) once("tree1", "🌳 最初の木が育った");
+    if (counts.tree >= 15) once("tree15", "🌲 森が生まれた（木 15本）");
+    if (counts.tree >= 60) once("tree60", "🏞 大森林だ（木 60本）");
+    if (counts.rabbit >= 20) once("r20", "🐇 ウサギが20匹に増えた");
+    let vol = 0; for (let i = 0; i < COLS; i++) vol += water[i];
+    if (vol > 2600) once("lake", "🏞 大きな湖ができた");
+    let sn = 0; for (let i = 0; i < COLS; i++) sn += snow[i];
+    if (sn > 900) once("snow", "❄️ 大地が雪に覆われた");
+    if (state.year >= 2) once("y2", "🎍 2年目を迎えた ― 大地は巡りつづける");
+    if (state.year >= 5) once("y5", "🌏 5年目 ― もう立派な生態系だ");
+  }
+
+  // ============================================================
+  //  RENDERING
+  // ============================================================
+  const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  const css3 = c => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+  function shade(c, f) { return [c[0] * f, c[1] * f, c[2] * f]; }
+
+  function skyColors() {
+    const L = dayLight();
+    const s = seasonIdx();
+    const dayTop = [[104, 173, 224], [86, 160, 226], [122, 168, 205], [150, 180, 205]][s];
+    const dayBot = [[189, 224, 242], [176, 220, 240], [214, 203, 182], [222, 232, 240]][s];
+    const nightTop = [10, 14, 38], nightBot = [26, 34, 66];
+    // warm band near sunrise/sunset
+    const sr = 0.25, ss = 0.75;
+    const warm = Math.max(
+      Math.exp(-Math.pow((state.dayT - sr) / 0.045, 2)),
+      Math.exp(-Math.pow((state.dayT - ss) / 0.045, 2)));
+    let top = mix3(nightTop, dayTop, L);
+    let bot = mix3(nightBot, dayBot, L);
+    bot = mix3(bot, [255, 150, 96], warm * 0.55);
+    top = mix3(top, [120, 90, 130], warm * 0.3);
+    // overcast desaturation
+    const oc = Math.max(state.rainInt, state.weather !== "clear" ? 0.45 : 0) * L;
+    const grey = [150, 158, 168];
+    top = mix3(top, shade(grey, 0.8), oc * 0.6);
+    bot = mix3(bot, grey, oc * 0.6);
+    return { top, bot, L, warm };
+  }
+
+  let stars = [];
+  function makeStars() {
+    stars = [];
+    const n = Math.round(W * H / 14000);
+    for (let i = 0; i < n; i++)
+      stars.push({ x: Math.random() * W, y: Math.random() * H * 0.62, r: rand(0.5, 1.5), tw: rand(0, TAU), sp: rand(0.5, 2) });
+  }
+  let clouds = [];
+  function makeClouds() {
+    clouds = [];
+    for (let i = 0; i < 9; i++)
+      clouds.push({ x: Math.random() * W, y: rand(H * 0.06, H * 0.30), s: rand(0.6, 1.5), v: rand(6, 14), seed: rand(0, 9) });
+  }
+
+  function drawSky(sk) {
+    const g = ctx.createLinearGradient(0, 0, 0, H * 0.8);
+    g.addColorStop(0, css3(sk.top));
+    g.addColorStop(1, css3(sk.bot));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // stars
+    if (sk.L < 0.5) {
+      const a = (1 - sk.L * 2);
+      for (const st of stars) {
+        ctx.fillStyle = `rgba(220,230,255,${a * (0.3 + Math.sin(state.time * st.sp + st.tw) * 0.25)})`;
+        ctx.fillRect(st.x, st.y, st.r, st.r);
+      }
+    }
+    // sun / moon along an arc
+    const arc = (t0, t1) => {
+      const u = (state.dayT - t0) / (t1 - t0);
+      return { u, x: W * (0.08 + u * 0.84), y: H * 0.62 - Math.sin(Math.PI * clamp(u, 0, 1)) * H * 0.5 };
+    };
+    const sun = arc(0.25, 0.75);
+    if (sun.u > -0.06 && sun.u < 1.06) {
+      const r = 26;
+      const gl = ctx.createRadialGradient(sun.x, sun.y, 2, sun.x, sun.y, r * 4);
+      gl.addColorStop(0, "rgba(255,236,180,0.9)");
+      gl.addColorStop(0.3, "rgba(255,210,120,0.35)");
+      gl.addColorStop(1, "rgba(255,190,100,0)");
+      ctx.fillStyle = gl; ctx.fillRect(sun.x - r * 4, sun.y - r * 4, r * 8, r * 8);
+      ctx.fillStyle = "#fff3cf";
+      ctx.beginPath(); ctx.arc(sun.x, sun.y, r * (1 + sk.warm * 0.35), 0, TAU); ctx.fill();
+    }
+    const moon = arc(0.75, 1.25 > 1 ? 1.25 : 1.25); // wraps past midnight
+    let mu = state.dayT >= 0.75 ? (state.dayT - 0.75) / 0.5 : (state.dayT + 0.25) / 0.5;
+    if (mu > 0 && mu < 1 && sk.L < 0.6) {
+      const mx = W * (0.08 + mu * 0.84), my = H * 0.6 - Math.sin(Math.PI * mu) * H * 0.46;
+      ctx.fillStyle = "rgba(235,240,250,0.92)";
+      ctx.beginPath(); ctx.arc(mx, my, 17, 0, TAU); ctx.fill();
+      ctx.fillStyle = css3(mix3([26, 34, 66], [120, 130, 160], 0.4));
+      ctx.beginPath(); ctx.arc(mx - 6, my - 3, 14, 0, TAU); ctx.fill();
+      void moon;
+    }
+    // distant ridges
+    for (const [amp, base, ph, f] of [[0.055, 0.475, 1.3, 0.55], [0.075, 0.52, 4.1, 0.38]]) {
+      ctx.fillStyle = css3(mix3(sk.bot, [16, 24, 30], f));
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (let x = 0; x <= W; x += 16) {
+        const u = x / W;
+        ctx.lineTo(x, H * base - (Math.sin(u * 4.4 + ph) * 0.6 + Math.sin(u * 9.1 + ph * 2) * 0.4) * H * amp - H * 0.06);
+      }
+      ctx.lineTo(W, H);
+      ctx.closePath(); ctx.fill();
+    }
+    // clouds
+    const dens = state.weather === "clear" ? 0.3 : state.weather === "cloudy" ? 0.75 : 0.95;
+    for (const cl of clouds) {
+      cl.x += (state.wind * cl.v + 2) * lastDt * state.speed;
+      if (cl.x > W + 160) cl.x = -160;
+      if (cl.x < -170) cl.x = W + 150;
+      const cc = mix3(mix3([245, 248, 252], [92, 100, 112], state.rainInt), [40, 46, 70], 1 - sk.L);
+      ctx.fillStyle = `rgba(${cc[0] | 0},${cc[1] | 0},${cc[2] | 0},${0.5 * dens})`;
+      for (let k = 0; k < 4; k++) {
+        ctx.beginPath();
+        ctx.ellipse(cl.x + k * 26 * cl.s - 36 * cl.s, cl.y + Math.sin(cl.seed + k) * 6 * cl.s,
+          (30 - Math.abs(k - 1.5) * 7) * cl.s, (15 - Math.abs(k - 1.5) * 3) * cl.s, 0, 0, TAU);
+        ctx.fill();
+      }
+    }
+  }
+
+  function grassColor() {
+    const q = state.yearT * 4;
+    const cols = [[124, 201, 94], [66, 158, 72], [201, 162, 62], [138, 125, 84]];
+    const i = Math.floor(q) % 4, j = (i + 1) % 4;
+    return mix3(cols[i], cols[j], frac(q));
+  }
+
+  function drawTerrain(sk) {
+    const L = 0.38 + sk.L * 0.62;
+    const gcol = grassColor();
+    // base fill
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let i = 0; i < COLS; i++) ctx.lineTo(i * colW, H - ground[i]);
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, H * 0.3, 0, H);
+    g.addColorStop(0, css3(shade([108, 82, 55], L)));
+    g.addColorStop(1, css3(shade([56, 44, 36], L)));
+    ctx.fillStyle = g; ctx.fill();
+
+    // per-column surface bands: rock, grass, snow
+    for (let i = 0; i < COLS - 1; i++) {
+      const x = i * colW, y = H - ground[i];
+      const alt = clamp((ground[i] - H * 0.44) / (H * 0.2), 0, 1);
+      if (alt > 0) { // rocky tops
+        ctx.fillStyle = css3(shade(mix3([108, 82, 55], [118, 120, 128], alt), L));
+        ctx.fillRect(x, y, colW + 1, 26);
+      }
+      if (grass[i] > 0.04 && water[i] < 1) {
+        const gc = shade(mix3([120, 96, 64], gcol, clamp(grass[i] * 1.4, 0, 1)), L);
+        ctx.fillStyle = css3(gc);
+        ctx.fillRect(x, y, colW + 1, 5 + grass[i] * 4);
+        // tufts
+        if (grass[i] > 0.3 && n1(i * 13.7) > 0.55) {
+          ctx.strokeStyle = css3(shade(gcol, L * 1.05));
+          ctx.lineWidth = 1.2;
+          const th = 3 + grass[i] * 5, sway = Math.sin(state.time * 2 + i) * state.wind * 2;
+          ctx.beginPath(); ctx.moveTo(x + 1, y); ctx.lineTo(x + 1 + sway, y - th); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x + 3, y); ctx.lineTo(x + 3 + sway, y - th * 0.8); ctx.stroke();
+        }
+      }
+      if (snow[i] > 0.4) {
+        ctx.fillStyle = `rgba(${235 * L + 20 | 0},${240 * L + 15 | 0},${248 * L + 7 | 0},0.95)`;
+        ctx.fillRect(x, y - snow[i], colW + 1, snow[i] + 2.5);
+      }
+    }
+  }
+
+  function drawWater(sk) {
+    const L = 0.35 + sk.L * 0.65;
+    let i = 0;
+    while (i < COLS) {
+      if (water[i] > 0.4) {
+        let j = i;
+        while (j < COLS && water[j] > 0.4) j++;
+        ctx.beginPath();
+        ctx.moveTo(i * colW, H - ground[i]);
+        for (let k = i; k < j; k++) {
+          const wave = Math.sin(k * 0.35 + state.time * 2.2) * Math.min(water[k] * 0.12, 1.4);
+          ctx.lineTo(k * colW, H - ground[k] - water[k] + wave);
+        }
+        for (let k = j - 1; k >= i; k--) ctx.lineTo(k * colW, H - ground[k]);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(${52 * L + 10 | 0},${118 * L + 14 | 0},${190 * L + 20 | 0},0.55)`;
+        ctx.fill();
+        // surface glint
+        ctx.strokeStyle = `rgba(220,240,255,${0.28 * L + 0.06})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (let k = i; k < j; k++) {
+          const wave = Math.sin(k * 0.35 + state.time * 2.2) * Math.min(water[k] * 0.12, 1.4);
+          const y = H - ground[k] - water[k] + wave;
+          if (k === i) ctx.moveTo(k * colW, y); else ctx.lineTo(k * colW, y);
+        }
+        ctx.stroke();
+        i = j;
+      } else i++;
+    }
+  }
+
+  // ---------------- trees ----------------
+  function drawTree(tr, sk) {
+    const L = 0.36 + sk.L * 0.64;
+    const x = tr.x, base = H - ground[tr.col];
+    const s = tr.stage, sp = tr.species;
+    const sway = Math.sin(state.time * 1.3 + tr.sway) * (1 + Math.abs(state.wind) * 3) * s;
+    const season = seasonIdx();
+    const burnT = tr.burning ? clamp(tr.burn, 0, 1) : 0;
+    const charred = tr.dead;
+
+    const trunkH = (sp === "pine" ? 58 : sp === "sakura" ? 42 : 48) * s;
+    const tw = 2 + s * 3;
+    ctx.strokeStyle = css3(shade(charred || burnT > 0.4 ? [40, 32, 30] : [96, 66, 40], L));
+    ctx.lineWidth = tw; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x, base);
+    ctx.quadraticCurveTo(x + sway * 0.4, base - trunkH * 0.6, x + sway, base - trunkH);
+    ctx.stroke();
+    if (charred) return; // burnt snag
+
+    const cx = x + sway, cy = base - trunkH;
+    let col;
+    if (sp === "pine") {
+      col = mix3([46, 107, 70], [30, 74, 52], n1(tr.seed));
+      if (burnT) col = mix3(col, [200, 70, 20], 0.5 + Math.sin(state.time * 18) * 0.3);
+      ctx.fillStyle = css3(shade(col, L));
+      for (let k = 0; k < 3; k++) {
+        const w = (26 - k * 7) * s, hh = 22 * s;
+        const yy = cy + 12 * s - k * 16 * s;
+        ctx.beginPath();
+        ctx.moveTo(cx - w, yy); ctx.lineTo(cx + sway * 0.2, yy - hh); ctx.lineTo(cx + w, yy);
+        ctx.closePath(); ctx.fill();
+        if (snow[tr.col] > 1 || tempAt(tr.col) < -1) {
+          ctx.fillStyle = `rgba(240,244,250,${0.85})`;
+          ctx.beginPath();
+          ctx.moveTo(cx - w * 0.7, yy - hh * 0.25); ctx.lineTo(cx + sway * 0.2, yy - hh); ctx.lineTo(cx + w * 0.7, yy - hh * 0.25);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = css3(shade(col, L));
+        }
+      }
+      return;
+    }
+    // broadleaf canopy or winter branches
+    const bare = season === 3 && !burnT;
+    if (bare) {
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = css3(shade([96, 66, 40], L));
+      for (let k = 0; k < 4; k++) {
+        const a = -Math.PI / 2 + (k - 1.5) * 0.5;
+        ctx.beginPath(); ctx.moveTo(cx, cy + 4);
+        ctx.lineTo(cx + Math.cos(a) * 16 * s + sway, cy + Math.sin(a) * 15 * s);
+        ctx.stroke();
+      }
+      if (snow[tr.col] > 1) {
+        ctx.fillStyle = "rgba(240,244,250,0.9)";
+        ctx.beginPath(); ctx.arc(cx, cy - 6 * s, 5 * s, 0, TAU); ctx.fill();
+      }
+      return;
+    }
+    if (sp === "sakura") {
+      col = season === 0 ? mix3([244, 168, 193], [249, 198, 216], n1(tr.seed))
+          : season === 2 ? [209, 137, 58] : [88, 168, 96];
+    } else {
+      col = season === 0 ? [111, 191, 89]
+          : season === 2 ? mix3([209, 122, 46], [193, 81, 46], n1(tr.seed * 3)) : [63, 158, 77];
+    }
+    if (burnT) col = mix3(col, [212, 80, 24], 0.55 + Math.sin(state.time * 18) * 0.3);
+    const R = 15 * s;
+    for (const [ox, oy, rr] of [[-R * 0.7, 0, R * 0.8], [R * 0.7, 0, R * 0.8], [0, -R * 0.75, R * 0.9], [0, 0.2 * R, R * 0.75]]) {
+      ctx.fillStyle = css3(shade(mix3(col, [0, 0, 0], burnT * tr.burn * 0.5), L * (1 - 0.08 * (oy > 0))));
+      ctx.beginPath(); ctx.arc(cx + ox, cy - R * 0.5 + oy, rr, 0, TAU); ctx.fill();
+    }
+    if (snow[tr.col] > 1) {
+      ctx.fillStyle = "rgba(240,244,250,0.85)";
+      ctx.beginPath(); ctx.ellipse(cx, cy - R * 1.1, R * 0.9, R * 0.4, 0, 0, TAU); ctx.fill();
+    }
+  }
+
+  // ---------------- animals ----------------
+  function drawAnimal(a, sk) {
+    const L = 0.4 + sk.L * 0.6;
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    // shadow
+    if (a.sp !== "bird" || a.perch) {
+      ctx.fillStyle = `rgba(0,0,0,${0.18 * sk.L + 0.05})`;
+      ctx.beginPath(); ctx.ellipse(0, 0, 8 * a.scale, 2.4 * a.scale, 0, 0, TAU); ctx.fill();
+    }
+    ctx.scale(a.dir >= 0 ? a.scale : -a.scale, a.scale);
+    const moving = Math.abs(a.vx) > 2;
+    const hop = moving ? Math.abs(Math.sin(a.hop)) : 0;
+
+    if (a.sp === "rabbit") {
+      const body = n1(a.seed) < 0.5 ? [216, 207, 196] : [176, 149, 120];
+      ctx.translate(0, -3 - hop * 4);
+      ctx.fillStyle = css3(shade(body, L));
+      ctx.beginPath(); ctx.ellipse(0, 0, 6.5, 4.6, 0, 0, TAU); ctx.fill();          // body
+      ctx.beginPath(); ctx.arc(5.5, -2.5, 3.4, 0, TAU); ctx.fill();                  // head
+      ctx.beginPath(); ctx.ellipse(4.5, -7.5, 1.2, 3.4, -0.25, 0, TAU); ctx.fill();  // ears
+      ctx.beginPath(); ctx.ellipse(6.6, -7.2, 1.2, 3.4, 0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath(); ctx.arc(-6, -1, 2, 0, TAU); ctx.fill();                       // tail
+      ctx.fillStyle = "#1c1512";
+      ctx.beginPath(); ctx.arc(6.6, -3, 0.8, 0, TAU); ctx.fill();                    // eye
+    } else if (a.sp === "deer") {
+      ctx.translate(0, -8);
+      const body = [143, 96, 58];
+      ctx.strokeStyle = css3(shade([92, 62, 38], L)); ctx.lineWidth = 1.8; ctx.lineCap = "round";
+      const lp = Math.sin(a.hop * 0.8);
+      for (const [lx, ph] of [[-8, 0], [-4, Math.PI], [5, Math.PI], [9, 0]]) {        // legs
+        ctx.beginPath(); ctx.moveTo(lx, 2);
+        ctx.lineTo(lx + (moving ? Math.sin(a.hop * 0.8 + ph) * 3 : 0), 9); ctx.stroke();
+      }
+      void lp;
+      ctx.fillStyle = css3(shade(body, L));
+      ctx.beginPath(); ctx.ellipse(0, 0, 11, 5.5, 0, 0, TAU); ctx.fill();            // body
+      ctx.beginPath(); ctx.ellipse(9.5, -6, 3.4, 5, 0.5, 0, TAU); ctx.fill();        // neck
+      ctx.beginPath(); ctx.arc(12, -10.5, 3, 0, TAU); ctx.fill();                    // head
+      ctx.beginPath(); ctx.ellipse(13.8, -10.8, 1.6, 1, 0.3, 0, TAU); ctx.fill();    // snout
+      if (a.scale > 0.92) {                                                          // antlers
+        ctx.strokeStyle = css3(shade([70, 50, 32], L)); ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.moveTo(11, -13); ctx.lineTo(9, -18); ctx.lineTo(7, -20); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(9, -18); ctx.lineTo(11, -21); ctx.stroke();
+      }
+      ctx.fillStyle = "#17110c";
+      ctx.beginPath(); ctx.arc(12.6, -11.2, 0.8, 0, TAU); ctx.fill();
+    } else if (a.sp === "fox") {
+      ctx.translate(0, -5 - hop * 2);
+      const body = [209, 102, 46];
+      ctx.fillStyle = css3(shade(body, L));
+      ctx.beginPath(); ctx.ellipse(-10, 0.5, 6.5, 3.2, -0.2 - Math.sin(state.time * 3 + a.seed) * 0.15, 0, TAU); ctx.fill(); // tail
+      ctx.fillStyle = "rgba(245,240,235,0.95)";
+      ctx.beginPath(); ctx.arc(-15.5, -0.5, 2, 0, TAU); ctx.fill();                  // tail tip
+      ctx.fillStyle = css3(shade(body, L));
+      ctx.beginPath(); ctx.ellipse(0, 0, 8.5, 4, 0, 0, TAU); ctx.fill();             // body
+      ctx.beginPath(); ctx.arc(7.5, -3, 3.2, 0, TAU); ctx.fill();                    // head
+      ctx.beginPath(); ctx.moveTo(9.5, -3.4); ctx.lineTo(12.5, -2.2); ctx.lineTo(9.3, -1.2); ctx.closePath(); ctx.fill(); // snout
+      ctx.beginPath(); ctx.moveTo(5.2, -5.4); ctx.lineTo(5.8, -9); ctx.lineTo(7.6, -5.8); ctx.closePath(); ctx.fill();    // ears
+      ctx.beginPath(); ctx.moveTo(7.8, -5.8); ctx.lineTo(9.2, -8.8); ctx.lineTo(10, -5.2); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = css3(shade([150, 70, 30], L)); ctx.lineWidth = 1.6;
+      for (const lx of [-4, 4]) { ctx.beginPath(); ctx.moveTo(lx, 3); ctx.lineTo(lx + (moving ? Math.sin(a.hop + lx) * 2.5 : 0), 7.5); ctx.stroke(); }
+      ctx.fillStyle = "#170f0a";
+      ctx.beginPath(); ctx.arc(8.6, -3.6, 0.8, 0, TAU); ctx.fill();
+    } else if (a.sp === "bird") {
+      const body = n1(a.seed) < 0.5 ? [74, 78, 107] : [148, 90, 60];
+      ctx.fillStyle = css3(shade(body, L));
+      if (a.perch) {
+        ctx.beginPath(); ctx.ellipse(0, -3, 3.4, 2.6, 0, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(2.8, -5.5, 1.8, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#e8b93c";
+        ctx.beginPath(); ctx.moveTo(4.4, -5.5); ctx.lineTo(6.4, -5); ctx.lineTo(4.4, -4.6); ctx.closePath(); ctx.fill();
+      } else {
+        const f = Math.sin(state.time * 14 + a.seed * 7);
+        ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 2.2, 0, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-1, -1);
+        ctx.quadraticCurveTo(-5, -1 - f * 6, -9, -2 - f * 8);
+        ctx.quadraticCurveTo(-4, 1, -1, 1); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.arc(3.2, -1.6, 1.7, 0, TAU); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  // ---------------- particles / effects ----------------
+  function drawParts(sk, pass) {
+    for (const p of parts) {
+      const u = p.life / p.max;
+      if (pass === "glow") {
+        if (p.kind === "fire") {
+          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3);
+          g.addColorStop(0, `rgba(255,${160 - u * 90 | 0},40,${0.8 * (1 - u)})`);
+          g.addColorStop(1, "rgba(255,80,0,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3, 0, TAU); ctx.fill();
+        } else if (p.kind === "firefly") {
+          const bl = 0.5 + Math.sin(p.life * 6 + p.seed * 9) * 0.5;
+          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 7);
+          g.addColorStop(0, `rgba(210,255,140,${0.85 * bl})`);
+          g.addColorStop(1, "rgba(180,255,100,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, TAU); ctx.fill();
+        } else if (p.kind === "soul") {
+          ctx.fillStyle = `rgba(255,255,255,${0.7 * (1 - u)})`;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 - u * 0.4), 0, TAU); ctx.fill();
+        }
+        continue;
+      }
+      switch (p.kind) {
+        case "rain":
+          ctx.strokeStyle = `rgba(180,210,240,${0.5 * sk.L + 0.18})`;
+          ctx.lineWidth = 1.1;
+          ctx.beginPath(); ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x - p.vx * 0.02, p.y - 9); ctx.stroke();
+          break;
+        case "snow":
+          ctx.fillStyle = `rgba(240,246,252,${0.85})`;
+          ctx.beginPath(); ctx.arc(p.x + Math.sin(p.life * 2 + p.seed) * 6, p.y, p.r, 0, TAU); ctx.fill();
+          break;
+        case "petal":
+          ctx.fillStyle = `rgba(248,186,208,${0.9 * (1 - u * 0.5)})`;
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, p.r, p.r * 0.6, p.life * 2 + p.seed, 0, TAU); ctx.fill();
+          break;
+        case "leaf":
+          ctx.fillStyle = `rgba(206,124,44,${0.9 * (1 - u * 0.4)})`;
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, p.r, p.r * 0.55, p.life * 3 + p.seed, 0, TAU); ctx.fill();
+          break;
+        case "smoke":
+          ctx.fillStyle = `rgba(90,88,86,${0.35 * (1 - u)})`;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+          break;
+        case "dust":
+          ctx.fillStyle = `rgba(150,122,92,${0.5 * (1 - u)})`;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+          break;
+      }
+    }
+  }
+
+  // lightning & meteors
+  let bolts = [];   // {pts,life}
+  let meteors = []; // {x,y,vx,vy}
+  let flash = 0;
+
+  function strikeLightning(x, natural = false) {
+    const gy = groundYpx(x);
+    const pts = [[x + rand(-40, 40), 0]];
+    let px_ = pts[0][0];
+    for (let y = 60; y < gy; y += rand(34, 60)) {
+      px_ += rand(-26, 26) + (x - px_) * 0.3;
+      pts.push([px_, y]);
+    }
+    pts.push([x, gy]);
+    bolts.push({ pts, life: 0 });
+    flash = 0.9;
+    state.shake = Math.max(state.shake, 0.4);
+    boom(natural ? 0.4 : 0.55, 1.8);
+    // scorch & ignite
+    const col = clamp(Math.round(x / colW), 0, COLS - 1);
+    for (let k = -2; k <= 2; k++) {
+      const i = clamp(col + k, 0, COLS - 1);
+      grass[i] *= 0.35;
+    }
+    let best = null, bd = 44;
+    for (const t of trees) {
+      const d = Math.abs(t.x - x);
+      if (d < bd && !t.dead) { best = t; bd = d; }
+    }
+    if (best && !(state.rainInt > 0.6 && Math.random() < 0.6)) igniteTree(best);
+    for (let k = 0; k < 8; k++) spawnP("dust", x + rand(-10, 10), gy);
+  }
+
+  function dropMeteor(x) {
+    meteors.push({ x: x - H * 0.5, y: -40, vx: H * 0.42, vy: H * 0.5 });
+    once("meteor", "☄️ 隕石が接近している…！");
+  }
+  function stepMeteors(dt) {
+    for (const m of meteors) {
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      spawnP("fire", m.x + rand(-4, 4), m.y + rand(-4, 4));
+      const gy = groundYpx(m.x);
+      if (m.y >= gy - 4) {
+        m.dead = true;
+        impact(m.x);
+      }
+    }
+    meteors = meteors.filter(m => !m.dead);
+    bolts.forEach(b => b.life += dt);
+    bolts = bolts.filter(b => b.life < 0.35);
+    flash = Math.max(0, flash - dt * 3.2);
+    state.shake = Math.max(0, state.shake - dt * 1.6);
+  }
+  function impact(x) {
+    const col = clamp(Math.round(x / colW), 0, COLS - 1);
+    for (let i = 0; i < COLS; i++) {
+      const d = (i - col) * colW;
+      const dig = Math.exp(-(d * d) / (2 * 46 * 46)) * H * 0.085;
+      ground[i] = Math.max(H * 0.07, ground[i] - dig);
+      if (Math.abs(d) < 120) { water[i] *= 0.25; snow[i] = 0; grass[i] *= 0.15; }
+    }
+    for (const t of trees) if (Math.abs(t.x - x) < 130 && !t.dead) igniteTree(t);
+    for (let k = 0; k < 40; k++) spawnP("dust", x + rand(-60, 60), groundYpx(x) + rand(-16, 4));
+    boom(0.95, 2.6);
+    flash = 1; state.shake = 1;
+    toast("☄️ 隕石が大地を抉った");
+  }
+  function drawEffects() {
+    for (const b of bolts) {
+      const a = 1 - b.life / 0.35;
+      ctx.strokeStyle = `rgba(240,246,255,${a})`;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(b.pts[0][0], b.pts[0][1]);
+      for (const [px_, py_] of b.pts) ctx.lineTo(px_, py_);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(150,190,255,${a * 0.5})`;
+      ctx.lineWidth = 6; ctx.stroke();
+    }
+    for (const m of meteors) {
+      ctx.fillStyle = "#ffd9a0";
+      ctx.beginPath(); ctx.arc(m.x, m.y, 7, 0, TAU); ctx.fill();
+      const g = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 30);
+      g.addColorStop(0, "rgba(255,180,80,0.8)"); g.addColorStop(1, "rgba(255,120,30,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(m.x, m.y, 30, 0, TAU); ctx.fill();
+    }
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${flash * 0.5})`;
+      ctx.fillRect(-20, -20, W + 40, H + 40);
+    }
+  }
+
+  function drawFireGlow(sk) {
+    for (const t of trees) {
+      if (!t.burning) continue;
+      const x = t.x, y = H - ground[t.col] - t.stage * 40;
+      const r = 60 + t.stage * 50 + Math.sin(state.time * 11 + t.sway) * 10;
+      const g = ctx.createRadialGradient(x, y, 4, x, y, r);
+      g.addColorStop(0, "rgba(255,150,50,0.55)");
+      g.addColorStop(1, "rgba(255,90,20,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    }
+  }
+
+  // ============================================================
+  //  TOOLS & INPUT
+  // ============================================================
+  let tool = "raise";
+  let brush = 1; // 0 S,1 M,2 L
+  const BRUSH_R = [26, 48, 84];
+  const pointer = { x: -999, y: -999, down: false, in: false };
+  let clickCool = 0;
+
+  const CONT = new Set(["raise", "dig", "rain", "grass"]);
+
+  function applyTool(dt) {
+    if (!pointer.down || !state.started) return;
+    const R = BRUSH_R[brush];
+    const colC = pointer.x / colW;
+    if (CONT.has(tool)) {
+      for (let i = 0; i < COLS; i++) {
+        const d = (i - colC) * colW;
+        if (Math.abs(d) > R) continue;
+        const f = Math.exp(-(d * d) / (2 * (R * 0.45) ** 2));
+        if (tool === "raise") {
+          ground[i] = clamp(ground[i] + 95 * f * dt, H * 0.06, H * 0.78);
+        } else if (tool === "dig") {
+          ground[i] = clamp(ground[i] - 95 * f * dt, H * 0.06, H * 0.78);
+          snow[i] *= 0.9;
+        } else if (tool === "rain") {
+          water[i] += 26 * f * dt;
+          moist[i] = Math.min(1, moist[i] + f * dt * 2);
+        } else if (tool === "grass") {
+          if (water[i] < 2) grass[i] = Math.min(1, grass[i] + f * dt * 1.6);
+          moist[i] = Math.min(1, moist[i] + f * dt * 0.8);
+        }
+      }
+      if (tool === "rain") for (let k = 0; k < 3; k++) spawnP("rain", pointer.x + rand(-R, R), pointer.y - rand(10, 60));
+    } else {
+      clickCool -= dt;
+      if (clickCool > 0) return;
+      applyClickTool();
+    }
+  }
+
+  function applyClickTool() {
+    clickCool = 0.28;
+    const x = clamp(pointer.x, 8, W - 8);
+    if (tool === "tree") { const t = plantTree(x, autoSpecies(clamp(Math.round(x / colW), 0, COLS - 1)), 0.12); if (t) sfx.pop(); }
+    else if (tool === "rabbit" || tool === "deer" || tool === "fox" || tool === "bird") {
+      const a = spawnAnimal(tool, x); if (a) sfx.pop(); else toast("これ以上増やせません");
+    }
+    else if (tool === "bolt") { strikeLightning(x); clickCool = 0.5; }
+    else if (tool === "meteor") { dropMeteor(x); clickCool = 1.2; }
+  }
+
+  canvas.addEventListener("pointerdown", e => {
+    pointer.down = true; pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = true;
+    canvas.setPointerCapture(e.pointerId);
+    // click-type tools fire immediately so quick taps register on touch screens
+    if (!CONT.has(tool) && state.started) applyClickTool();
+  });
+  canvas.addEventListener("pointermove", e => {
+    pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = true;
+  });
+  canvas.addEventListener("pointerup", () => pointer.down = false);
+  canvas.addEventListener("pointerleave", () => { pointer.in = false; pointer.down = false; });
+
+  window.addEventListener("keydown", e => {
+    if (e.code === "KeyH") $("hud").classList.toggle("off");
+    else if (e.code === "Space") { e.preventDefault(); togglePause(); }
+  });
+
+  // UI wiring
+  document.querySelectorAll("[data-tool]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      tool = btn.dataset.tool;
+      document.querySelectorAll("[data-tool]").forEach(b => b.classList.toggle("on", b === btn));
+    });
+  });
+  $("ct-brush").addEventListener("click", () => {
+    brush = (brush + 1) % 3;
+    $("ct-brush").innerHTML = `<span class="ic">${["◔", "◐", "●"][brush]}</span>筆:${["小", "中", "大"][brush]}`;
+  });
+  const SPEEDS = [1, 2, 4, 8];
+  let speedIdx = 0;
+  $("ct-speed").addEventListener("click", () => {
+    speedIdx = (speedIdx + 1) % SPEEDS.length;
+    state.speed = SPEEDS[speedIdx];
+    $("ct-speed").innerHTML = `<span class="ic">▶▶</span>${state.speed}×`;
+  });
+  function togglePause() {
+    state.paused = !state.paused;
+    $("ct-pause").innerHTML = state.paused ? `<span class="ic">▶</span>再開` : `<span class="ic">⏸</span>停止`;
+  }
+  $("ct-pause").addEventListener("click", togglePause);
+  $("btn-sound").addEventListener("click", () => setSound(!soundOn));
+
+  let toastTimer = 0;
+  function toast(msg) {
+    $("toast").textContent = msg;
+    $("toast").classList.add("show");
+    toastTimer = 3.4;
+  }
+
+  // ---------------- HUD ----------------
+  function timeLabel() {
+    const t = state.dayT;
+    if (t < 0.20 || t >= 0.83) return "夜";
+    if (t < 0.30) return "朝";
+    if (t < 0.60) return "昼";
+    if (t < 0.72) return "午後";
+    return "夕方";
+  }
+  function updateHUD() {
+    $("info-year").innerHTML = `<b>${state.year}年目</b> ${SEASONS[seasonIdx()]}`;
+    const wx = state.rainInt > 0.25 ? (baseTemp() < 1.5 ? "🌨" : "🌧") :
+      state.weather === "cloudy" ? "☁️" : dayLight() > 0.4 ? "☀️" : "🌙";
+    $("info-sub").innerHTML = `${timeLabel()} ・ <b>${Math.round(baseTemp())}</b>°C ・ ${wx}`;
+    let g = 0; for (let i = 0; i < COLS; i++) g += grass[i];
+    $("st-grass").textContent = Math.round(g / COLS * 100);
+    $("st-tree").textContent = counts.tree;
+    $("st-rabbit").textContent = counts.rabbit;
+    $("st-deer").textContent = counts.deer;
+    $("st-fox").textContent = counts.fox;
+  }
+
+  // ============================================================
+  //  MAIN LOOP
+  // ============================================================
+  let lastT = performance.now(), lastDt = 0.016, hudT = 0, mileT = 0;
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((now - lastT) / 1000, 0.05);
+    lastT = now; lastDt = dt;
+    const sdt = state.paused || !state.started ? 0 : dt * state.speed;
+
+    if (sdt > 0) {
+      state.time += sdt;
+      state.dayT = frac(state.dayT + sdt / DAY_LEN);
+      state.yearT += sdt / YEAR_LEN;
+      if (state.yearT >= 1) { state.yearT -= 1; state.year++; }
+      stepWeather(sdt);
+      const flows = Math.min(Math.ceil(state.speed / 2), 4);
+      for (let k = 0; k < flows; k++) flowWater(sdt / flows);
+      stepPlants(sdt);
+      stepAnimals(sdt);
+      stepParts(sdt);
+      stepMeteors(sdt);
+      applyTool(sdt / state.speed); // tools feel constant regardless of speed
+      mileT -= sdt;
+      if (mileT <= 0) { mileT = 1; checkMilestones(); stepMigration(1); }
+    } else if (state.started) {
+      applyTool(dt);
+    }
+    ambientAudio(dt);
+
+    if (toastTimer > 0 && (toastTimer -= dt) <= 0) $("toast").classList.remove("show");
+
+    // ---------- render ----------
+    ctx.save();
+    if (state.shake > 0) ctx.translate(rand(-1, 1) * state.shake * 7, rand(-1, 1) * state.shake * 7);
+    const sk = skyColors();
+    drawSky(sk);
+    drawTerrain(sk);
+    drawWater(sk);
+    for (const tr of trees) drawTree(tr, sk);
+    for (const a of animals) drawAnimal(a, sk);
+    drawParts(sk, "main");
+    // night tint
+    const nt = 1 - sk.L;
+    if (nt > 0.02) {
+      ctx.fillStyle = `rgba(8,12,40,${nt * 0.34})`;
+      ctx.fillRect(-20, -20, W + 40, H + 40);
+    }
+    ctx.globalCompositeOperation = "lighter";
+    drawFireGlow(sk);
+    drawParts(sk, "glow");
+    ctx.globalCompositeOperation = "source-over";
+    drawEffects();
+    // brush cursor
+    if (pointer.in && state.started && CONT.has(tool)) {
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.lineWidth = 1.4; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.arc(pointer.x, pointer.y, BRUSH_R[brush], 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+
+    hudT -= dt;
+    if (hudT <= 0) { hudT = 0.25; updateHUD(); }
+  }
+
+  // ============================================================
+  //  BOOT
+  // ============================================================
+  function resize() {
+    const oldH = H || window.innerHeight;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    colW = W / (COLS - 1);
+    const hr = H / oldH;
+    if (Math.abs(hr - 1) > 0.001) {
+      for (let i = 0; i < COLS; i++) { ground[i] *= hr; water[i] *= hr; snow[i] *= hr; }
+    }
+    makeStars(); makeClouds();
+  }
+
+  function seedWorld() {
+    genTerrain();
+    const starts = [[0.12, "oak"], [0.17, "sakura"], [0.47, "oak"], [0.52, "sakura"], [0.55, "oak"], [0.70, "pine"], [0.76, "pine"], [0.88, "pine"]];
+    for (const [u, sp] of starts) plantTree(u * W, sp, rand(0.65, 1));
+    for (let k = 0; k < 7; k++) spawnAnimal("rabbit", rand(W * 0.08, W * 0.55));
+    spawnAnimal("deer", W * 0.5); spawnAnimal("deer", W * 0.53);
+    spawnAnimal("fox", W * 0.65);
+    for (let k = 0; k < 3; k++) spawnAnimal("bird", rand(W * 0.2, W * 0.8));
+  }
+
+  $("start-btn").addEventListener("click", () => {
+    initAudio();
+    $("title-screen").classList.add("hide");
+    state.started = true;
+    toast("🌏 大地が動き出した ― まずは眺めてみよう");
+  });
+
+  window.addEventListener("resize", resize);
+  resize();
+  seedWorld();
+  requestAnimationFrame(loop);
+
+  // debug / test hook
+  window.__terra = {
+    state, ground, water, grass, snow, moist, counts,
+    get trees() { return trees; }, get animals() { return animals; },
+    setSeason(q) { state.yearT = clamp(q, 0, 0.999); },
+    setDay(d) { state.dayT = clamp(d, 0, 0.999); },
+    setWeather(w, int = 1) { state.weather = w; state.rainInt = w === "rain" ? int : 0; state.wxTimer = 30; },
+    spawn: spawnAnimal, plant: plantTree,
+    lightning: strikeLightning, meteor: dropMeteor,
+    setTool(t) { tool = t; }, pointer,
+  };
+})();
+</script>
+</body>
+</html>
