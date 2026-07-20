@@ -175,13 +175,27 @@
 
   #toggle-panel {
     position: fixed; right: 24px; top: 96px;
-    z-index: 11;
-    width: 34px; height: 34px;
+    z-index: 12;
+    width: 44px; height: 44px;
     border-radius: 50%;
-    font-size: 15px;
+    font-size: 18px;
     padding: 0;
     display: none;
     align-items: center; justify-content: center;
+  }
+
+  /* close button inside the panel (mobile bottom-sheet) */
+  #panel-head { display: none; }
+  #panel-close {
+    width: 34px; height: 34px; border-radius: 50%;
+    font-size: 15px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #sheet-grip {
+    width: 40px; height: 4px; border-radius: 999px;
+    background: rgba(125, 211, 252, 0.35);
+    margin: 0 auto 12px;
+    display: none;
   }
 
   /* ---------- Toast ---------- */
@@ -208,13 +222,35 @@
   @keyframes slideIn { from { transform: translateX(300px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
   @media (max-width: 720px) {
-    #panel { right: 12px; top: 88px; width: 218px; }
-    #toggle-panel { display: flex; right: 12px; top: 44px; }
-    #stats { right: 12px; top: 12px; gap: 6px; }
-    .stat { min-width: 60px; padding: 6px 8px; }
-    #title { top: 12px; left: 14px; }
-    #title h1 { font-size: 19px; }
+    #title { top: 13px; left: 14px; }
+    #title h1 { font-size: 16px; letter-spacing: 0.1em; }
+    #title p { display: none; }
+    #stats { top: 42px; left: 12px; right: auto; gap: 6px; }
+    .stat { min-width: 0; padding: 5px 11px; }
+    .stat b { font-size: 13px; }
+    .stat span { font-size: 9px; }
+    #toggle-panel { display: flex; right: 14px; top: 12px; }
     #hint { display: none; }
+
+    /* control panel becomes a dismissable bottom sheet */
+    #panel {
+      right: 0; left: 0; top: auto; bottom: 0;
+      width: auto; max-height: 80vh; overflow-y: auto;
+      border-radius: 20px 20px 0 0;
+      padding: 14px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+      animation: none; /* slide via transition so .hidden isn't overridden by fill-mode */
+      transition: transform 0.4s cubic-bezier(.2,.9,.25,1), opacity 0.3s ease;
+    }
+    #panel.hidden { transform: translateY(105%); opacity: 1; }
+    #sheet-grip { display: block; }
+    #panel-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    #panel-head h2 { margin-bottom: 0; }
+    #panel > h2:first-of-type { display: none; } /* replaced by panel-head */
+    .btn-grid button, .row label { font-size: 12.5px; }
+    #panel button { padding: 11px 6px; }
   }
 </style>
 </head>
@@ -235,6 +271,11 @@
 <button id="toggle-panel" title="パネル表示切替">☰</button>
 
 <div id="panel">
+  <div id="sheet-grip"></div>
+  <div id="panel-head">
+    <h2>CONTROL DECK</h2>
+    <button id="panel-close" title="閉じる">✕</button>
+  </div>
   <h2>CONTROL DECK</h2>
   <div class="row">
     <label>恒星の数 <output id="out-count">4000</output></label>
@@ -734,10 +775,15 @@
       $(id).style.pointerEvents = uiHidden ? "none" : "";
     }
   }
+  function setPanel(open) {
+    $("panel").classList.toggle("hidden", !open);
+    $("toggle-panel").textContent = open ? "✕" : "☰";
+  }
   $("toggle-panel").addEventListener("click", () => {
-    $("panel").classList.toggle("hidden");
+    setPanel($("panel").classList.contains("hidden"));
   });
-  if (window.innerWidth <= 720) $("panel").classList.add("hidden");
+  $("panel-close").addEventListener("click", () => setPanel(false));
+  if (window.innerWidth <= 720) setPanel(false);
 
   let toastTimer = 0;
   function toast(msg) {
