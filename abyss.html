@@ -258,9 +258,26 @@
     #sea { cursor: default; }
   }
   @media (max-width: 720px) {
-    #depth-val { font-size: 24px; }
+    #depth-box { top: 12px; left: 12px; padding: 9px 13px 8px; max-width: calc(100vw - 150px); }
+    #depth-val { font-size: 22px; }
+    #depth-val small { font-size: 12px; }
+    #depth-sub { flex-wrap: wrap; gap: 4px 10px; font-size: 10px; }
     #zone-label { display: none; }
-    #card { width: min(300px, calc(100vw - 100px)); }
+    /* compact top-right buttons so they clear the depth readout */
+    #right-hud { top: 12px; right: 12px; gap: 6px; }
+    .hbtn { font-size: 11px; padding: 7px 12px; }
+    /* dive buttons: bottom-right, out of the way of the rail (hidden on mobile) */
+    #mctl { right: 12px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); gap: 12px; }
+    #mctl button { width: 52px; height: 52px; font-size: 18px; }
+    /* discovery card: keep clear of the dive buttons */
+    #card { left: 12px; bottom: 12px; width: min(320px, calc(100vw - 88px)); padding: 13px; }
+    #card canvas { height: 82px; }
+    #card h3 { font-size: 15px; }
+    #card .fact { font-size: 11.5px; }
+  }
+  @media (max-width: 720px) and (max-height: 560px) {
+    /* landscape phones: shrink the card so it doesn't cover the scene */
+    #card canvas { display: none; }
   }
 </style>
 </head>
@@ -1783,6 +1800,7 @@
   }
 
   function drawRail() {
+    if (W <= 720) return; // on phones the rail collides with touch controls; depth is shown top-left
     const x = W - 24, y0 = 78, y1 = H - 78;
     ctx.strokeStyle = "rgba(110,143,163,0.4)"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
