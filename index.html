@@ -57,11 +57,12 @@
 
   .cards {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 24px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
     width: 100%;
   }
-  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+  @media (max-width: 1020px) { .cards { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 680px) { .cards { grid-template-columns: 1fr; } }
 
   .card {
     position: relative;
@@ -79,6 +80,7 @@
   }
   .card:nth-child(1) { animation-delay: 0.1s; }
   .card:nth-child(2) { animation-delay: 0.22s; }
+  .card:nth-child(3) { animation-delay: 0.34s; }
   .card:hover { transform: translateY(-8px); border-color: rgba(255,255,255,0.22); }
   .card:hover .art canvas { transform: scale(1.06); }
   .card:hover .go { gap: 16px; }
@@ -123,6 +125,11 @@
   .card.galaxy:hover { box-shadow: 0 26px 60px rgba(60, 30, 110, 0.5); }
   .card.galaxy h2 { color: #ecdfff; }
   .card.galaxy .en, .card.galaxy .go { color: #c084fc; }
+  /* terra theming */
+  .card.terra .tag { background: rgba(143, 227, 136, 0.14); color: #b2f0a9; border: 1px solid rgba(143,227,136,0.3); }
+  .card.terra:hover { box-shadow: 0 26px 60px rgba(30, 90, 45, 0.5); }
+  .card.terra h2 { color: #e4ffe0; }
+  .card.terra .en, .card.terra .go { color: #8fe388; }
 
   footer {
     margin-top: auto; padding-top: 54px;
@@ -142,8 +149,8 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">INTERACTIVE WORLDS</div>
-    <h1>銀河と、深海。</h1>
-    <p>ブラウザだけで動く、2つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところまで。</p>
+    <h1>銀河と、深海と、大地。</h1>
+    <p>ブラウザだけで動く、3つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところ、そして生命の営みまで。</p>
   </header>
 
   <div class="cards">
@@ -156,6 +163,18 @@
         <div class="desc">潜航艇の探照灯で闇を照らし、実在の深海生物26種を撮影して図鑑を集める。深くなるほど光は消え、水圧は増し、生物は自ら光りだす。</div>
         <div class="feat"><span>🔦 探照灯</span><span>📖 図鑑26種</span><span>🐙 生物発光</span><span>🎧 環境音</span></div>
         <div class="go"><span>潜航する</span><span class="arrow">→</span></div>
+      </div>
+    </a>
+
+    <a class="card terra" href="terra.html">
+      <div class="art"><canvas id="art-terra"></canvas></div>
+      <div class="body">
+        <span class="tag">LIVING ECOSYSTEM</span>
+        <h2>TERRA</h2>
+        <div class="en">生きている大地</div>
+        <div class="desc">地形を隆起させ、雨を降らせ、木を植え、動物を放つ。草が茂り、ウサギが増え、キツネが狩り、四季と昼夜が巡る箱庭の生態系。</div>
+        <div class="feat"><span>🌏 地形創造</span><span>🦊 食物連鎖</span><span>🌸 四季</span><span>🔥 山火事</span></div>
+        <div class="go"><span>創世する</span><span class="arrow">→</span></div>
       </div>
     </a>
 
@@ -173,7 +192,7 @@
   </div>
 
   <footer>
-    Canvas &amp; Web Audio でつくった、依存ライブラリなしの2作品。<br>
+    Canvas &amp; Web Audio でつくった、依存ライブラリなしの3作品。<br>
     <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a>
     <div class="hint">カードをクリックで起動 ・ どちらもフルスクリーン推奨</div>
   </footer>
@@ -184,6 +203,7 @@
 (() => {
   const TAU = Math.PI * 2;
   const rand = (a, b) => a + Math.random() * (b - a);
+  const frac = x => x - Math.floor(x);
 
   // ---- ambient starfield behind everything ----
   const sc = document.getElementById("stars");
@@ -221,6 +241,9 @@
   const A = setup("art-abyss");
   const snow = [];
   for (let i = 0; i < 90; i++) snow.push({ x: Math.random(), y: Math.random(), r: rand(0.5, 1.8), s: rand(0.02, 0.08), ph: rand(0, TAU) });
+
+  // terra preview: rolling hills, arcing sun, swaying tree, hopping rabbit
+  const T = setup("art-terra");
 
   let t = 0;
   function frame() {
@@ -289,6 +312,60 @@
       c.beginPath(); c.moveTo(lx + 52, ly + 12); c.lineTo(lx + 70, ly + 2); c.lineTo(lx + 70, ly + 22); c.closePath(); c.fill();
       c.strokeStyle = "rgba(4,10,18,0.9)"; c.lineWidth = 2;
       c.beginPath(); c.moveTo(lx + 10, ly - 2); c.quadraticCurveTo(lx, ly - 24, lx, ly); c.stroke();
+    }
+
+    // ---- terra ----
+    {
+      const { c, w, h } = T;
+      c.clearRect(0, 0, w, h);
+      const cyc = (t * 0.07) % 1; // mini day cycle
+      const L = 0.35 + 0.65 * Math.max(0, Math.sin(cyc * TAU));
+      const sky = c.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, `rgb(${60 + 80 * L | 0},${90 + 90 * L | 0},${140 + 90 * L | 0})`);
+      sky.addColorStop(1, `rgb(${140 + 80 * L | 0},${170 + 60 * L | 0},${180 + 60 * L | 0})`);
+      c.fillStyle = sky; c.fillRect(0, 0, w, h);
+      // sun
+      const su = cyc, sx2 = w * su, sy2 = h * 0.85 - Math.sin(su * Math.PI) * h * 0.75;
+      const sg = c.createRadialGradient(sx2, sy2, 1, sx2, sy2, 26);
+      sg.addColorStop(0, "rgba(255,240,190,0.95)"); sg.addColorStop(1, "rgba(255,210,120,0)");
+      c.fillStyle = sg; c.beginPath(); c.arc(sx2, sy2, 26, 0, TAU); c.fill();
+      // hills
+      const shade = f => `rgb(${60 * f * L + 20 | 0},${120 * f * L + 26 | 0},${58 * f * L + 18 | 0})`;
+      c.fillStyle = shade(0.65);
+      c.beginPath(); c.moveTo(0, h);
+      for (let x = 0; x <= w; x += 8) c.lineTo(x, h * 0.62 - Math.sin(x / w * 4 + 1) * h * 0.1);
+      c.lineTo(w, h); c.fill();
+      c.fillStyle = shade(1);
+      c.beginPath(); c.moveTo(0, h);
+      for (let x = 0; x <= w; x += 8) c.lineTo(x, h * 0.78 - Math.sin(x / w * 2.6 + 4) * h * 0.09);
+      c.lineTo(w, h); c.fill();
+      // tree
+      const tx = w * 0.68, ty = h * 0.72, sway = Math.sin(t * 1.4) * 2;
+      c.strokeStyle = `rgba(96,66,40,${0.5 + L * 0.5})`; c.lineWidth = 4; c.lineCap = "round";
+      c.beginPath(); c.moveTo(tx, ty); c.quadraticCurveTo(tx + sway * 0.5, ty - 14, tx + sway, ty - 26); c.stroke();
+      c.fillStyle = `rgba(${80 * L + 30 | 0},${165 * L + 30 | 0},${80 * L + 25 | 0},0.95)`;
+      for (const [ox, oy, rr] of [[-9, 0, 11], [9, 0, 11], [0, -9, 12]])
+        { c.beginPath(); c.arc(tx + sway + ox, ty - 30 + oy, rr, 0, TAU); c.fill(); }
+      // hopping rabbit silhouette
+      const ru = frac(t * 0.1), rx = w * ru, hopY = Math.abs(Math.sin(t * 7)) * 6;
+      const ry = h * 0.78 - Math.sin(rx / w * 2.6 + 4) * h * 0.09 - 4 - hopY;
+      c.fillStyle = `rgba(${240 * L + 10 | 0},${238 * L + 10 | 0},${232 * L + 10 | 0},0.95)`;
+      c.beginPath(); c.ellipse(rx, ry, 5, 3.6, 0, 0, TAU); c.fill();
+      c.beginPath(); c.arc(rx + 4, ry - 2.4, 2.4, 0, TAU); c.fill();
+      c.beginPath(); c.ellipse(rx + 3.4, ry - 6, 0.9, 2.6, -0.2, 0, TAU); c.fill();
+      c.beginPath(); c.ellipse(rx + 5, ry - 5.8, 0.9, 2.6, 0.2, 0, TAU); c.fill();
+      // fireflies at night
+      if (L < 0.55) {
+        for (let k = 0; k < 5; k++) {
+          const fx = w * (0.15 + k * 0.17) + Math.sin(t * 1.3 + k * 2) * 10;
+          const fy = h * 0.66 + Math.cos(t * 1.7 + k) * 8;
+          const bl = 0.5 + Math.sin(t * 5 + k * 3) * 0.5;
+          const fg = c.createRadialGradient(fx, fy, 0, fx, fy, 5);
+          fg.addColorStop(0, `rgba(210,255,140,${0.8 * bl * (1 - L)})`);
+          fg.addColorStop(1, "rgba(180,255,100,0)");
+          c.fillStyle = fg; c.beginPath(); c.arc(fx, fy, 5, 0, TAU); c.fill();
+        }
+      }
     }
   }
   requestAnimationFrame(frame);
