@@ -154,7 +154,7 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">INTERACTIVE WORLDS</div>
-    <h1>銀河と、深海と、大地と、空。</h1>
+    <h1>銀河と、深海と、大地と、縁起。</h1>
     <p>ブラウザだけで動く、4つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところ、生命の営み、そして、形と空(くう)のあわいまで。</p>
   </header>
 
@@ -195,15 +195,15 @@
       </div>
     </a>
 
-    <a class="card ku" href="ku.html">
+    <a class="card ku" href="engi.html">
       <div class="art"><canvas id="art-ku"></canvas></div>
       <div class="body">
-        <span class="tag">MEDITATION · 般若心経</span>
-        <h2>色即是空</h2>
-        <div class="en">FORM ⇌ EMPTINESS</div>
-        <div class="desc">数千の光が「色（形）」を結び、やがて「空（くう）」へと散り、また生まれ変わる。触れれば乱れ、掴もうとしても留まらない — 無常を眺める瞑想。</div>
-        <div class="feat"><span>✦ 生滅の循環</span><span>◯ 円相・蓮・桜</span><span>🔔 シンギングボウル</span></div>
-        <div class="go"><span>観る</span><span class="arrow">→</span></div>
+        <span class="tag">STRATEGY · 縁起</span>
+        <h2>縁起</h2>
+        <div class="en">FORM vs EMPTINESS — 対戦</div>
+        <div class="desc">すべては空。形は「縁（つながり）」があるときだけ存在する。縁を織り形を灯す色派 vs 縁を断ち空へ還す空派。あなたはどちらで戦う？(瞑想版「色即是空」もゲーム内から)</div>
+        <div class="feat"><span>♟ 対AI戦</span><span>🕸 縁起と縁滅</span><span>◈ 連鎖崩壊</span></div>
+        <div class="go"><span>戦う</span><span class="arrow">→</span></div>
       </div>
     </a>
   </div>
@@ -262,23 +262,14 @@
   // terra preview: rolling hills, arcing sun, swaying tree, hopping rabbit
   const T = setup("art-terra");
 
-  // ku preview: particles gather into 空, hold, scatter, and reform
+  // ku preview: a small 縁起 network — nodes joined by 縁 that sever and re-form
   const K = setup("art-ku");
-  const kPts = (() => {
-    // sample the glyph 空 from a small offscreen canvas
-    const s = 120, oc = document.createElement("canvas"); oc.width = oc.height = s;
-    const o = oc.getContext("2d");
-    o.fillStyle = "#fff"; o.textAlign = "center"; o.textBaseline = "middle";
-    o.font = `900 ${s * 0.82}px "Hiragino Mincho ProN","Yu Mincho",serif`;
-    o.fillText("空", s / 2, s / 2 + s * 0.02);
-    const d = o.getImageData(0, 0, s, s).data, pts = [];
-    for (let y = 0; y < s; y += 3) for (let x = 0; x < s; x += 3)
-      if (d[(y * s + x) * 4 + 3] > 90) pts.push([(x - s / 2) / (s / 2), (y - s / 2) / (s / 2)]);
-    for (let i = pts.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [pts[i], pts[j]] = [pts[j], pts[i]]; }
-    return pts;
-  })();
-  const kN = 240, kP = [];
-  for (let i = 0; i < kN; i++) kP.push({ x: rand(0, 1), y: rand(0, 1), vx: 0, vy: 0, ph: rand(0, TAU), gold: Math.random() < 0.5 });
+  const kNodes = [ // normalized hex-ish cluster; one shrine (pink)
+    [0.5, 0.24, "src"], [0.3, 0.4, "f"], [0.7, 0.4, "f"], [0.5, 0.5, "f"],
+    [0.24, 0.62, "f"], [0.5, 0.72, "shrine"], [0.76, 0.62, "f"], [0.38, 0.86, "src"], [0.66, 0.86, "src"],
+  ];
+  const kEdges = [[0,1],[0,2],[1,3],[2,3],[1,4],[3,5],[2,6],[4,5],[4,7],[5,7],[5,8],[6,8]];
+  const kEdgeState = kEdges.map(() => ({ cut: 0, next: rand(1.5, 6) }));
 
   let t = 0;
   function frame() {
@@ -403,39 +394,37 @@
       }
     }
 
-    // ---- ku (色即是空): 4s cycle — gather into 空, hold, scatter ----
+    // ---- ku card (縁起): a living network of 縁 that sever and re-form ----
     {
       const { c, w, h } = K;
       c.clearRect(0, 0, w, h);
       c.fillStyle = "#0a0b12"; c.fillRect(0, 0, w, h);
-      const cyc = (t * 0.25) % 1;                 // 0..1 over 4s
-      const formed = cyc < 0.62
-        ? Math.min(1, cyc / 0.28)                 // gather
-        : Math.max(0, 1 - (cyc - 0.62) / 0.28);   // scatter
-      const scale = Math.min(w, h) * 0.34;
+      const X = i => kNodes[i][0] * w, Y = i => kNodes[i][1] * h;
+      // edges
+      kEdges.forEach((e, i) => {
+        const s = kEdgeState[i];
+        s.next -= 0.016;
+        if (s.next <= 0) { s.cut = s.cut > 0 ? 0 : rand(1.2, 2.2); s.next = rand(2, 7); }
+        if (s.cut > 0) s.cut -= 0.016;
+        const active = s.cut <= 0;
+        c.strokeStyle = active ? "rgba(227,192,118,0.5)" : "rgba(143,160,214,0.35)";
+        c.lineWidth = active ? 1.6 : 1.2;
+        c.setLineDash(active ? [] : [3, 4]);
+        c.beginPath(); c.moveTo(X(e[0]), Y(e[0])); c.lineTo(X(e[1]), Y(e[1])); c.stroke();
+      });
+      c.setLineDash([]);
       c.globalCompositeOperation = "lighter";
-      for (let i = 0; i < kN; i++) {
-        const p = kP[i];
-        const pt = kPts[i % kPts.length];
-        const tx = 0.5 + pt[0] * scale / w, ty = 0.5 + pt[1] * scale / h;
-        // target in [0,1]; blend between drifting void and the glyph
-        const gx = tx, gy = ty;
-        if (formed > 0.02) { p.vx += (gx - p.x) * 0.02 * formed; p.vy += (gy - p.y) * 0.02 * formed; }
-        // gentle void drift
-        p.vx += Math.cos(t * 0.6 + p.ph) * 0.00018 * (1 - formed);
-        p.vy += Math.sin(t * 0.7 + p.ph * 1.3) * 0.00018 * (1 - formed);
-        p.vx *= 0.9; p.vy *= 0.9;
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < -0.1) p.x = 1.1; else if (p.x > 1.1) p.x = -0.1;
-        if (p.y < -0.1) p.y = 1.1; else if (p.y > 1.1) p.y = -0.1;
-        const px = p.x * w, py = p.y * h;
-        const r = (formed > 0.4 ? 1.5 : 2.2);
-        const a = 0.5 + formed * 0.4;
-        const col = p.gold ? `rgba(227,192,118,${a})` : `rgba(244,238,226,${a})`;
-        const g = c.createRadialGradient(px, py, 0, px, py, r * 2.4);
-        g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
-        c.fillStyle = g; c.beginPath(); c.arc(px, py, r * 2.4, 0, TAU); c.fill();
-      }
+      kNodes.forEach((n, i) => {
+        const x = X(i), y = Y(i);
+        const pulse = 1 + Math.sin(t * 2 + i) * 0.12;
+        let col = "227,192,118", rad = 8;
+        if (n[2] === "src") { col = "255,224,150"; rad = 11; }
+        else if (n[2] === "shrine") { col = "230,166,189"; rad = 11 * pulse; }
+        const g = c.createRadialGradient(x, y, 0, x, y, rad);
+        g.addColorStop(0, `rgba(${col},0.95)`); g.addColorStop(0.5, `rgba(${col},0.4)`); g.addColorStop(1, `rgba(${col},0)`);
+        c.fillStyle = g; c.beginPath(); c.arc(x, y, rad, 0, TAU); c.fill();
+        c.fillStyle = `rgba(${col},0.95)`; c.beginPath(); c.arc(x, y, n[2] === "f" ? 2 : 2.6, 0, TAU); c.fill();
+      });
       c.globalCompositeOperation = "source-over";
     }
   }

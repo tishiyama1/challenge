@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>縁起 ― 色と空の攻防</title>
+<style>
+  :root {
+    --gold: #e3c076;
+    --rose: #e6a6bd;
+    --void: #8fa0d6;
+    --ink: #efe8da;
+    --dim: #8b90a6;
+    --panel: rgba(10, 11, 18, 0.62);
+    --line: rgba(227, 192, 118, 0.2);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #05060b; color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; touch-action: none;
+  }
+  #board { position: fixed; inset: 0; display: block; }
+  .glass { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    backdrop-filter: blur(11px); -webkit-backdrop-filter: blur(11px); }
+
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+
+  /* top: turn + round */
+  #topbar {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px; padding: 9px 18px;
+    font-size: 13px; letter-spacing: 0.06em; white-space: nowrap;
+  }
+  #turn-badge { font-weight: 800; letter-spacing: 0.16em; }
+  #turn-badge.color { color: var(--gold); }
+  #turn-badge.void { color: var(--void); }
+  #topbar .sep { width: 1px; height: 16px; background: var(--line); }
+  #round-n { color: var(--ink); font-variant-numeric: tabular-nums; }
+  #round-n b { color: var(--gold); }
+  #moves-dot { display: inline-flex; gap: 4px; }
+  .pip { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+  .pip.on { background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  .pip.void.on { background: var(--void); box-shadow: 0 0 6px var(--void); }
+
+  /* shrine progress (top-left) */
+  #shrines { position: absolute; top: 14px; left: 14px; padding: 9px 13px; }
+  #shrines .t { font-size: 9.5px; letter-spacing: 0.24em; color: var(--dim); margin-bottom: 5px; }
+  #shrines .row { display: flex; gap: 6px; }
+  .shrine-ic { width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--dim); }
+  .shrine-ic.lit { border-color: var(--gold); background: radial-gradient(circle, var(--gold), transparent 72%); box-shadow: 0 0 8px var(--gold); }
+
+  /* side info (top-right) */
+  #side-info { position: absolute; top: 14px; right: 14px; padding: 9px 13px; text-align: right; font-size: 11px; }
+  #side-info .you { color: var(--ink); }
+  #side-info .you b { letter-spacing: 0.1em; }
+
+  /* message / log (bottom) */
+  #msg {
+    position: absolute; bottom: 66px; left: 50%; transform: translateX(-50%);
+    font-size: 12.5px; letter-spacing: 0.06em; color: var(--ink);
+    padding: 8px 20px; max-width: calc(100vw - 32px); text-align: center;
+    opacity: 0; transition: opacity .3s; white-space: nowrap;
+  }
+  #msg.show { opacity: 1; }
+  #msg b.g { color: var(--gold); } #msg b.v { color: var(--void); }
+
+  /* controls */
+  #controls { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; pointer-events: auto; }
+  .ctl { font-family: inherit; font-size: 12px; letter-spacing: 0.08em; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 9px 16px; cursor: pointer; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    transition: border-color .2s, color .2s; }
+  .ctl:hover { border-color: var(--gold); color: #fff6e2; }
+
+  /* hint under board */
+  #hint { position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%);
+    font-size: 10.5px; letter-spacing: 0.1em; color: var(--dim); pointer-events: none;
+    text-align: center; width: min(94vw, 560px); transition: opacity .4s; }
+
+  /* ---------- start overlay ---------- */
+  #start {
+    position: fixed; inset: 0; z-index: 40; overflow-y: auto;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 38%, rgba(24, 22, 34, 0.5), rgba(3, 4, 8, 0.9));
+    transition: opacity 1s ease; padding: 32px 20px;
+  }
+  #start.gone { opacity: 0; pointer-events: none; }
+  #start h1 {
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-size: clamp(40px, 9vw, 76px); letter-spacing: 0.2em; text-indent: 0.2em;
+    background: linear-gradient(180deg, #fbf4e4, var(--gold) 60%, #7a5a24);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 30px rgba(227, 192, 118, 0.3));
+  }
+  #start .en { margin-top: 10px; font-size: 12px; letter-spacing: 0.42em; text-indent: .42em; color: var(--dim); }
+  #start .rules {
+    margin-top: 26px; max-width: 620px; text-align: center;
+    font-size: 13px; line-height: 2.1; letter-spacing: 0.04em; color: rgba(239,232,218,0.9);
+  }
+  #start .rules b.g { color: var(--gold); } #start .rules b.v { color: var(--void); }
+  #start .rules .small { font-size: 11.5px; color: var(--dim); line-height: 1.9; }
+  #start .choose { margin-top: 24px; font-size: 11px; letter-spacing: 0.3em; color: var(--dim); }
+  #start .sides { margin-top: 14px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .side-btn {
+    font-family: inherit; cursor: pointer; width: 190px; padding: 18px 16px; border-radius: 16px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--line); color: var(--ink);
+    transition: transform .2s, border-color .2s, box-shadow .2s; text-align: center;
+  }
+  .side-btn:hover { transform: translateY(-3px); }
+  .side-btn .big { font-family: "Hiragino Mincho ProN","Yu Mincho",serif; font-size: 30px; letter-spacing: 0.1em; }
+  .side-btn .nm { margin-top: 6px; font-size: 12px; letter-spacing: 0.14em; }
+  .side-btn .ds { margin-top: 8px; font-size: 10.5px; line-height: 1.7; color: var(--dim); }
+  .side-btn.color:hover { border-color: var(--gold); box-shadow: 0 0 26px rgba(227,192,118,0.3); }
+  .side-btn.color .big { color: var(--gold); }
+  .side-btn.void:hover { border-color: var(--void); box-shadow: 0 0 26px rgba(143,160,214,0.3); }
+  .side-btn.void .big { color: var(--void); }
+  .side-btn.watch:hover { border-color: var(--ink); }
+  .side-btn.watch .big { color: var(--ink); font-size: 22px; padding-top: 6px; }
+  #start .foot { margin-top: 26px; font-size: 11px; color: var(--dim); }
+  #start .foot a { color: var(--gold); text-decoration: none; } #start .foot a:hover { text-decoration: underline; }
+
+  /* ---------- result overlay ---------- */
+  #result {
+    position: fixed; inset: 0; z-index: 45; display: none; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: rgba(3,4,8,0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    opacity: 0; transition: opacity 1s; padding: 20px;
+  }
+  #result.show { display: flex; opacity: 1; }
+  #result .big { font-family: "Hiragino Mincho ProN","Yu Mincho",serif; font-size: clamp(30px, 6vw, 54px); letter-spacing: 0.2em; }
+  #result .sub { margin-top: 16px; font-size: 14px; line-height: 2; color: rgba(239,232,218,0.85); letter-spacing: 0.1em; max-width: 520px; }
+  #result .btns { margin-top: 30px; display: flex; gap: 12px; }
+
+  @media (max-width: 720px) {
+    #topbar { font-size: 11px; gap: 9px; padding: 7px 12px; top: 10px; }
+    #shrines, #side-info { top: 60px; padding: 7px 10px; }
+    #shrines { left: 10px; } #side-info { right: 10px; }
+    #hint { display: none; }
+    #msg { bottom: 62px; font-size: 11.5px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="board"></canvas>
+
+<div id="hud">
+  <div id="topbar" class="glass">
+    <span id="turn-badge" class="color">色の手番</span>
+    <span id="moves-dot"></span>
+    <span class="sep"></span>
+    <span id="round-n">第 <b>1</b> / 19 局</span>
+  </div>
+  <div id="shrines" class="glass">
+    <div class="t">縁座 SHRINES</div>
+    <div class="row"><span class="shrine-ic"></span><span class="shrine-ic"></span><span class="shrine-ic"></span></div>
+  </div>
+  <div id="side-info" class="glass">
+    <div class="you">あなた：<b id="you-side">—</b></div>
+  </div>
+  <div id="msg" class="glass"></div>
+  <div id="hint"></div>
+  <div id="controls">
+    <button class="ctl" id="btn-restart">やり直す</button>
+    <button class="ctl" id="btn-menu">投了・変更</button>
+    <button class="ctl" id="btn-sound">🔔</button>
+  </div>
+</div>
+
+<div id="start">
+  <h1>縁 起</h1>
+  <div class="en">ENGI · FORM vs EMPTINESS</div>
+  <div class="rules">
+    盤上のすべては、本来 <b class="v">空(くう)</b>。<br>
+    形は、<b class="g">源(みなもと)への縁(つながり)</b> があるときにだけ、存在できる。<br>
+    <span class="small">
+      <b class="g">色</b>：縁を伸ばして形を灯し、3つの<b class="g">縁座</b>すべてに形を灯せば勝ち。<br>
+      <b class="v">空</b>：縁を断つ。源へのつながりを断たれた形は、連鎖して滅する(縁滅)。色の完成を19局まで防げば勝ち。<br>
+      断たれた縁は、数手ののち結び直される。縁を<b>輪</b>に厚く結べば、一手では崩れない。
+    </span>
+  </div>
+  <div class="choose">どちらで戦いますか</div>
+  <div class="sides">
+    <button class="side-btn color" data-side="color">
+      <div class="big">色</div><div class="nm">形を紡ぐ</div>
+      <div class="ds">縁を織り、<br>縁座に形を灯す</div>
+    </button>
+    <button class="side-btn void" data-side="void">
+      <div class="big">空</div><div class="nm">縁を断つ</div>
+      <div class="ds">つながりを絶ち、<br>すべてを空へ還す</div>
+    </button>
+    <button class="side-btn watch" data-side="watch">
+      <div class="big">観</div><div class="nm">観戦</div>
+      <div class="ds">色と空、<br>AI同士の対局</div>
+    </button>
+  </div>
+  <div class="foot">静かに眺めたい方へ ― <a href="ku.html">色即是空(瞑想版)</a></div>
+</div>
+
+<div id="result">
+  <div class="big" id="result-big"></div>
+  <div class="sub" id="result-sub"></div>
+  <div class="btns">
+    <button class="ctl" id="res-again">もう一局</button>
+    <button class="ctl" id="res-menu">手番を変える</button>
+  </div>
+</div>
+<script>
+"use strict";
+(() => {
+  // ============================================================
+  //  縁起 (ENGI) — 色 builds forms via 縁; 空 severs them.
+  //  A form stands only while connected to a 源. Cut its last
+  //  path and it collapses (縁滅), cascading to its dependents.
+  // ============================================================
+  const canvas = document.getElementById("board");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const $ = id => document.getElementById(id);
+
+  const CONF = { R: 3, roundLimit: 19, colorPlaces: 2, voidCuts: 1, heal: 3 };
+
+  // ---------------- engine ----------------
+  function makeGame(o) {
+    const R = o.R, HEAL = o.heal;
+    const DIRS = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+    const hd = (q, r) => (Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2;
+    const cells = [], idx = new Map();
+    for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++)
+      if (hd(q, r) <= R) { idx.set(q + "," + r, cells.length); cells.push({ q, r, type: "normal", state: "void", x: 0, y: 0 }); }
+    const N = cells.length;
+    const adj = cells.map(c => { const a = []; for (const [dq, dr] of DIRS) { const j = idx.get((c.q + dq) + "," + (c.r + dr)); if (j !== undefined) a.push(j); } return a; });
+    const corners = [[R,0],[0,R],[-R,R],[-R,0],[0,-R],[R,-R]];
+    const sources = [], shrines = [];
+    corners.forEach(([q, r], i) => { const id = idx.get(q + "," + r);
+      if (i % 2 === 0) { cells[id].type = "source"; cells[id].state = "form"; sources.push(id); }
+      else { cells[id].type = "shrine"; shrines.push(id); } });
+    const ekey = (i, j) => i < j ? i * N + j : j * N + i;
+    const cut = new Map();
+    const st = { cells, adj, N, sources, shrines, corners, cut, hd,
+      turn: "color", round: 1, winner: null, movesLeft: o.colorPlaces,
+      lastCollapsed: [], conf: o, ekey };
+    const isForm = i => cells[i].state === "form";
+    const isSource = i => cells[i].type === "source";
+    const isCut = (i, j) => { const h = cut.get(ekey(i, j)); return h !== undefined && st.round < h; };
+    const edgeActive = (i, j) => isForm(i) && isForm(j) && !isCut(i, j);
+    const formNonSourceCount = () => { let n = 0; for (let i = 0; i < N; i++) if (isForm(i) && !isSource(i)) n++; return n; };
+    function reachFromSources() {
+      const seen = new Uint8Array(N), stack = [...sources];
+      for (const s of sources) seen[s] = 1;
+      while (stack.length) { const c = stack.pop(); for (const nb of adj[c]) if (!seen[nb] && edgeActive(c, nb)) { seen[nb] = 1; stack.push(nb); } }
+      return seen;
+    }
+    function colorMoves() { const out = []; for (let i = 0; i < N; i++) { if (cells[i].state !== "void") continue; if (adj[i].some(nb => isForm(nb) && !isCut(i, nb))) out.push(i); } return out; }
+    function voidMoves() { const out = []; for (let i = 0; i < N; i++) for (const j of adj[i]) if (i < j && edgeActive(i, j)) out.push([i, j]); return out; }
+    function cascade() { const seen = reachFromSources(); const col = []; for (let i = 0; i < N; i++) if (isForm(i) && !isSource(i) && !seen[i]) { cells[i].state = "void"; col.push(i); } return col; }
+    function checkWin() {
+      if (shrines.every(isForm)) { st.winner = "color"; return; }
+      if (st.round > o.roundLimit) { st.winner = "void"; return; }
+      if (st.round > 4 && formNonSourceCount() === 0) { st.winner = "void"; return; }
+    }
+    function move(m) {
+      let collapsed = [];
+      if (st.turn === "color") {
+        cells[m].state = "form"; st.movesLeft--; checkWin();
+        if (!st.winner && st.movesLeft <= 0) { st.turn = "void"; st.movesLeft = o.voidCuts; }
+      } else {
+        cut.set(ekey(m[0], m[1]), st.round + HEAL);
+        collapsed = cascade(); st.lastCollapsed = collapsed; st.movesLeft--; checkWin();
+        if (!st.winner && st.movesLeft <= 0) { st.turn = "color"; st.movesLeft = o.colorPlaces; st.round++; checkWin(); }
+      }
+      return { collapsed };
+    }
+    Object.assign(st, { isForm, isSource, isCut, edgeActive, colorMoves, voidMoves, reachFromSources, formNonSourceCount, cascade, move, checkWin, activeLinks: i => { let n = 0; for (const nb of adj[i]) if (isForm(nb) && !isCut(i, nb)) n++; return n; } });
+    return st;
+  }
+
+  // ---------------- AI (validated ~50/50 at these weights) ----------------
+  function gridDistFrom(st, starts) {
+    const dd = new Int16Array(st.N).fill(-1), q = [];
+    for (const s of starts) { dd[s] = 0; q.push(s); }
+    let h = 0; while (h < q.length) { const c = q[h++]; for (const nb of st.adj[c]) if (dd[nb] < 0) { dd[nb] = dd[c] + 1; q.push(nb); } }
+    return dd;
+  }
+  function colorAI(st) {
+    const moves = st.colorMoves(); if (!moves.length) return null;
+    const unmet = st.shrines.filter(s => !st.isForm(s));
+    const dS = unmet.length ? gridDistFrom(st, unmet) : new Int16Array(st.N);
+    const unanchored = st.sources.length > 1 ? st.sources.filter(s => !st.adj[s].some(nb => st.isForm(nb) && !st.isCut(s, nb))) : [];
+    const dU = unanchored.length ? gridDistFrom(st, unanchored) : null;
+    let best = null, bs = -1e9;
+    for (const m of moves) {
+      const cell = st.cells[m];
+      const links = st.adj[m].filter(nb => st.isForm(nb) && !st.isCut(m, nb)).length;
+      let s = links >= 2 ? 120 + links * 8 : 0;
+      s -= 5 * dS[m];
+      if (st.adj[m].some(nb => st.isSource(nb) && !st.isCut(m, nb))) s += 90;
+      if (dU) s -= 7 * dU[m];
+      if (cell.type === "shrine") { const wins = st.shrines.every(x => x === m || st.isForm(x)); s += (links >= 2 || wins) ? 900 : 110; }
+      for (const nb of st.adj[m]) if (st.cells[nb].type === "shrine" && st.isForm(nb) && !st.isCut(m, nb) && st.activeLinks(nb) < 2) s += 500;
+      s += Math.random() * 3;
+      if (s > bs) { bs = s; best = m; }
+    }
+    return best;
+  }
+  function voidAI(st) {
+    const moves = st.voidMoves(); if (!moves.length) return null;
+    let best = null, bs = -1e9;
+    for (const [i, j] of moves) {
+      const key = st.ekey(i, j), had = st.cut.get(key);
+      st.cut.set(key, st.round + st.conf.heal);
+      const seen = st.reachFromSources();
+      let col = 0, sh = 0;
+      for (let k = 0; k < st.N; k++) if (st.cells[k].state === "form" && !st.isSource(k) && !seen[k]) { col++; if (st.cells[k].type === "shrine") sh++; }
+      if (had === undefined) st.cut.delete(key); else st.cut.set(key, had);
+      const touch = st.cells[i].type === "shrine" || st.cells[j].type === "shrine";
+      let s = col * 22 + sh * 200 + (touch ? 8 : 0) + Math.random() * 3;
+      if (s > bs) { bs = s; best = [i, j]; }
+    }
+    return best;
+  }
+
+  // ============================================================
+  //  PARTICLES (manifest gather / collapse burst)
+  // ============================================================
+  const parts = [];
+  function burst(x, y, kind, colr) {
+    const n = kind === "gather" ? 16 : 22;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, sp = kind === "gather" ? rand(30, 70) : rand(50, 140);
+      const p = { x, y, life: 0, max: kind === "gather" ? 0.5 : 0.9, c: colr, kind };
+      if (kind === "gather") { p.x = x + Math.cos(a) * rand(20, 46); p.y = y + Math.sin(a) * rand(20, 46); p.tx = x; p.ty = y; }
+      else { p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 14; }
+      parts.push(p);
+    }
+  }
+  function stepParts(dt) {
+    for (const p of parts) {
+      p.life += dt;
+      if (p.kind === "gather") { p.x += (p.tx - p.x) * Math.min(dt * 8, 1); p.y += (p.ty - p.y) * Math.min(dt * 8, 1); }
+      else { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 40 * dt; p.vx *= 0.96; p.vy *= 0.96; }
+    }
+    for (let i = parts.length - 1; i >= 0; i--) if (parts[i].life >= parts[i].max) parts.splice(i, 1);
+  }
+
+  // ============================================================
+  //  AUDIO
+  // ============================================================
+  let AU = null, soundOn = true;
+  function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const acx = new AC(); const master = acx.createGain(); master.gain.value = 0;
+    const comp = acx.createDynamicsCompressor(); master.connect(comp); comp.connect(acx.destination);
+    const drone = acx.createGain(); drone.gain.value = 0.05; drone.connect(master);
+    for (const f of [58, 87]) { const o = acx.createOscillator(); o.type = "sine"; o.frequency.value = f; const g = acx.createGain(); g.gain.value = 0.5; o.connect(g); g.connect(drone); o.start(); }
+    AU = { acx, master }; setSound(soundOn);
+  }
+  function setSound(on) { soundOn = on; $("btn-sound").textContent = on ? "🔔" : "🔕"; if (!AU) return; if (AU.acx.state === "suspended") AU.acx.resume(); AU.master.gain.setTargetAtTime(on ? 0.8 : 0, AU.acx.currentTime, 0.4); }
+  function bowl(base, vol = 0.5) {
+    if (!AU || !soundOn) return; const { acx, master } = AU, t = acx.currentTime;
+    for (const [r, a, d] of [[1, 1, 3.4], [2.02, 0.5, 2.6], [2.76, 0.3, 2.2], [5.4, 0.12, 1.4]]) {
+      const o = acx.createOscillator(); o.type = "sine"; o.frequency.value = base * r;
+      const g = acx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * a, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + d + 0.1);
+    }
+  }
+  function thud(vol = 0.4) {
+    if (!AU || !soundOn) return; const { acx, master } = AU, t = acx.currentTime;
+    const len = acx.sampleRate * 0.7, b = acx.createBuffer(1, len, acx.sampleRate), ch = b.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const s = acx.createBufferSource(); s.buffer = b; const f = acx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 220;
+    const g = acx.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(master); s.start(t);
+    const o = acx.createOscillator(); o.type = "sine"; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.5);
+    const og = acx.createGain(); og.gain.setValueAtTime(vol * 0.6, t); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.6); o.connect(og); og.connect(master); o.start(t); o.stop(t + 0.7);
+  }
+  function click() { if (!AU || !soundOn) return; const { acx, master } = AU, t = acx.currentTime; const o = acx.createOscillator(); o.type = "triangle"; o.frequency.setValueAtTime(660, t); o.frequency.exponentialRampToValueAtTime(330, t + 0.08); const g = acx.createGain(); g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12); o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.14); }
+
+  // ============================================================
+  //  GAME STATE & LAYOUT
+  // ============================================================
+  let G = null;            // current game
+  let humanSide = "color"; // "color" | "void" | null(watch)
+  let busy = false;        // AI acting / animating
+  let hoverCell = -1, hoverEdge = null;
+  let cellR = 20, spacing = 60;
+  let gen = 0;             // generation token — invalidates stale AI timers
+  let aiTimer = 0;
+
+  function layout() {
+    if (!G) return;
+    // axial -> pixel (flat-top), fit to a centered square area
+    const raw = G.cells.map(c => ({ x: 1.5 * c.q, y: Math.sqrt(3) * (c.r + c.q / 2) }));
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    for (const p of raw) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+    const availW = W - 40, availH = H - 190;
+    const s = Math.min(availW / (maxX - minX), availH / (maxY - minY));
+    spacing = s; cellR = s * 0.3;
+    const ox = W / 2 - (minX + maxX) / 2 * s;
+    const oy = (H - 40) / 2 + 14 - (minY + maxY) / 2 * s;
+    G.cells.forEach((c, i) => { c.x = raw[i].x * s + ox; c.y = raw[i].y * s + oy; });
+  }
+
+  // ============================================================
+  //  RENDER
+  // ============================================================
+  function draw(t) {
+    ctx.clearRect(0, 0, W, H);
+    // background
+    const bg = ctx.createRadialGradient(W / 2, H * 0.44, 0, W / 2, H * 0.44, Math.max(W, H) * 0.7);
+    bg.addColorStop(0, "#0c0e18"); bg.addColorStop(0.6, "#070812"); bg.addColorStop(1, "#04050a");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (!G) return;
+
+    const myTurn = !busy && G.turn === humanSide && !G.winner;
+
+    // ---- edges ----
+    for (let i = 0; i < G.N; i++) {
+      for (const j of G.adj[i]) {
+        if (j <= i) continue;
+        const a = G.cells[i], b = G.cells[j];
+        const bothForm = G.isForm(i) && G.isForm(j);
+        if (!bothForm) continue;
+        const cutNow = G.isCut(i, j);
+        if (cutNow) {
+          // severed 縁 — dashed, faint, healing
+          ctx.strokeStyle = "rgba(143,160,214,0.4)";
+          ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          const hl = hoverEdge && ((hoverEdge[0] === i && hoverEdge[1] === j) || (hoverEdge[0] === j && hoverEdge[1] === i));
+          ctx.strokeStyle = hl ? "rgba(230,166,189,0.95)" : "rgba(227,192,118,0.5)";
+          ctx.lineWidth = hl ? 4 : 2.4;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+      }
+    }
+
+    // ---- legal-move highlights ----
+    if (myTurn && humanSide === "color") {
+      for (const m of G.colorMoves()) {
+        const c = G.cells[m];
+        ctx.strokeStyle = m === hoverCell ? "rgba(227,192,118,0.95)" : "rgba(227,192,118,0.32)";
+        ctx.lineWidth = m === hoverCell ? 2.4 : 1.4;
+        ctx.beginPath(); ctx.arc(c.x, c.y, cellR * 0.9, 0, TAU); ctx.stroke();
+      }
+    }
+
+    // ---- nodes ----
+    for (let i = 0; i < G.N; i++) {
+      const c = G.cells[i];
+      const form = G.isForm(i);
+      if (c.type === "source") { drawSource(c, t); continue; }
+      if (c.type === "shrine") { drawShrine(c, form, t); continue; }
+      if (form) drawForm(c, t, i);
+      else { // void node
+        ctx.strokeStyle = "rgba(150,160,190,0.18)"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(c.x, c.y, cellR * 0.34, 0, TAU); ctx.stroke();
+      }
+    }
+
+    // ---- particles ----
+    for (const p of parts) {
+      const al = p.kind === "gather" ? (p.life / p.max) : (1 - p.life / p.max);
+      const r = p.kind === "gather" ? 2 : 2.4 * (1 - p.life / p.max) + 0.6;
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
+      g.addColorStop(0, p.c.replace("A", (0.9 * al).toFixed(2))); g.addColorStop(1, p.c.replace("A", "0"));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, r * 3, 0, TAU); ctx.fill();
+    }
+  }
+
+  function drawForm(c, t, i) {
+    const pulse = 1 + Math.sin(t * 2 + i) * 0.06;
+    const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, cellR * 1.5 * pulse);
+    g.addColorStop(0, "rgba(255,244,214,0.95)"); g.addColorStop(0.5, "rgba(227,192,118,0.5)"); g.addColorStop(1, "rgba(227,192,118,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, cellR * 1.5 * pulse, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#fbf3df"; ctx.beginPath(); ctx.arc(c.x, c.y, cellR * 0.42, 0, TAU); ctx.fill();
+  }
+  function drawSource(c, t) {
+    const R = cellR * 1.0, pulse = 1 + Math.sin(t * 1.6) * 0.08;
+    const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R * 2.4 * pulse);
+    g.addColorStop(0, "rgba(255,236,180,0.85)"); g.addColorStop(0.4, "rgba(240,200,110,0.35)"); g.addColorStop(1, "rgba(240,200,110,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, R * 2.4 * pulse, 0, TAU); ctx.fill();
+    // 4-point star (源)
+    ctx.fillStyle = "#fff3cf"; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(t * 0.2);
+    ctx.beginPath();
+    for (let k = 0; k < 8; k++) { const rr = k % 2 ? R * 0.28 : R * 0.66; const a = k / 8 * TAU; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  function drawShrine(c, form, t) {
+    const R = cellR;
+    if (form) {
+      const pulse = 1 + Math.sin(t * 2.2) * 0.07;
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R * 2 * pulse);
+      g.addColorStop(0, "rgba(255,224,236,0.95)"); g.addColorStop(0.45, "rgba(230,166,189,0.5)"); g.addColorStop(1, "rgba(230,166,189,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, R * 2 * pulse, 0, TAU); ctx.fill();
+    }
+    // lotus-ring marker
+    ctx.strokeStyle = form ? "#ffe6f0" : "rgba(230,166,189,0.5)";
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(c.x, c.y, R * 0.6, 0, TAU); ctx.stroke();
+    ctx.fillStyle = form ? "#ffdfec" : "rgba(230,166,189,0.35)";
+    for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; ctx.beginPath(); ctx.arc(c.x + Math.cos(a) * R * 0.6, c.y + Math.sin(a) * R * 0.6, R * 0.14, 0, TAU); ctx.fill(); }
+  }
+
+  // ============================================================
+  //  HIT TESTING
+  // ============================================================
+  function cellAt(x, y) {
+    let best = -1, bd = cellR * 1.2;
+    for (let i = 0; i < G.N; i++) { const c = G.cells[i]; const d = Math.hypot(c.x - x, c.y - y); if (d < bd) { bd = d; best = i; } }
+    return best;
+  }
+  function edgeAt(x, y) {
+    let best = null, bd = Math.max(cellR * 0.7, 16);
+    for (const [i, j] of G.voidMoves()) {
+      const a = G.cells[i], b = G.cells[j];
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      // distance to segment midpoint region
+      const d = pointSeg(x, y, a.x, a.y, b.x, b.y);
+      const dm = Math.hypot(mx - x, my - y);
+      const dd = Math.min(d, dm);
+      if (dd < bd) { bd = dd; best = [i, j]; }
+    }
+    return best;
+  }
+  function pointSeg(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
+    let tt = l2 ? ((px - x1) * dx + (py - y1) * dy) / l2 : 0; tt = clamp(tt, 0, 1);
+    return Math.hypot(px - (x1 + dx * tt), py - (y1 + dy * tt));
+  }
+
+  // ============================================================
+  //  TURN FLOW
+  // ============================================================
+  function afterMove(res, side) {
+    if (side === "color") { /* placed */ }
+    if (res.collapsed.length) {
+      thud(0.35 + Math.min(res.collapsed.length, 6) * 0.05);
+      for (const k of res.collapsed) { const c = G.cells[k]; burst(c.x, c.y, "scatter", "rgba(143,160,214,A)"); }
+      if (res.collapsed.length >= 2) showMsg(`縁滅 ― <b class="v">${res.collapsed.length}</b>つの形が空へ還った`);
+    }
+    updateHUD();
+    if (G.winner) { endGame(); return; }
+    scheduleNext();
+  }
+
+  function doColorMove(i) {
+    const c = G.cells[i];
+    bowl(G.cells[i].type === "shrine" ? 392 : 261.6, 0.4);
+    burst(c.x, c.y, "gather", c.type === "shrine" ? "rgba(230,166,189,A)" : "rgba(227,192,118,A)");
+    const res = G.move(i);
+    afterMove(res, "color");
+  }
+  function doVoidMove(edge) {
+    click();
+    const res = G.move(edge);
+    afterMove(res, "void");
+  }
+
+  function scheduleNext() {
+    // if it's the AI's turn (or watch mode), act after a beat
+    const aiTurn = humanSide === null || G.turn !== humanSide;
+    if (!aiTurn) { busy = false; updateHUD(); return; }
+    busy = true; updateHUD();
+    const myGen = gen;
+    clearTimeout(aiTimer);
+    aiTimer = setTimeout(() => {
+      if (myGen !== gen || !G || G.winner) { return; }
+      if (G.turn === "color") { const m = colorAI(G); if (m == null) { passTurn(); return; } doColorMove(m); }
+      else { const e = voidAI(G); if (e == null) { passTurn(); return; } doVoidMove(e); }
+    }, humanSide === null ? 520 : 620);
+  }
+  function passTurn() {
+    // rare: no legal move — hand over
+    if (G.turn === "color") { G.turn = "void"; G.movesLeft = CONF.voidCuts; }
+    else { G.turn = "color"; G.movesLeft = CONF.colorPlaces; G.round++; G.checkWin(); }
+    updateHUD(); if (G.winner) endGame(); else scheduleNext();
+  }
+
+  // ============================================================
+  //  HUD
+  // ============================================================
+  let msgTimer = 0;
+  function showMsg(html) { $("msg").innerHTML = html; $("msg").classList.add("show"); msgTimer = 2.6; }
+  function updateHUD() {
+    if (!G) return;
+    const badge = $("turn-badge");
+    badge.className = G.turn;
+    badge.textContent = G.turn === "color" ? "色の手番" : "空の手番";
+    $("round-n").innerHTML = `第 <b>${Math.min(G.round, CONF.roundLimit)}</b> / ${CONF.roundLimit} 局`;
+    // move pips
+    const total = G.turn === "color" ? CONF.colorPlaces : CONF.voidCuts;
+    let pips = "";
+    for (let k = 0; k < total; k++) pips += `<span class="pip ${G.turn === "void" ? "void" : ""} ${k < G.movesLeft ? "on" : ""}"></span>`;
+    $("moves-dot").innerHTML = pips;
+    // shrines
+    const ic = document.querySelectorAll(".shrine-ic");
+    G.shrines.forEach((s, k) => ic[k].classList.toggle("lit", G.isForm(s)));
+    // hint
+    if (!G.winner) {
+      const myTurn = !busy && G.turn === humanSide;
+      $("hint").textContent = humanSide === null ? "観戦中 ― 色と空の攻防"
+        : myTurn ? (humanSide === "color" ? "光る円をクリックして、形を灯す（縁を輪に厚く結べば崩れにくい）" : "金色の縁をクリックして断つ（源から切り離された形は連鎖して滅する）")
+        : "相手の手番…";
+    }
+  }
+
+  // ============================================================
+  //  INPUT
+  // ============================================================
+  canvas.addEventListener("pointermove", e => {
+    if (!G || busy || G.winner || G.turn !== humanSide) { hoverCell = -1; hoverEdge = null; return; }
+    if (humanSide === "color") { hoverCell = cellAt(e.clientX, e.clientY); if (hoverCell >= 0 && G.cells[hoverCell].state !== "void") hoverCell = -1; hoverEdge = null; }
+    else { hoverEdge = edgeAt(e.clientX, e.clientY); hoverCell = -1; }
+  });
+  canvas.addEventListener("pointerdown", e => {
+    if (!G || busy || G.winner || G.turn !== humanSide) return;
+    if (humanSide === "color") {
+      const i = cellAt(e.clientX, e.clientY);
+      if (i >= 0 && G.cells[i].state === "void" && G.colorMoves().includes(i)) { busy = true; doColorMove(i); }
+    } else {
+      const edge = edgeAt(e.clientX, e.clientY);
+      if (edge) { busy = true; doVoidMove(edge); }
+    }
+    hoverCell = -1; hoverEdge = null;
+  });
+
+  // ============================================================
+  //  START / END
+  // ============================================================
+  function startGame(side) {
+    gen++; clearTimeout(aiTimer);
+    humanSide = side === "watch" ? null : side;
+    G = makeGame(CONF);
+    layout();
+    busy = false; parts.length = 0;
+    $("start").classList.add("gone");
+    $("result").classList.remove("show");
+    $("you-side").textContent = side === "watch" ? "観戦" : side === "color" ? "色（形を紡ぐ）" : "空（縁を断つ）";
+    $("you-side").style.color = side === "watch" ? "var(--ink)" : colorRaw(side);
+    updateHUD();
+    // color moves first; if human isn't color, AI starts
+    scheduleNext();
+    if (!AU) initAudio();
+  }
+  function colorRaw(s) { return s === "color" ? "#e3c076" : "#8fa0d6"; }
+
+  function endGame() {
+    busy = true;
+    const win = G.winner;
+    const res = $("result");
+    const big = $("result-big"), sub = $("result-sub");
+    const humanWon = humanSide && win === humanSide;
+    if (win === "color") { big.textContent = "色 ― 曼荼羅、成る"; big.style.color = "#e3c076"; bowl(523, 0.5); setTimeout(() => bowl(784, 0.4), 180); }
+    else { big.textContent = "空 ― すべては、還る"; big.style.color = "#8fa0d6"; thud(0.5); }
+    let s;
+    if (humanSide === null) s = win === "color" ? "3つの縁座に形が灯り、曼荼羅が完成した。" : "形は保てず、大地は空へと還った。";
+    else if (humanWon) s = win === "color" ? "あなたは縁を織りきり、3つの縁座を灯した。" : "あなたは縁を断ち、形を空へ還した。";
+    else s = win === "color" ? "相手は曼荼羅を完成させた。縁の輪を、断ちきれなかった。" : "縁は断たれ、形は保てなかった。19局を、耐えられなかった。";
+    sub.textContent = s;
+    setTimeout(() => res.classList.add("show"), 900);
+  }
+
+  // ============================================================
+  //  MAIN LOOP
+  // ============================================================
+  let lastT = performance.now();
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((now - lastT) / 1000, 0.05); lastT = now;
+    const t = now / 1000;
+    stepParts(dt);
+    if (msgTimer > 0 && (msgTimer -= dt) <= 0) $("msg").classList.remove("show");
+    draw(t);
+  }
+
+  // ============================================================
+  //  BOOT
+  // ============================================================
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    layout();
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  document.querySelectorAll(".side-btn").forEach(b => b.addEventListener("click", () => startGame(b.dataset.side)));
+  $("btn-restart").addEventListener("click", () => { if (humanSide !== undefined) startGame(humanSide === null ? "watch" : humanSide); });
+  $("btn-menu").addEventListener("click", () => { $("result").classList.remove("show"); $("start").classList.remove("gone"); G = null; });
+  $("res-again").addEventListener("click", () => startGame(humanSide === null ? "watch" : humanSide));
+  $("res-menu").addEventListener("click", () => { $("result").classList.remove("show"); $("start").classList.remove("gone"); G = null; });
+  $("btn-sound").addEventListener("click", () => setSound(!soundOn));
+
+  requestAnimationFrame(loop);
+
+  // test hook
+  window.__engi = {
+    start: startGame, get game() { return G; },
+    colorAI, voidAI,
+    step() { if (G && !G.winner) { const s = G.turn; const m = s === "color" ? colorAI(G) : voidAI(G); if (m != null) G.move(m); else passTurn(); updateHUD(); } },
+    get winner() { return G && G.winner; },
+  };
+})();
+</script>
+</body>
+</html>
