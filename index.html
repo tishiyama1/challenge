@@ -320,7 +320,7 @@
   // closet preview: a little outfit whose colours shuffle
   const CL = setup("art-closet");
   const clPalette = ["#e8e2d6", "#2f3a54", "#b8453f", "#6f8f5a", "#d98a4b", "#7c6193", "#5b7fb0", "#cdb99c"];
-  let clTop = 0, clBot = 1, clSho = 2, clShufT = 0;
+  let clTop = 0, clBot = 1, clSho = 2, clOut = 7, clShufT = 0, clOpen = true, clHasOut = true;
 
   // doubutsu preview: animals bobbing with a little sum + stars
   const D = setup("art-doubutsu");
@@ -563,28 +563,56 @@
   }
   function roundRectP(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 
-  // ---- closet card: a tiny shuffling outfit (top / bottom / shoes) ----
+  // ---- closet card: a tiny mannequin wearing a shuffling outfit ----
   {
     const { c, w, h } = CL;
     c.fillStyle = "#f3f1ec"; c.fillRect(0, 0, w, h);
-    // re-shuffle colours periodically
-    if (t - clShufT > 2.4) { clShufT = t; clTop = (clTop + 1 + (Math.random() * 3 | 0)) % clPalette.length; clBot = (clBot + 1 + (Math.random() * 3 | 0)) % clPalette.length; clSho = (clSho + 2) % clPalette.length; }
-    const cx = w / 2, u = Math.min(w, h) * 0.16;
+    // re-shuffle colours / outer state periodically
+    if (t - clShufT > 2.4) { clShufT = t;
+      clTop = (clTop + 1 + (Math.random() * 3 | 0)) % clPalette.length;
+      clBot = (clBot + 1 + (Math.random() * 3 | 0)) % clPalette.length;
+      clSho = (clSho + 2) % clPalette.length;
+      clOut = (clOut + 1 + (Math.random() * 2 | 0)) % clPalette.length;
+      clHasOut = Math.random() < 0.7; clOpen = Math.random() < 0.6; }
     const shade = (hex, f) => { const n = parseInt(hex.slice(1), 16); return `rgb(${(n>>16&255)*f|0},${(n>>8&255)*f|0},${(n&255)*f|0})`; };
-    // top (tshirt)
-    (() => { const y = h * 0.3, col = clPalette[clTop]; c.fillStyle = col; c.strokeStyle = shade(col, 0.62); c.lineWidth = 2.5; c.lineJoin = "round";
-      c.beginPath(); const P = [[-.55,-.6],[-.95,-.32],[-.7,-.05],[-.55,-.22],[-.55,.8],[.55,.8],[.55,-.22],[.7,-.05],[.95,-.32],[.55,-.6],[.28,-.5],[0,-.4],[-.28,-.5]];
-      c.moveTo(cx+P[0][0]*u, y+P[0][1]*u); for (let i=1;i<P.length;i++) c.lineTo(cx+P[i][0]*u, y+P[i][1]*u); c.closePath(); c.fill(); c.stroke(); })();
-    // bottom (skirt)
-    (() => { const y = h * 0.62, col = clPalette[clBot]; c.fillStyle = col; c.strokeStyle = shade(col, 0.62); c.lineWidth = 2.5;
-      c.beginPath(); const P = [[-.34,-.5],[.34,-.5],[.6,.6],[-.6,.6]];
-      c.moveTo(cx+P[0][0]*u, y+P[0][1]*u); for (let i=1;i<P.length;i++) c.lineTo(cx+P[i][0]*u, y+P[i][1]*u); c.closePath(); c.fill(); c.stroke(); })();
-    // shoes (two dots)
-    (() => { const y = h * 0.85, col = clPalette[clSho]; c.fillStyle = col; c.strokeStyle = shade(col, 0.6); c.lineWidth = 2;
-      for (const sx of [-1, 1]) { c.beginPath(); c.ellipse(cx + sx * u * 0.28, y, u * 0.22, u * 0.12, 0, 0, TAU); c.fill(); c.stroke(); } })();
+    const cx = w / 2, top = h * 0.1, Fh = h * 0.82, s = Fh / 2.42, Y = n => top + n * s;
+    const skin = "#e7ddcc", sk2 = "#d8ccb6";
+    const poly = (pts) => { c.beginPath(); c.moveTo(cx + pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) c.lineTo(cx + pts[i][0], pts[i][1]); c.closePath(); };
+    // geometry
+    const shoulderX = 0.40 * s, shoulderY = Y(0.58), waistX = 0.245 * s, waistY = Y(1.06), hipX = 0.32 * s, hipY = Y(1.24);
+    const crotchY = Y(1.40), kneeY = Y(1.86), ankleY = Y(2.28), footY = Y(2.42), neckX = 0.11 * s, neckY = Y(0.48);
+    const legOut = 0.30 * s, legIn = 0.045 * s, kneeOut = 0.20 * s, ankleOut = 0.135 * s;
+    const armInX = 0.30 * s, wristX = 0.42 * s, wristY = Y(1.36), elbowX = 0.46 * s, elbowY = Y(1.02);
+    // body
+    c.fillStyle = skin; c.strokeStyle = sk2; c.lineWidth = 1.5; c.lineJoin = "round";
+    for (const sx of [-1, 1]) { poly([[sx*legIn,crotchY],[sx*legOut,hipY],[sx*kneeOut,kneeY],[sx*ankleOut,ankleY],[sx*(ankleOut-0.02*s),footY],[sx*legIn*0.3,footY],[sx*legIn*0.6,kneeY]]); c.fill(); }
+    for (const sx of [-1, 1]) { poly([[sx*armInX,Y(0.55)],[sx*shoulderX*1.02,Y(0.60)],[sx*elbowX,elbowY],[sx*wristX,wristY],[sx*(wristX-0.09*s),wristY],[sx*(elbowX-0.1*s),elbowY],[sx*(armInX-0.02*s),shoulderY]]); c.fill(); }
+    poly([[-shoulderX,shoulderY],[-waistX,waistY],[-hipX,hipY],[-hipX*0.9,crotchY],[hipX*0.9,crotchY],[hipX,hipY],[waistX,waistY],[shoulderX,shoulderY],[neckX,neckY],[-neckX,neckY]]); c.fill();
+    c.fillRect(cx - neckX, neckY - s * 0.06, neckX * 2, s * 0.14);
+    c.beginPath(); c.arc(cx, Y(0.27), 0.19 * s, 0, TAU); c.fill();
+    const gar = (col, pts) => { poly(pts); c.fillStyle = col; c.fill(); c.strokeStyle = shade(col, 0.6); c.lineWidth = 2; c.stroke(); };
+    // bottom (pants)
+    (() => { const col = clPalette[clBot], wp = hipX * 1.06;
+      c.beginPath(); c.moveTo(cx - wp, waistY); c.lineTo(cx + wp, waistY); c.lineTo(cx + ankleOut * 1.5, ankleY); c.lineTo(cx + ankleOut * 0.3, ankleY); c.lineTo(cx, crotchY + s * 0.05); c.lineTo(cx - ankleOut * 0.3, ankleY); c.lineTo(cx - ankleOut * 1.5, ankleY); c.closePath();
+      c.fillStyle = col; c.fill(); c.strokeStyle = shade(col, 0.6); c.lineWidth = 2; c.stroke(); })();
+    // shoes
+    (() => { const col = clPalette[clSho]; c.fillStyle = col; c.strokeStyle = shade(col, 0.55); c.lineWidth = 1.5;
+      for (const sx of [-1, 1]) { const fx = cx + sx * ankleOut * 0.9;
+        c.beginPath(); c.moveTo(fx - sx * s*0.05, footY - s*0.09); c.quadraticCurveTo(fx + sx*s*0.16, footY - s*0.1, fx + sx*s*0.19, footY + s*0.02); c.quadraticCurveTo(fx + sx*s*0.2, footY + s*0.06, fx + sx*s*0.13, footY + s*0.06); c.lineTo(fx - sx*s*0.07, footY + s*0.06); c.closePath(); c.fill(); c.stroke(); } })();
+    // top
+    (() => { const col = clPalette[clTop], syT = shoulderY - s*0.04, hemY = hipY + s*0.03, nX = neckX*1.4, sxT = shoulderX*1.06, wY = wristY, wX = wristX;
+      gar(col, [[-nX,syT],[-sxT,syT],[-(wX+s*0.09),wY],[-(wX-s*0.02),wY+s*0.02],[-waistX*1.02,waistY+s*0.04],[-hipX*1.02,hemY],[hipX*1.02,hemY],[waistX*1.02,waistY+s*0.04],[(wX-s*0.02),wY+s*0.02],[(wX+s*0.09),wY],[sxT,syT],[nX,syT]]); })();
+    // outer (open or closed)
+    if (clHasOut) { const col = clPalette[clOut], syO = shoulderY - s*0.06, hemY = hipY + s*0.08, sxO = shoulderX*1.16, nX = neckX*1.8, wY = wristY + s*0.02, wX = wristX + s*0.02;
+      const sleeve = (side) => { c.beginPath(); c.moveTo(cx + side*sxO, syO); c.lineTo(cx + side*(wX+s*0.12), wY); c.lineTo(cx + side*(wX-s*0.01), wY+s*0.02); c.lineTo(cx + side*shoulderX*1.02, shoulderY+s*0.06); c.closePath(); c.fillStyle = col; c.fill(); c.strokeStyle = shade(col, 0.58); c.lineWidth = 2; c.stroke(); };
+      sleeve(-1); sleeve(1);
+      if (!clOpen) { gar(col, [[-nX,syO],[-sxO,syO],[-waistX*1.15,waistY],[-hipX*1.12,hemY],[hipX*1.12,hemY],[waistX*1.15,waistY],[sxO,syO],[nX,syO]]);
+        c.strokeStyle = shade(col, 0.58); c.lineWidth = 2; c.beginPath(); c.moveTo(cx-nX,syO); c.lineTo(cx-s*0.02,syO+s*0.14); c.lineTo(cx+nX,syO); c.stroke(); }
+      else { const gap = s*0.10; for (const side of [-1,1]) gar(col, [[side*nX,syO],[side*sxO,syO],[side*waistX*1.15,waistY],[side*hipX*1.12,hemY],[side*gap,hemY],[side*gap*0.7,waistY],[side*gap*0.6,syO+s*0.16]]); }
+    }
     // sparkle
-    c.fillStyle = "rgba(201,138,94,0.5)"; c.font = "16px serif"; c.textAlign = "center";
-    c.globalAlpha = 0.4 + 0.4 * Math.sin(t * 3); c.fillText("✨", w * 0.78, h * 0.28); c.globalAlpha = 1; c.textAlign = "left";
+    c.fillStyle = "rgba(201,138,94,0.5)"; c.font = "15px serif"; c.textAlign = "center";
+    c.globalAlpha = 0.4 + 0.4 * Math.sin(t * 3); c.fillText("✨", w * 0.82, h * 0.2); c.globalAlpha = 1; c.textAlign = "left";
   }
   requestAnimationFrame(frame);
 })();
