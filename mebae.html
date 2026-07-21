@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>めばえ ― いきもの工房</title>
+<style>
+  :root {
+    --cream: #f7f0e2;
+    --cream2: #efe4cf;
+    --ink: #4a4030;
+    --dim: #9a8f78;
+    --accent: #f0a04b;
+    --accent2: #8fce6d;
+    --pink: #f0899e;
+    --sky: #7fc4e8;
+    --card: #fffaf0;
+    --line: rgba(74, 64, 48, 0.12);
+    --shadow: rgba(120, 100, 60, 0.18);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: var(--cream);
+    color: var(--ink);
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; touch-action: none;
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+  #app { position: relative; width: 100%; height: 100%; }
+
+  /* ---------- screens ---------- */
+  .screen { position: absolute; inset: 0 0 66px 0; overflow: hidden; opacity: 0; pointer-events: none; transition: opacity .3s ease; }
+  .screen.on { opacity: 1; pointer-events: auto; }
+  canvas.stage { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+
+  /* ---------- top bar ---------- */
+  .topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; pointer-events: none; }
+  .topbar .title { font-size: 16px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink);
+    background: rgba(255,250,240,0.8); padding: 6px 14px; border-radius: 999px; box-shadow: 0 3px 10px var(--shadow); }
+  .topbar .count { font-size: 13px; font-weight: 700; color: var(--ink);
+    background: rgba(255,250,240,0.8); padding: 6px 13px; border-radius: 999px; box-shadow: 0 3px 10px var(--shadow); pointer-events: auto; }
+  .topbar .count b { color: var(--accent); }
+
+  /* ---------- bottom nav ---------- */
+  #nav { position: absolute; bottom: 0; left: 0; right: 0; height: 66px; z-index: 20;
+    display: flex; background: var(--card); box-shadow: 0 -3px 16px var(--shadow); border-top: 1px solid var(--line); }
+  .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    color: var(--dim); transition: color .2s; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .nav-btn .ic { font-size: 22px; line-height: 1; transition: transform .2s; }
+  .nav-btn .lb { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; }
+  .nav-btn.on { color: var(--accent); }
+  .nav-btn.on .ic { transform: translateY(-2px) scale(1.12); }
+
+  /* ---------- workshop (工房) ---------- */
+  #forge-preview { position: absolute; top: 54px; left: 0; right: 0; bottom: 232px; }
+  #forge-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #forge-name { position: absolute; left: 50%; bottom: 238px; transform: translateX(-50%); z-index: 4;
+    display: flex; align-items: center; gap: 8px; }
+  #forge-name input { font-family: inherit; font-size: 17px; font-weight: 800; text-align: center; color: var(--ink);
+    background: var(--card); border: 2px solid var(--line); border-radius: 999px; padding: 7px 18px; width: 190px; outline: none; }
+  #forge-name input:focus { border-color: var(--accent); }
+  #dice { font-size: 20px; width: 42px; height: 42px; border-radius: 50%; background: var(--card); box-shadow: 0 3px 10px var(--shadow); }
+  #dice:active { transform: scale(0.92); }
+
+  #forge-tools { position: absolute; left: 0; right: 0; bottom: 78px; height: 150px; z-index: 4;
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; }
+  #slots { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 8px; }
+  .slot { display: flex; align-items: center; justify-content: space-between; gap: 2px;
+    background: var(--card); border-radius: 14px; box-shadow: 0 2px 6px var(--shadow); padding: 4px 4px; }
+  .slot .arw { width: 26px; height: 100%; font-size: 16px; color: var(--accent); display: flex; align-items: center; justify-content: center; border-radius: 10px; }
+  .slot .arw:active { background: var(--cream2); }
+  .slot .mid { flex: 1; text-align: center; overflow: hidden; }
+  .slot .mid .t { font-size: 9.5px; color: var(--dim); font-weight: 700; }
+  .slot .mid .v { font-size: 12px; color: var(--ink); font-weight: 800; margin-top: 1px; white-space: nowrap; }
+  #birth { height: 52px; border-radius: 16px; font-size: 17px; font-weight: 800; letter-spacing: 0.1em; color: #fff;
+    background: linear-gradient(90deg, var(--accent), var(--pink)); box-shadow: 0 5px 16px rgba(240,137,158,0.45); }
+  #birth:active { transform: translateY(1px); }
+
+  /* ---------- dex (図鑑) ---------- */
+  #dex-scroll { position: absolute; top: 52px; left: 0; right: 0; bottom: 0; overflow-y: auto; padding: 8px 12px 20px; }
+  #dex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+  .dex-cell { background: var(--card); border-radius: 16px; box-shadow: 0 3px 10px var(--shadow); padding: 8px 6px 10px; text-align: center; transition: transform .15s; }
+  .dex-cell:active { transform: scale(0.95); }
+  .dex-cell canvas { width: 100%; height: 78px; display: block; }
+  .dex-cell .nm { font-size: 12px; font-weight: 800; color: var(--ink); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dex-cell .sp { font-size: 9.5px; color: var(--dim); }
+  #dex-empty { text-align: center; color: var(--dim); font-size: 13px; line-height: 2; padding: 60px 20px; }
+
+  /* ---------- creature detail modal ---------- */
+  #modal { position: absolute; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center;
+    background: rgba(60, 50, 34, 0.5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 24px; }
+  #modal.on { display: flex; }
+  #modal .card { background: var(--card); border-radius: 24px; box-shadow: 0 16px 44px rgba(60,45,20,0.4);
+    width: min(340px, 92vw); padding: 18px; text-align: center; position: relative; animation: pop .35s cubic-bezier(.2,1.2,.4,1); }
+  @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #modal canvas { width: 180px; height: 160px; display: block; margin: 0 auto; }
+  #modal .nm { font-size: 22px; font-weight: 800; color: var(--ink); margin-top: 4px; }
+  #modal .sp { font-size: 12px; color: var(--accent); font-weight: 700; letter-spacing: 0.1em; margin-top: 2px; }
+  #modal .traits { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px; }
+  #modal .traits span { font-size: 11px; color: var(--ink); background: var(--cream2); border-radius: 999px; padding: 4px 11px; }
+  #modal .born { font-size: 10.5px; color: var(--dim); margin-top: 10px; }
+  #modal .btns { display: flex; gap: 8px; margin-top: 14px; }
+  #modal .btns button { flex: 1; padding: 11px; border-radius: 14px; font-size: 13px; font-weight: 800; }
+  #modal .close { background: var(--cream2); color: var(--ink); }
+  #modal .release { background: #f3d7dc; color: #b25a6c; flex: 0 0 auto !important; padding: 11px 16px !important; }
+
+  /* ---------- toast / celebration ---------- */
+  #toast { position: absolute; top: 60px; left: 50%; transform: translate(-50%, -8px); z-index: 25;
+    background: rgba(74,64,48,0.9); color: #fff; font-size: 13px; font-weight: 700; padding: 9px 20px; border-radius: 999px;
+    opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; white-space: nowrap; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- start / intro ---------- */
+  #intro { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 36%, #fffaf0, var(--cream2)); transition: opacity .8s; padding: 24px; text-align: center; }
+  #intro.gone { opacity: 0; pointer-events: none; }
+  #intro canvas { width: 150px; height: 140px; }
+  #intro h1 { font-size: clamp(30px, 8vw, 46px); font-weight: 800; letter-spacing: 0.14em; color: var(--ink); margin-top: 4px; }
+  #intro h1 b { color: var(--accent); }
+  #intro .sub { margin-top: 8px; font-size: 13px; color: var(--dim); letter-spacing: 0.1em; line-height: 1.9; }
+  #intro .go { margin-top: 30px; padding: 15px 44px; border-radius: 999px; font-size: 16px; font-weight: 800; letter-spacing: 0.14em;
+    color: #fff; background: linear-gradient(90deg, var(--accent), var(--pink)); box-shadow: 0 6px 20px rgba(240,137,158,0.45); }
+  #intro .go:active { transform: translateY(2px); }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- HOME (おうち) -->
+  <section class="screen" id="s-home">
+    <canvas class="stage" id="home-canvas"></canvas>
+    <div class="topbar">
+      <span class="title">おうち</span>
+      <span class="count" id="home-count">🐣 <b>0</b> ひき</span>
+    </div>
+  </section>
+
+  <!-- WORKSHOP (工房) -->
+  <section class="screen" id="s-forge">
+    <div class="topbar"><span class="title">こうぼう</span><span class="count">パーツを えらんで つくろう</span></div>
+    <div id="forge-preview"><canvas id="forge-canvas"></canvas></div>
+    <div id="forge-name">
+      <input id="name-input" type="text" maxlength="8" placeholder="なまえ">
+      <button id="dice" title="ランダム">🎲</button>
+    </div>
+    <div id="forge-tools">
+      <div id="slots"></div>
+      <button id="birth">🥚 うみだす</button>
+    </div>
+  </section>
+
+  <!-- DEX (図鑑) -->
+  <section class="screen" id="s-dex">
+    <div class="topbar"><span class="title">ずかん</span><span class="count" id="dex-count"><b>0</b> しゅるい</span></div>
+    <div id="dex-scroll"><div id="dex-grid"></div><div id="dex-empty" style="display:none">まだ いきものが いません。<br>「こうぼう」で つくってみよう！</div></div>
+  </section>
+
+  <!-- nav -->
+  <nav id="nav">
+    <button class="nav-btn on" data-scr="home"><span class="ic">🏠</span><span class="lb">おうち</span></button>
+    <button class="nav-btn" data-scr="forge"><span class="ic">🛠</span><span class="lb">こうぼう</span></button>
+    <button class="nav-btn" data-scr="dex"><span class="ic">📖</span><span class="lb">ずかん</span></button>
+  </nav>
+
+  <div id="toast"></div>
+
+  <!-- detail modal -->
+  <div id="modal"><div class="card">
+    <canvas id="modal-canvas" width="360" height="320"></canvas>
+    <div class="nm" id="modal-nm"></div>
+    <div class="sp" id="modal-sp"></div>
+    <div class="traits" id="modal-traits"></div>
+    <div class="born" id="modal-born"></div>
+    <div class="btns">
+      <button class="close" id="modal-close">とじる</button>
+      <button class="release" id="modal-release">🌿 にがす</button>
+    </div>
+  </div></div>
+
+  <!-- intro -->
+  <div id="intro">
+    <canvas id="intro-canvas" width="360" height="336"></canvas>
+    <h1>めばえ</h1>
+    <div class="sub">いきものの <b>こうぼう</b><br>パーツから いきものを つくって、育てて、図鑑に。</div>
+    <button class="go" id="intro-go">はじめる</button>
+  </div>
+</div>
+<script>
+"use strict";
+(() => {
+  // ============================================================
+  //  めばえ ― procedural creature workshop, home & dex
+  // ============================================================
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const ri = n => (Math.random() * n) | 0;
+  const $ = id => document.getElementById(id);
+
+  // ---------------- genome definition ----------------
+  // each creature = a genome of small integer choices + a hue + size + seed
+  const SLOTS = [
+    { key: "body",   label: "からだ", n: 5, vals: ["まる", "たまご", "のっぽ", "もこ", "まめ"] },
+    { key: "eyes",   label: "め",     n: 5, vals: ["ふたつ", "まんまる", "ねむね", "みっつ", "ひとつ"] },
+    { key: "mouth",  label: "くち",   n: 5, vals: ["にこ", "ぽかん", "にゃ", "きば", "てん"] },
+    { key: "top",    label: "あたま", n: 6, vals: ["なし", "アンテナ", "つの", "みみ", "ふたば", "かんむり"] },
+    { key: "arms",   label: "て",     n: 4, vals: ["なし", "ちょこ", "ながて", "ばんざい"] },
+    { key: "legs",   label: "あし",   n: 3, vals: ["ふわり", "ちょこ", "すらり"] },
+    { key: "pattern",label: "もよう", n: 4, vals: ["むじ", "おなか", "ぶち", "しま"] },
+    { key: "hue",    label: "いろ",   n: 12, vals: ["あか","だいだい","きいろ","きみどり","みどり","あおみどり","みず","あお","あおむらさき","むらさき","もも","こげ"] },
+  ];
+  const HUES = [4, 30, 48, 78, 130, 160, 188, 210, 250, 282, 328, 20];
+  const HUE_SAT = [70, 72, 74, 60, 55, 52, 60, 62, 55, 58, 68, 30];
+  const HUE_LIG = [70, 70, 74, 70, 66, 66, 70, 72, 72, 72, 76, 52];
+
+  function randomGenome() {
+    const g = { seed: rand(0, 1000) };
+    for (const s of SLOTS) g[s.key] = ri(s.n);
+    g.cheeks = Math.random() < 0.6 ? 1 : 0;
+    g.size = 1;
+    return g;
+  }
+
+  // ---------------- naming ----------------
+  const SYL = ["ぽ","ぷ","も","ちゃ","ぴ","こ","た","ま","ふ","む","ぎ","ろ","ぴょ","ちょ","くぅ","にゃ","ぷく","もこ","たま","ぷに","ころ","ふわ","ぽん","むに"];
+  function randomName() {
+    const n = 2 + ri(2);
+    let s = "";
+    for (let i = 0; i < n; i++) s += SYL[ri(SYL.length)];
+    return s.length > 8 ? s.slice(0, 8) : s;
+  }
+  function speciesOf(g) {
+    const b = ["まるまる", "たまご", "のっぽ", "もこもこ", "まめ"][g.body];
+    const topS = ["", "・アンテナ", "・ツノ", "・ミミ", "・フタバ", "・カンムリ"][g.top];
+    return b + topS + "ぞく";
+  }
+
+  // ============================================================
+  //  DRAW CREATURE — every creature rendered from its genome
+  // ============================================================
+  // colors from hue index
+  function bodyColors(g) {
+    const i = g.hue % 12;
+    const h = HUES[i], sa = HUE_SAT[i], li = HUE_LIG[i];
+    return {
+      fill: `hsl(${h},${sa}%,${li}%)`,
+      shade: `hsl(${h},${sa - 6}%,${li - 26}%)`,
+      belly: `hsl(${h},${sa - 20}%,${Math.min(li + 16, 94)}%)`,
+      dark: `hsl(${h},${sa}%,${Math.max(li - 40, 20)}%)`,
+    };
+  }
+
+  // main draw: centered at (cx,cy). unit = body half-height in px.
+  function drawCreature(c, g, cx, cy, unit, t, opt = {}) {
+    const col = bodyColors(g);
+    const ph = g.seed;
+    const bob = Math.sin(t * 2 + ph) * unit * 0.05;
+    const hop = opt.hop ? Math.abs(Math.sin(t * 9)) * unit * 0.5 : 0;
+    const breathe = 1 + Math.sin(t * 2 + ph) * 0.03;
+    cy = cy + bob - hop;
+    const lw = Math.max(unit * 0.09, 1.6);
+
+    c.save();
+    c.translate(cx, cy);
+    c.lineJoin = "round"; c.lineCap = "round";
+
+    // ---- shadow ----
+    c.save(); c.globalAlpha = 0.16;
+    c.fillStyle = "#6b5a38";
+    c.beginPath(); c.ellipse(0, unit * 1.18 + hop, unit * 0.72 * (1 - hop / unit * 0.3), unit * 0.16, 0, 0, TAU); c.fill();
+    c.restore();
+
+    // body dimensions by shape
+    const shapes = [
+      { w: 1.0, h: 1.0 },   // まる
+      { w: 0.86, h: 1.12 }, // たまご
+      { w: 0.74, h: 1.28 }, // のっぽ
+      { w: 1.12, h: 0.92 }, // もこ
+      { w: 1.0, h: 0.82 },  // まめ
+    ][g.body];
+    const bw = unit * shapes.w * breathe, bh = unit * shapes.h / breathe;
+
+    // ---- legs / feet ----
+    const legY = bh * 0.82;
+    if (g.legs === 0) { // float: little nubs
+      for (const sx of [-1, 1]) { c.fillStyle = col.shade; c.beginPath(); c.ellipse(sx * bw * 0.4, legY, unit * 0.16, unit * 0.12, 0, 0, TAU); c.fill(); }
+    } else if (g.legs === 1) { // choco feet
+      for (const sx of [-1, 1]) { c.fillStyle = col.fill; c.strokeStyle = col.shade; c.lineWidth = lw;
+        c.beginPath(); c.ellipse(sx * bw * 0.42, legY + unit * 0.1, unit * 0.24, unit * 0.16, 0, 0, TAU); c.fill(); c.stroke(); }
+    } else { // slender legs
+      const sw = Math.sin(t * 3 + ph) * unit * 0.06;
+      for (const sx of [-1, 1]) { c.strokeStyle = col.shade; c.lineWidth = lw * 1.4;
+        c.beginPath(); c.moveTo(sx * bw * 0.34, bh * 0.7); c.lineTo(sx * bw * 0.42 + sw * sx, legY + unit * 0.34); c.stroke();
+        c.fillStyle = col.fill; c.beginPath(); c.ellipse(sx * bw * 0.42 + sw * sx, legY + unit * 0.38, unit * 0.16, unit * 0.1, 0, 0, TAU); c.fill(); }
+    }
+
+    // ---- back head decorations (ears / horns behind) ----
+    drawTop(c, g, col, bw, bh, unit, t, ph, lw, "back");
+
+    // ---- arms behind (when raised) ----
+    if (g.arms === 3) drawArms(c, g, col, bw, bh, unit, t, ph, lw, true);
+
+    // ---- body ----
+    c.fillStyle = col.fill; c.strokeStyle = col.shade; c.lineWidth = lw;
+    roundBlob(c, 0, 0, bw, bh, g.body);
+    c.fill(); c.stroke();
+
+    // ---- pattern ----
+    c.save(); roundBlob(c, 0, 0, bw, bh, g.body); c.clip();
+    if (g.pattern === 1) { c.fillStyle = col.belly; c.beginPath(); c.ellipse(0, bh * 0.28, bw * 0.62, bh * 0.6, 0, 0, TAU); c.fill(); }
+    else if (g.pattern === 2) { c.fillStyle = col.shade; c.globalAlpha = 0.5; for (let i = 0; i < 6; i++) { const s2 = (g.seed + i * 53); c.beginPath(); c.ellipse((frac(s2 * .13) - .5) * bw * 1.3, (frac(s2 * .27) - .4) * bh * 1.4, unit * 0.12, unit * 0.12, 0, 0, TAU); c.fill(); } c.globalAlpha = 1; }
+    else if (g.pattern === 3) { c.strokeStyle = col.shade; c.globalAlpha = 0.5; c.lineWidth = unit * 0.14; for (let i = -2; i <= 2; i++) { c.beginPath(); c.moveTo(-bw, i * bh * 0.34 + bh * 0.1); c.lineTo(bw, i * bh * 0.34 - bh * 0.1); c.stroke(); } c.globalAlpha = 1; }
+    c.restore();
+
+    // ---- front head decorations (antenna / leaf / crown) ----
+    drawTop(c, g, col, bw, bh, unit, t, ph, lw, "front");
+
+    // ---- arms in front ----
+    if (g.arms !== 0 && g.arms !== 3) drawArms(c, g, col, bw, bh, unit, t, ph, lw, false);
+
+    // ---- face ----
+    drawFace(c, g, col, bw, bh, unit, t, ph, lw, opt);
+
+    c.restore();
+  }
+
+  const frac = x => x - Math.floor(x);
+
+  function roundBlob(c, x, y, w, h, shape) {
+    c.beginPath();
+    if (shape === 3) { // もこ: bumpy top
+      const k = 0.55;
+      c.moveTo(x, y - h);
+      c.bezierCurveTo(x + w * k, y - h, x + w, y - h * k, x + w, y);
+      c.bezierCurveTo(x + w, y + h * 0.9, x + w * 0.6, y + h, x, y + h);
+      c.bezierCurveTo(x - w * 0.6, y + h, x - w, y + h * 0.9, x - w, y);
+      c.bezierCurveTo(x - w, y - h * k, x - w * k, y - h, x, y - h);
+    } else {
+      c.ellipse(x, y, w, h, 0, 0, TAU);
+    }
+    c.closePath();
+  }
+
+  function drawTop(c, g, col, bw, bh, unit, t, ph, lw, layer) {
+    const topY = -bh * 0.92;
+    if (g.top === 1 && layer === "front") { // antenna
+      const sway = Math.sin(t * 2.5 + ph) * 0.2;
+      for (const sx of [-1, 1]) {
+        c.strokeStyle = col.dark; c.lineWidth = lw * 0.9;
+        c.beginPath(); c.moveTo(sx * bw * 0.3, topY + unit * 0.1);
+        c.quadraticCurveTo(sx * bw * 0.5, topY - unit * 0.5, sx * bw * 0.5 + sx * sway * unit, topY - unit * 0.7);
+        c.stroke();
+        c.fillStyle = ["#ff6b8a","#ffd23f","#7fe0b0"][ (g.seed|0) % 3 ]; c.beginPath();
+        c.arc(sx * bw * 0.5 + sx * sway * unit, topY - unit * 0.74, unit * 0.13, 0, TAU); c.fill();
+      }
+    } else if (g.top === 2 && layer === "front") { // horns
+      c.fillStyle = col.belly; c.strokeStyle = col.shade; c.lineWidth = lw;
+      for (const sx of [-1, 1]) { c.beginPath(); c.moveTo(sx * bw * 0.4, topY + unit * 0.2);
+        c.lineTo(sx * bw * 0.62, topY - unit * 0.5); c.lineTo(sx * bw * 0.2, topY + unit * 0.05); c.closePath(); c.fill(); c.stroke(); }
+    } else if (g.top === 3 && layer === "back") { // ears
+      c.fillStyle = col.fill; c.strokeStyle = col.shade; c.lineWidth = lw;
+      for (const sx of [-1, 1]) { c.beginPath(); c.ellipse(sx * bw * 0.55, topY + unit * 0.15, unit * 0.22, unit * 0.34, sx * 0.3, 0, TAU); c.fill(); c.stroke();
+        c.fillStyle = col.belly; c.beginPath(); c.ellipse(sx * bw * 0.55, topY + unit * 0.18, unit * 0.1, unit * 0.2, sx * 0.3, 0, TAU); c.fill(); c.fillStyle = col.fill; }
+    } else if (g.top === 4 && layer === "front") { // sprout / leaf
+      const sway = Math.sin(t * 2 + ph) * 0.15;
+      c.strokeStyle = "#6ab04c"; c.lineWidth = lw * 1.1;
+      c.beginPath(); c.moveTo(0, topY + unit * 0.1); c.quadraticCurveTo(sway * unit, topY - unit * 0.4, sway * unit, topY - unit * 0.55); c.stroke();
+      c.fillStyle = "#7ec850";
+      for (const sx of [-1, 1]) { c.beginPath(); c.ellipse(sx * unit * 0.18 + sway * unit, topY - unit * 0.4, unit * 0.2, unit * 0.11, sx * 0.6, 0, TAU); c.fill(); }
+    } else if (g.top === 5 && layer === "front") { // crown
+      c.fillStyle = "#ffd23f"; c.strokeStyle = "#e0a92e"; c.lineWidth = lw * 0.8;
+      c.beginPath(); c.moveTo(-bw * 0.5, topY + unit * 0.2);
+      c.lineTo(-bw * 0.5, topY - unit * 0.1); c.lineTo(-bw * 0.22, topY + unit * 0.05); c.lineTo(0, topY - unit * 0.25);
+      c.lineTo(bw * 0.22, topY + unit * 0.05); c.lineTo(bw * 0.5, topY - unit * 0.1); c.lineTo(bw * 0.5, topY + unit * 0.2); c.closePath(); c.fill(); c.stroke();
+    }
+  }
+
+  function drawArms(c, g, col, bw, bh, unit, t, ph, lw, raised) {
+    const sway = Math.sin(t * 3 + ph) * 0.25;
+    c.strokeStyle = col.shade; c.lineWidth = lw * 1.5; c.lineCap = "round";
+    for (const sx of [-1, 1]) {
+      const ax = sx * bw * 0.82, ay = raised ? -bh * 0.1 : bh * 0.25;
+      let ex, ey;
+      if (g.arms === 1) { ex = ax + sx * unit * 0.18; ey = ay + unit * 0.28; } // choco
+      else if (g.arms === 2) { ex = ax + sx * unit * 0.5; ey = ay + unit * 0.5 + sway * unit; } // long
+      else { ex = ax + sx * unit * 0.2; ey = -bh * 0.9 + sway * unit; } // raised
+      c.beginPath(); c.moveTo(sx * bw * 0.72, ay); c.quadraticCurveTo(ax, ay + unit * 0.1, ex, ey); c.stroke();
+      c.fillStyle = col.fill; c.beginPath(); c.arc(ex, ey, unit * 0.14, 0, TAU); c.fill();
+    }
+  }
+
+  function drawFace(c, g, col, bw, bh, unit, t, ph, lw, opt) {
+    const eyeY = -bh * 0.08;
+    // blink
+    const blinkPhase = frac(t * 0.28 + ph * 0.13);
+    const blink = opt.forceBlink || blinkPhase > 0.94;
+    const es = unit * 0.16; // eye size base
+    const positions = g.eyes === 3 ? [-0.34, 0, 0.34] : g.eyes === 4 ? [0] : [-0.28, 0.28];
+    const bigness = g.eyes === 1 ? 1.6 : g.eyes === 4 ? 2.0 : 1;
+
+    // cheeks
+    if (g.cheeks) { c.fillStyle = "rgba(255,140,160,0.5)";
+      for (const sx of [-1, 1]) { c.beginPath(); c.ellipse(sx * bw * 0.5, bh * 0.05, unit * 0.13, unit * 0.09, 0, 0, TAU); c.fill(); } }
+
+    for (const ex of positions) {
+      const x = ex * bw * 1.3, y = eyeY;
+      const r = es * bigness;
+      if (blink || g.eyes === 2) { // closed / sleepy
+        c.strokeStyle = col.dark; c.lineWidth = lw; c.beginPath();
+        c.arc(x, y, r, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
+      } else {
+        c.fillStyle = "#3a3226"; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+        c.fillStyle = "#fff"; c.beginPath(); c.arc(x - r * 0.3, y - r * 0.3, r * 0.34, 0, TAU); c.fill();
+      }
+    }
+
+    // mouth
+    const my = bh * 0.28, mw = unit * 0.28;
+    c.strokeStyle = col.dark; c.fillStyle = col.dark; c.lineWidth = lw;
+    if (g.mouth === 0) { c.beginPath(); c.arc(0, my - unit * 0.1, mw * 0.7, Math.PI * 0.15, Math.PI * 0.85); c.stroke(); }
+    else if (g.mouth === 1) { c.fillStyle = "#c8607a"; c.beginPath(); c.ellipse(0, my, mw * 0.4, mw * 0.5, 0, 0, TAU); c.fill(); }
+    else if (g.mouth === 2) { c.beginPath(); c.moveTo(-mw * 0.5, my - unit * 0.05); c.quadraticCurveTo(-mw * 0.2, my + unit * 0.1, 0, my - unit * 0.02); c.quadraticCurveTo(mw * 0.2, my + unit * 0.1, mw * 0.5, my - unit * 0.05); c.stroke(); }
+    else if (g.mouth === 3) { c.beginPath(); c.arc(0, my - unit * 0.1, mw * 0.6, Math.PI * 0.1, Math.PI * 0.9); c.stroke(); c.fillStyle = "#fff"; c.beginPath(); c.moveTo(-mw * 0.3, my + unit * 0.05); c.lineTo(-mw * 0.18, my + unit * 0.22); c.lineTo(-mw * 0.05, my + unit * 0.05); c.closePath(); c.fill(); }
+    else { c.beginPath(); c.arc(0, my, unit * 0.06, 0, TAU); c.fill(); }
+  }
+
+  // ============================================================
+  //  STATE & PERSISTENCE
+  // ============================================================
+  const store = {
+    load() { try { return JSON.parse(localStorage.getItem("mebae.creatures") || "[]"); } catch { return []; } },
+    save(v) { try { localStorage.setItem("mebae.creatures", JSON.stringify(v)); } catch {} },
+  };
+  let creatures = store.load();   // [{g, name, species, born}]
+  let working = randomGenome();   // forge working genome
+  let uid = 0;
+
+  // ============================================================
+  //  AUDIO (cute blips)
+  // ============================================================
+  let AU = null, soundOn = true;
+  function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    AU = { acx: new AC() };
+    AU.master = AU.acx.createGain(); AU.master.gain.value = 0.5; AU.master.connect(AU.acx.destination);
+    if (AU.acx.state === "suspended") AU.acx.resume();
+  }
+  function blip(freq, dur = 0.12, type = "sine", vol = 0.18) {
+    if (!AU || !soundOn) return; const { acx, master } = AU, t = acx.currentTime;
+    const o = acx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+    o.frequency.exponentialRampToValueAtTime(freq * 1.5, t + dur);
+    const g = acx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function jingle() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => blip(f, 0.18, "triangle", 0.2), i * 90)); }
+  function pop() { blip(rand(400, 700), 0.09, "sine", 0.14); }
+
+  // ============================================================
+  //  canvas helpers
+  // ============================================================
+  let DPR = 1;
+  function fit(cv) {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.max(1, Math.round(r.width * DPR)); cv.height = Math.max(1, Math.round(r.height * DPR));
+    const c = cv.getContext("2d"); c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    return { c, w: r.width, h: r.height };
+  }
+
+  // ============================================================
+  //  HOME (おうち) — creatures live in a cozy habitat
+  // ============================================================
+  const homeCv = $("home-canvas");
+  let homeCtx, HW = 0, HH = 0;
+  const actors = [];
+  const clouds = [];
+
+  function initHome() {
+    const f = fit(homeCv); homeCtx = f.c; HW = f.w; HH = f.h;
+    clouds.length = 0;
+    for (let i = 0; i < 4; i++) clouds.push({ x: Math.random() * HW, y: rand(HH * 0.08, HH * 0.32), s: rand(0.7, 1.4), v: rand(4, 10) });
+    buildActors();
+  }
+  function groundBand() { return { top: HH - 82, bot: HH - 24 }; }
+  function buildActors() {
+    actors.length = 0;
+    const band = groundBand();
+    const baseU = clamp(Math.min(HW, HH) * 0.075, 18, 40);
+    for (const cr of creatures) {
+      // scatter through a ground band so nobody sits exactly on one line;
+      // creatures further back (higher y) are drawn a touch smaller
+      const y = rand(band.top, band.bot);
+      const depth = (y - band.top) / (band.bot - band.top); // 0 far .. 1 near
+      actors.push({ cr, x: rand(HW * 0.1, HW * 0.9), y, unit: baseU * (0.78 + depth * 0.42),
+        vx: 0, dir: Math.random() < .5 ? -1 : 1, state: "idle", timer: rand(0.3, 3), hop: 0, bubble: 0, seed: rand(0, 9) });
+    }
+  }
+  function stepActors(dt) {
+    for (const a of actors) {
+      a.timer -= dt;
+      if (a.hop > 0) a.hop -= dt;
+      if (a.bubble > 0) a.bubble -= dt;
+      if (a.timer <= 0) {
+        const r = Math.random();
+        if (r < 0.5) { a.state = "idle"; a.vx = 0; a.timer = rand(1.5, 4); }
+        else { a.state = "walk"; a.dir = Math.random() < .5 ? -1 : 1; a.vx = a.dir * rand(10, 22); a.timer = rand(1, 3); }
+      }
+      if (a.state === "walk") {
+        a.x += a.vx * dt;
+        if (a.x < a.unit) { a.x = a.unit; a.vx = Math.abs(a.vx); a.dir = 1; }
+        if (a.x > HW - a.unit) { a.x = HW - a.unit; a.vx = -Math.abs(a.vx); a.dir = -1; }
+      }
+    }
+  }
+  function drawHome(t, dt) {
+    const c = homeCtx; if (!c) return;
+    // sky
+    const sky = c.createLinearGradient(0, 0, 0, HH);
+    sky.addColorStop(0, "#bfe6f5"); sky.addColorStop(0.6, "#e9f6d8"); sky.addColorStop(1, "#f4ecd2");
+    c.fillStyle = sky; c.fillRect(0, 0, HW, HH);
+    // sun
+    c.fillStyle = "rgba(255,230,150,0.9)"; c.beginPath(); c.arc(HW * 0.82, HH * 0.16, 26, 0, TAU); c.fill();
+    // clouds
+    for (const cl of clouds) {
+      cl.x += cl.v * dt; if (cl.x > HW + 80) cl.x = -80;
+      c.fillStyle = "rgba(255,255,255,0.85)";
+      for (let k = 0; k < 3; k++) { c.beginPath(); c.ellipse(cl.x + k * 22 * cl.s - 22, cl.y + Math.sin(k) * 5, 22 * cl.s, 15 * cl.s, 0, 0, TAU); c.fill(); }
+    }
+    // hills
+    c.fillStyle = "#a9d977"; c.beginPath(); c.moveTo(0, HH); c.lineTo(0, HH * 0.72);
+    for (let x = 0; x <= HW; x += 20) c.lineTo(x, HH * 0.72 - Math.sin(x / HW * 3 + 1) * 24); c.lineTo(HW, HH); c.fill();
+    // little house on a hill (nod to the sketch)
+    const hx = HW * 0.16, hy = HH * 0.66;
+    c.fillStyle = "#f0c68a"; c.fillRect(hx - 20, hy, 40, 34);
+    c.fillStyle = "#e07a5f"; c.beginPath(); c.moveTo(hx - 26, hy); c.lineTo(hx, hy - 24); c.lineTo(hx + 26, hy); c.closePath(); c.fill();
+    c.fillStyle = "#7a5a3a"; c.fillRect(hx - 7, hy + 12, 14, 22);
+    // ground band
+    c.fillStyle = "#8fc95a"; c.fillRect(0, HH - 82, HW, 82);
+    c.fillStyle = "#7db84a"; c.fillRect(0, HH - 82, HW, 6);
+    // flowers
+    for (let i = 0; i < 10; i++) { const fx = (i + 0.5) / 10 * HW + Math.sin(i) * 12, fy = HH - 30 - (i % 3) * 6;
+      const sway = Math.sin(t * 2 + i) * 2;
+      c.strokeStyle = "#5a9a3a"; c.lineWidth = 2; c.beginPath(); c.moveTo(fx, fy + 12); c.lineTo(fx + sway, fy); c.stroke();
+      c.fillStyle = ["#ff8fab","#ffd23f","#fff"][i % 3]; c.beginPath(); c.arc(fx + sway, fy, 4, 0, TAU); c.fill(); }
+
+    // creatures (sorted by y for depth)
+    const sorted = [...actors].sort((a, b) => a.y - b.y);
+    for (const a of sorted) {
+      drawCreature(c, a.cr.g, a.x, a.y - a.unit, a.unit, t + a.seed, { hop: a.hop > 0 });
+      if (a.bubble > 0) drawBubble(c, a.x, a.y - a.unit * 2.4, a.cr.name);
+    }
+
+    if (!creatures.length) {
+      c.fillStyle = "rgba(74,64,48,0.55)"; c.textAlign = "center"; c.font = "600 15px sans-serif";
+      c.fillText("まだ だれも いません", HW / 2, HH * 0.42);
+      c.font = "600 13px sans-serif";
+      c.fillText("「こうぼう」で いきものを つくろう！", HW / 2, HH * 0.42 + 24);
+    }
+  }
+  function drawBubble(c, x, y, name) {
+    c.font = "700 13px sans-serif"; c.textAlign = "center";
+    const w = c.measureText(name).width + 20;
+    c.fillStyle = "#fffaf0"; c.strokeStyle = "rgba(74,64,48,0.2)"; c.lineWidth = 1.5;
+    roundRect(c, x - w / 2, y - 14, w, 26, 13); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(x - 5, y + 11); c.lineTo(x + 5, y + 11); c.lineTo(x, y + 18); c.closePath(); c.fill();
+    c.fillStyle = "#4a4030"; c.fillText(name, x, y + 4);
+  }
+  function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+  homeCv.addEventListener("pointerdown", e => {
+    const r = homeCv.getBoundingClientRect(); const px = e.clientX - r.left, py = e.clientY - r.top;
+    let hit = null, hd = 1e9;
+    for (const a of actors) { const d = Math.hypot(a.x - px, (a.y - a.unit) - py); if (d < a.unit * 1.4 && d < hd) { hd = d; hit = a; } }
+    if (hit) { hit.hop = 0.5; hit.bubble = 2; hit.state = "idle"; hit.vx = 0; hit.timer = 1.2; pop(); }
+  });
+
+  // ============================================================
+  //  WORKSHOP (工房)
+  // ============================================================
+  const forgeCv = $("forge-canvas");
+  let forgeCtx, FW = 0, FH = 0;
+  function initForge() { const f = fit(forgeCv); forgeCtx = f.c; FW = f.w; FH = f.h; buildSlots(); }
+  function buildSlots() {
+    const grid = $("slots"); grid.innerHTML = "";
+    for (const s of SLOTS) {
+      const el = document.createElement("div"); el.className = "slot"; el.dataset.key = s.key;
+      el.innerHTML = `<button class="arw" data-d="-1">◀</button><div class="mid"><div class="t">${s.label}</div><div class="v"></div></div><button class="arw" data-d="1">▶</button>`;
+      el.querySelectorAll(".arw").forEach(b => b.addEventListener("click", () => {
+        const d = +b.dataset.d; working[s.key] = (working[s.key] + d + s.n) % s.n; pop(); refreshSlots();
+      }));
+      grid.appendChild(el);
+    }
+    refreshSlots();
+  }
+  function refreshSlots() {
+    for (const el of document.querySelectorAll("#slots .slot")) {
+      const s = SLOTS.find(x => x.key === el.dataset.key);
+      el.querySelector(".v").textContent = s.vals[working[s.key]];
+    }
+  }
+  function drawForge(t) {
+    const c = forgeCtx; if (!c) return;
+    c.clearRect(0, 0, FW, FH);
+    const g = c.createRadialGradient(FW / 2, FH * 0.5, 10, FW / 2, FH * 0.5, FW * 0.6);
+    g.addColorStop(0, "rgba(255,255,255,0.6)"); g.addColorStop(1, "rgba(255,255,255,0)");
+    c.fillStyle = g; c.fillRect(0, 0, FW, FH);
+    // sparkle ring
+    c.strokeStyle = "rgba(240,160,75,0.25)"; c.lineWidth = 2;
+    c.beginPath(); c.arc(FW / 2, FH * 0.52, Math.min(FW, FH) * 0.4, 0, TAU); c.stroke();
+    const unit = clamp(Math.min(FW, FH) * 0.26, 40, 120);
+    drawCreature(c, working, FW / 2, FH * 0.52, unit, t, {});
+  }
+  $("dice").addEventListener("click", () => { working = randomGenome(); $("name-input").value = randomName(); refreshSlots(); blip(880, 0.14, "triangle"); });
+  $("birth").addEventListener("click", birth);
+  function birth() {
+    const name = ($("name-input").value || "").trim() || randomName();
+    const cr = { g: { ...working }, name, species: speciesOf(working), born: Date.now(), id: "c" + (uid++) + Date.now() };
+    creatures.push(cr); store.save(creatures);
+    jingle(); showToast(`🥚 ${name} が うまれた！`);
+    buildActors();
+    working = randomGenome(); $("name-input").value = randomName(); refreshSlots();
+    updateCounts();
+    setTimeout(() => showScreen("home"), 500);
+  }
+
+  // ============================================================
+  //  DEX (図鑑)
+  // ============================================================
+  function buildDex() {
+    const grid = $("dex-grid"); grid.innerHTML = "";
+    $("dex-empty").style.display = creatures.length ? "none" : "block";
+    creatures.forEach((cr, i) => {
+      const cell = document.createElement("div"); cell.className = "dex-cell";
+      const cv = document.createElement("canvas"); cv.width = 180; cv.height = 156;
+      cell.appendChild(cv);
+      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = cr.name; cell.appendChild(nm);
+      const sp = document.createElement("div"); sp.className = "sp"; sp.textContent = cr.species; cell.appendChild(sp);
+      const c = cv.getContext("2d");
+      drawCreature(c, cr.g, 90, 92, 46, i * 0.7, { forceBlink: false });
+      cell.addEventListener("click", () => openModal(i));
+      grid.appendChild(cell);
+    });
+  }
+
+  // ============================================================
+  //  MODAL (detail)
+  // ============================================================
+  let modalIdx = -1;
+  function openModal(i) {
+    modalIdx = i; const cr = creatures[i];
+    $("modal-nm").textContent = cr.name;
+    $("modal-sp").textContent = cr.species;
+    const tr = $("modal-traits"); tr.innerHTML = "";
+    const traits = [
+      SLOTS[0].vals[cr.g.body] + "からだ", SLOTS[1].label + "：" + SLOTS[1].vals[cr.g.eyes],
+      SLOTS[3].vals[cr.g.top] === "なし" ? "つるん" : SLOTS[3].vals[cr.g.top],
+      SLOTS[7].vals[cr.g.hue] + "いろ",
+    ];
+    for (const s of traits) { const sp = document.createElement("span"); sp.textContent = s; tr.appendChild(sp); }
+    const d = new Date(cr.born); $("modal-born").textContent = `うまれ：${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+    $("modal").classList.add("on"); pop();
+  }
+  $("modal-close").addEventListener("click", () => $("modal").classList.remove("on"));
+  $("modal").addEventListener("pointerdown", e => { if (e.target.id === "modal") $("modal").classList.remove("on"); });
+  $("modal-release").addEventListener("click", () => {
+    if (modalIdx < 0) return; const cr = creatures[modalIdx];
+    creatures.splice(modalIdx, 1); store.save(creatures); buildActors(); buildDex(); updateCounts();
+    $("modal").classList.remove("on"); showToast(`🌿 ${cr.name} を にがした`); blip(300, 0.3, "sine");
+  });
+
+  // ============================================================
+  //  NAV / SCREENS / TOAST
+  // ============================================================
+  let current = "home";
+  function showScreen(name) {
+    current = name;
+    for (const s of document.querySelectorAll(".screen")) s.classList.toggle("on", s.id === "s-" + name);
+    for (const b of document.querySelectorAll(".nav-btn")) b.classList.toggle("on", b.dataset.scr === name);
+    if (name === "home") { initHome(); }
+    if (name === "forge") { initForge(); }
+    if (name === "dex") { buildDex(); }
+  }
+  document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => { showScreen(b.dataset.scr); pop(); }));
+
+  let toastT = 0;
+  function showToast(msg) { $("toast").textContent = msg; $("toast").classList.add("on"); toastT = 2.4; }
+  function updateCounts() {
+    $("home-count").innerHTML = `🐣 <b>${creatures.length}</b> ひき`;
+    $("dex-count").innerHTML = `<b>${creatures.length}</b> しゅるい`;
+  }
+
+  // ============================================================
+  //  MAIN LOOP
+  // ============================================================
+  let lastT = performance.now();
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((now - lastT) / 1000, 0.05); lastT = now;
+    const t = now / 1000;
+    if (toastT > 0 && (toastT -= dt) <= 0) $("toast").classList.remove("on");
+
+    if (current === "home") { stepActors(dt); drawHome(t, dt); }
+    else if (current === "forge") drawForge(t);
+    if ($("modal").classList.contains("on") && modalIdx >= 0) {
+      const c = $("modal-canvas").getContext("2d"); c.clearRect(0, 0, 360, 320);
+      drawCreature(c, creatures[modalIdx].g, 180, 170, 84, t, {});
+    }
+    // intro creature
+    if (!$("intro").classList.contains("gone")) {
+      const c = $("intro-canvas").getContext("2d"); c.clearRect(0, 0, 360, 336);
+      drawCreature(c, introGenome, 180, 176, 82, t, { hop: Math.sin(t * 1.5) > 0.9 });
+    }
+  }
+
+  // ============================================================
+  //  BOOT
+  // ============================================================
+  const introGenome = randomGenome(); introGenome.top = 1; introGenome.cheeks = 1;
+  $("name-input").value = randomName();
+  updateCounts();
+  window.addEventListener("resize", () => { if (current === "home") initHome(); if (current === "forge") initForge(); });
+
+  $("intro-go").addEventListener("click", () => {
+    initAudio();
+    $("intro").classList.add("gone");
+    showScreen("home");
+    jingle();
+  });
+
+  requestAnimationFrame(loop);
+
+  // test hook
+  window.__mebae = {
+    get creatures() { return creatures; },
+    add(n) { for (let k = 0; k < (n || 1); k++) { const g = randomGenome(); creatures.push({ g, name: randomName(), species: speciesOf(g), born: Date.now(), id: "c" + (uid++) }); } store.save(creatures); buildActors(); updateCounts(); },
+    reset() { creatures = []; store.save(creatures); buildActors(); updateCounts(); },
+    show: showScreen, birth, drawCreature, randomGenome,
+  };
+})();
+</script>
+</body>
+</html>
