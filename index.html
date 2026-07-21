@@ -57,11 +57,10 @@
 
   .cards {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
     gap: 22px;
     width: 100%;
   }
-  @media (max-width: 680px) { .cards { grid-template-columns: 1fr; } }
 
   .card {
     position: relative;
@@ -81,6 +80,7 @@
   .card:nth-child(2) { animation-delay: 0.2s; }
   .card:nth-child(3) { animation-delay: 0.3s; }
   .card:nth-child(4) { animation-delay: 0.4s; }
+  .card:nth-child(5) { animation-delay: 0.5s; }
   .card:hover { transform: translateY(-8px); border-color: rgba(255,255,255,0.22); }
   .card:hover .art canvas { transform: scale(1.06); }
   .card:hover .go { gap: 16px; }
@@ -135,6 +135,11 @@
   .card.ku:hover { box-shadow: 0 26px 60px rgba(90, 70, 30, 0.5); }
   .card.ku h2 { color: #f6ecd6; font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; letter-spacing: 0.14em; }
   .card.ku .en, .card.ku .go { color: #e3c076; }
+  /* mebae (めばえ) theming */
+  .card.mebae .tag { background: rgba(143, 206, 109, 0.16); color: #b6e79a; border: 1px solid rgba(143,206,109,0.32); }
+  .card.mebae:hover { box-shadow: 0 26px 60px rgba(40, 90, 40, 0.5); }
+  .card.mebae h2 { color: #eafff0; }
+  .card.mebae .en, .card.mebae .go { color: #9bd97a; }
 
   footer {
     margin-top: auto; padding-top: 54px;
@@ -154,8 +159,8 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">INTERACTIVE WORLDS</div>
-    <h1>銀河と、深海と、大地と、縁起。</h1>
-    <p>ブラウザだけで動く、4つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところ、生命の営み、そして、形と空(くう)のあわいまで。</p>
+    <h1>銀河と、深海と、大地と、縁起と、いきもの。</h1>
+    <p>ブラウザだけで動く、5つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところ、生命の営み、形と空(くう)のあわい、そして小さないきものまで。</p>
   </header>
 
   <div class="cards">
@@ -206,10 +211,22 @@
         <div class="go"><span>戦う</span><span class="arrow">→</span></div>
       </div>
     </a>
+
+    <a class="card mebae" href="mebae.html">
+      <div class="art"><canvas id="art-mebae"></canvas></div>
+      <div class="body">
+        <span class="tag">CREATURE WORKSHOP</span>
+        <h2>めばえ</h2>
+        <div class="en">いきもの工房</div>
+        <div class="desc">パーツを選んで、あなただけの「いきもの」をつくる。名前をつけて図鑑に登録すると、おうちの草原で暮らしはじめる。組み合わせは無限、みんな違う顔。</div>
+        <div class="feat"><span>🛠 パーツ生成</span><span>🐣 育成・図鑑</span><span>🏠 草原のおうち</span></div>
+        <div class="go"><span>つくる</span><span class="arrow">→</span></div>
+      </div>
+    </a>
   </div>
 
   <footer>
-    Canvas &amp; Web Audio でつくった、依存ライブラリなしの4作品。<br>
+    Canvas &amp; Web Audio でつくった、依存ライブラリなしの5作品。<br>
     <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a>
     <div class="hint">カードをクリックで起動 ・ どれもフルスクリーン推奨</div>
   </footer>
@@ -264,6 +281,14 @@
 
   // ku preview: a small 縁起 network — nodes joined by 縁 that sever and re-form
   const K = setup("art-ku");
+  // mebae preview: little pastel creatures bobbing on a grassy strip
+  const M = setup("art-mebae");
+  const mCrit = [
+    { x: 0.28, hue: 130, top: "antenna", eyes: 2 },
+    { x: 0.52, hue: 210, top: "ears", eyes: 1 },
+    { x: 0.74, hue: 320, top: "sprout", eyes: 2 },
+  ].map((o, i) => ({ ...o, ph: i * 2.1 }));
+
   const kNodes = [ // normalized hex-ish cluster; one shrine (pink)
     [0.5, 0.24, "src"], [0.3, 0.4, "f"], [0.7, 0.4, "f"], [0.5, 0.5, "f"],
     [0.24, 0.62, "f"], [0.5, 0.72, "shrine"], [0.76, 0.62, "f"], [0.38, 0.86, "src"], [0.66, 0.86, "src"],
@@ -426,6 +451,42 @@
         c.fillStyle = `rgba(${col},0.95)`; c.beginPath(); c.arc(x, y, n[2] === "f" ? 2 : 2.6, 0, TAU); c.fill();
       });
       c.globalCompositeOperation = "source-over";
+    }
+
+    // ---- mebae card: pastel creatures bobbing on grass ----
+    {
+      const { c, w, h } = M;
+      const sky = c.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, "#bfe6f5"); sky.addColorStop(1, "#e9f6d8");
+      c.fillStyle = sky; c.fillRect(0, 0, w, h);
+      // grass
+      c.fillStyle = "#8fc95a"; c.fillRect(0, h * 0.7, w, h * 0.3);
+      c.fillStyle = "#7db84a"; c.fillRect(0, h * 0.7, w, 4);
+      const gy = h * 0.82, u = h * 0.16;
+      for (const m of mCrit) {
+        const x = m.x * w, hop = Math.max(0, Math.sin(t * 1.6 + m.ph)) * u * 0.4;
+        const y = gy - hop;
+        const fill = `hsl(${m.hue},60%,70%)`, shade = `hsl(${m.hue},54%,44%)`;
+        // shadow
+        c.fillStyle = "rgba(90,80,40,0.15)"; c.beginPath(); c.ellipse(x, gy + u * 0.7, u * 0.6, u * 0.14, 0, 0, TAU); c.fill();
+        // top decoration
+        c.strokeStyle = shade; c.lineWidth = 2.5; c.lineCap = "round";
+        if (m.top === "antenna") { for (const s of [-1,1]) { c.beginPath(); c.moveTo(x + s*u*0.3, y - u*0.7); c.lineTo(x + s*u*0.5, y - u*1.1); c.stroke(); c.fillStyle="#ff8fab"; c.beginPath(); c.arc(x+s*u*0.5, y-u*1.15, u*0.13,0,TAU); c.fill(); } }
+        else if (m.top === "ears") { c.fillStyle = fill; for (const s of [-1,1]) { c.beginPath(); c.ellipse(x+s*u*0.55, y-u*0.6, u*0.22, u*0.34, s*0.3,0,TAU); c.fill(); c.strokeStyle=shade; c.stroke(); } }
+        else { c.strokeStyle="#6ab04c"; c.beginPath(); c.moveTo(x, y-u*0.7); c.lineTo(x, y-u*1.05); c.stroke(); c.fillStyle="#7ec850"; for (const s of [-1,1]){ c.beginPath(); c.ellipse(x+s*u*0.16, y-u*0.9, u*0.2, u*0.11, s*0.6,0,TAU); c.fill(); } }
+        // body
+        c.fillStyle = fill; c.strokeStyle = shade; c.lineWidth = 3;
+        c.beginPath(); c.ellipse(x, y, u * 0.62, u * 0.72, 0, 0, TAU); c.fill(); c.stroke();
+        // cheeks
+        c.fillStyle = "rgba(255,140,160,0.5)"; for (const s of [-1,1]) { c.beginPath(); c.ellipse(x+s*u*0.34, y+u*0.14, u*0.1, u*0.07, 0,0,TAU); c.fill(); }
+        // eyes
+        c.fillStyle = "#3a3226";
+        const ex = m.eyes === 1 ? [0] : [-0.24, 0.24];
+        const er = m.eyes === 1 ? u*0.24 : u*0.13;
+        for (const e of ex) { c.beginPath(); c.arc(x + e*u, y - u*0.06, er, 0, TAU); c.fill(); c.fillStyle="#fff"; c.beginPath(); c.arc(x+e*u-er*0.3, y-u*0.06-er*0.3, er*0.34,0,TAU); c.fill(); c.fillStyle="#3a3226"; }
+        // smile
+        c.strokeStyle = shade; c.lineWidth = 2; c.beginPath(); c.arc(x, y + u*0.16, u*0.16, Math.PI*0.15, Math.PI*0.85); c.stroke();
+      }
     }
   }
   requestAnimationFrame(frame);
