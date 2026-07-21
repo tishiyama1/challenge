@@ -227,7 +227,7 @@
     ["オレンジ", "#d98a4b"], ["きいろ", "#e6c257"], ["グリーン", "#6f8f5a"], ["カーキ", "#8a8455"],
     ["ブラウン", "#7a5a41"], ["ベージュ", "#cdb99c"], ["パープル", "#7c6193"],
   ];
-  const PATTERNS = ["むじ", "ボーダー", "ドット", "チェック"];
+  const PATTERNS = ["むじ", "ボーダー", "ドット", "チェック", "花柄"];
 
   // ---------------- color helpers ----------------
   function shade(hex, f) {
@@ -295,6 +295,7 @@
     if (pattern === "ボーダー") { for (let y = -1.2; y <= 1.2; y += 0.28) { c.beginPath(); c.moveTo(-1.3 * u, y * u); c.lineTo(1.3 * u, y * u); c.stroke(); } }
     else if (pattern === "ドット") { for (let y = -1.1; y <= 1.1; y += 0.34) for (let x = -1.1; x <= 1.1; x += 0.34) { c.beginPath(); c.arc(x * u, y * u, u * 0.05, 0, 6.283); c.fill(); } }
     else if (pattern === "チェック") { c.lineWidth = u * 0.06; for (let y = -1.2; y <= 1.2; y += 0.3) { c.beginPath(); c.moveTo(-1.3 * u, y * u); c.lineTo(1.3 * u, y * u); c.stroke(); } for (let x = -1.2; x <= 1.2; x += 0.3) { c.beginPath(); c.moveTo(x * u, -1.3 * u); c.lineTo(x * u, 1.3 * u); c.stroke(); } }
+    else if (pattern === "花柄") { for (let y = -1.1; y <= 1.1; y += 0.44) for (let x = ((y / 0.44) % 2 ? 0.22 : 0) - 1.1; x <= 1.1; x += 0.44) { for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283; c.beginPath(); c.arc((x + Math.cos(a) * 0.07) * u, (y + Math.sin(a) * 0.07) * u, u * 0.045, 0, 6.283); c.fill(); } c.fillStyle = shade(hex, 0.85); c.beginPath(); c.arc(x * u, y * u, u * 0.035, 0, 6.283); c.fill(); c.fillStyle = col; } }
   }
 
   function drawGarment(c, item, w, h) {
@@ -320,176 +321,285 @@
   }
 
   // ============================================================
-  //  MANNEQUIN ― draw a body and layer garments onto it (worn)
+  //  MANNEQUIN ― an elegant fashion-croquis figure, garments worn on it
   // ============================================================
   function bodyGeo(W, H) {
-    const cx = W / 2, top = H * 0.045, Fh = H * 0.91, s = Fh / 2.42;
-    const Y = n => top + n * s, X = n => cx + n * s;
+    const cx = W / 2, top = H * 0.035, Fh = H * 0.93, s = Fh / 3.0;
+    const Y = n => top + n * s;
     return {
-      W, H, cx, s, X, Y,
-      headCy: Y(0.27), headR: 0.19 * s,
-      shoulderY: Y(0.58), shoulderX: 0.40 * s,
-      neckY: Y(0.48), neckX: 0.11 * s,
-      waistY: Y(1.06), waistX: 0.245 * s,
-      hipY: Y(1.24), hipX: 0.32 * s,
-      crotchY: Y(1.40),
-      kneeY: Y(1.86), ankleY: Y(2.28), footY: Y(2.42),
-      legOut: 0.30 * s, legIn: 0.045 * s, kneeOut: 0.20 * s, ankleOut: 0.135 * s,
-      armTopY: Y(0.60), shoulderTopY: Y(0.55), armInX: 0.30 * s,
-      elbowY: Y(1.02), elbowX: 0.46 * s, wristY: Y(1.36), wristX: 0.42 * s,
+      W, H, cx, s, Y,
+      headCy: Y(0.30), headRx: 0.155 * s, headRy: 0.205 * s,
+      neckY: Y(0.53), neckX: 0.085 * s, neckBaseY: Y(0.66),
+      shoulderY: Y(0.72), shoulderX: 0.34 * s,
+      bustY: Y(0.96), bustX: 0.285 * s,
+      waistY: Y(1.30), waistX: 0.185 * s,
+      hipY: Y(1.56), hipX: 0.335 * s,
+      crotchY: Y(1.74),
+      kneeY: Y(2.30), ankleY: Y(2.86), footY: Y(3.0),
+      thighOut: 0.255 * s, legIn: 0.03 * s, kneeOut: 0.135 * s, ankleOut: 0.075 * s,
+      shoulderTopY: Y(0.70), armTopY: Y(0.75), armInX: 0.285 * s,
+      elbowX: 0.375 * s, elbowY: Y(1.28), wristX: 0.325 * s, wristY: Y(1.70), handY: Y(1.80),
     };
   }
-  function mPoly(c, pts, close) { c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]); if (close !== false) c.closePath(); }
+  function P(c, pts, close) { c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { const p = pts[i]; if (p.length === 4) c.quadraticCurveTo(p[0], p[1], p[2], p[3]); else c.lineTo(p[0], p[1]); } if (close !== false) c.closePath(); }
+  const A = (g, x, y) => [g.cx + x, y];
+  const Q = (g, cx1, y1, x, y) => [g.cx + cx1, y1, g.cx + x, y];
 
-  function drawBody(c, g) {
-    const skin = "#e7ddcc", sk2 = "#d8ccb6";
-    c.fillStyle = skin; c.strokeStyle = sk2; c.lineWidth = g.s * 0.02; c.lineJoin = "round";
-    for (const sx of [-1, 1]) {
-      mPoly(c, [[sx * g.legIn, g.crotchY], [sx * g.legOut, g.hipY], [sx * g.kneeOut, g.kneeY], [sx * g.ankleOut, g.ankleY], [sx * (g.ankleOut - 0.02 * g.s), g.footY], [sx * (g.legIn * 0.3), g.footY], [sx * g.legIn * 0.6, g.kneeY]].map(p => [g.cx + p[0], p[1]]));
-      c.fill();
-    }
-    for (const sx of [-1, 1]) {
-      mPoly(c, [[sx * g.armInX, g.shoulderTopY], [sx * g.shoulderX * 1.02, g.armTopY], [sx * g.elbowX, g.elbowY], [sx * g.wristX, g.wristY], [sx * (g.wristX - 0.09 * g.s), g.wristY], [sx * (g.elbowX - 0.1 * g.s), g.elbowY], [sx * (g.armInX - 0.02 * g.s), g.shoulderY]].map(p => [g.cx + p[0], p[1]]));
-      c.fill();
-    }
-    mPoly(c, [[-g.shoulderX, g.shoulderY], [-g.waistX, g.waistY], [-g.hipX, g.hipY], [-g.hipX * 0.9, g.crotchY], [g.hipX * 0.9, g.crotchY], [g.hipX, g.hipY], [g.waistX, g.waistY], [g.shoulderX, g.shoulderY], [g.neckX, g.neckY], [-g.neckX, g.neckY]].map(p => [g.cx + p[0], p[1]]));
-    c.fill();
-    c.fillRect(g.cx - g.neckX, g.neckY - g.s * 0.06, g.neckX * 2, g.s * 0.14);
-    c.beginPath(); c.arc(g.cx, g.headCy, g.headR, 0, 7); c.fill();
+  function drawGround(c, g) {
+    const grd = c.createRadialGradient(g.cx, g.footY + g.s * 0.02, g.s * 0.02, g.cx, g.footY + g.s * 0.02, g.s * 0.6);
+    grd.addColorStop(0, "rgba(120,100,92,0.20)"); grd.addColorStop(1, "rgba(120,100,92,0)");
+    c.fillStyle = grd; c.beginPath(); c.ellipse(g.cx, g.footY + g.s * 0.04, g.s * 0.5, g.s * 0.09, 0, 0, 7); c.fill();
   }
-  function mFill(c, item, drawPath) {
-    const hex = item.color || "#ccc";
-    drawPath(); c.fillStyle = hex; c.fill();
-    c.lineWidth = item._lw || 2; c.strokeStyle = shade(hex, 0.6); c.lineJoin = "round"; c.stroke();
+  function drawHairBack(c, g) {
+    c.fillStyle = "#4a3b31";
+    P(c, [A(g, -g.headRx * 1.15, g.headCy - g.headRy * 0.4),
+      Q(g, -g.headRx * 1.7, g.headCy + g.headRy * 0.2, -g.headRx * 1.35, g.bustY - g.s * 0.02),
+      Q(g, -g.headRx * 1.1, g.bustY + g.s * 0.14, -g.headRx * 0.55, g.bustY + g.s * 0.06),
+      Q(g, -g.neckX * 1.2, g.neckBaseY, -g.neckX * 0.9, g.neckY),
+      A(g, g.neckX * 0.9, g.neckY),
+      Q(g, g.neckX * 1.2, g.neckBaseY, g.headRx * 0.55, g.bustY + g.s * 0.06),
+      Q(g, g.headRx * 1.1, g.bustY + g.s * 0.14, g.headRx * 1.35, g.bustY - g.s * 0.02),
+      Q(g, g.headRx * 1.7, g.headCy + g.headRy * 0.2, g.headRx * 1.15, g.headCy - g.headRy * 0.4)]);
+    c.fill();
+  }
+  function drawHairFront(c, g) {
+    const col = "#4a3b31", hi = "#5e4c3f";
+    const grd = c.createLinearGradient(0, g.headCy - g.headRy, 0, g.headCy + g.headRy);
+    grd.addColorStop(0, hi); grd.addColorStop(1, col); c.fillStyle = grd;
+    P(c, [A(g, -g.headRx * 1.02, g.headCy + g.headRy * 0.15),
+      Q(g, -g.headRx * 1.2, g.headCy - g.headRy * 0.9, -g.headRx * 0.15, g.headCy - g.headRy * 1.02),
+      Q(g, g.headRx * 1.25, g.headCy - g.headRy * 1.02, g.headRx * 1.02, g.headCy + g.headRy * 0.2),
+      Q(g, g.headRx * 0.9, g.headCy - g.headRy * 0.2, g.headRx * 0.5, g.headCy - g.headRy * 0.35),
+      Q(g, g.headRx * 0.2, g.headCy - g.headRy * 0.55, -g.headRx * 0.15, g.headCy - g.headRy * 0.5),
+      Q(g, -g.headRx * 0.55, g.headCy - g.headRy * 0.45, -g.headRx * 0.85, g.headCy - g.headRy * 0.05)]);
+    c.fill();
+    c.fillStyle = col;
+    for (const sx of [-1, 1]) {
+      P(c, [A(g, sx * g.headRx * 0.98, g.headCy - g.headRy * 0.2),
+        Q(g, sx * g.headRx * 1.28, g.headCy + g.headRy * 0.6, sx * g.headRx * 1.0, g.headCy + g.headRy * 1.15),
+        Q(g, sx * g.headRx * 0.85, g.headCy + g.headRy * 0.9, sx * g.headRx * 0.8, g.headCy + g.headRy * 0.4),
+        Q(g, sx * g.headRx * 0.85, g.headCy, sx * g.headRx * 0.98, g.headCy - g.headRy * 0.2)]);
+      c.fill();
+    }
+  }
+  function drawBody(c, g) {
+    drawHairBack(c, g);
+    const skin = "#ecdfce";
+    c.lineJoin = "round"; c.lineCap = "round";
+    c.fillStyle = skin;
+    for (const sx of [-1, 1]) {
+      P(c, [A(g, sx * g.legIn, g.crotchY),
+        Q(g, sx * g.thighOut, g.hipY - g.s * 0.02, sx * g.kneeOut * 1.05, g.kneeY),
+        Q(g, sx * g.kneeOut * 0.9, g.kneeY + g.s * 0.28, sx * g.ankleOut, g.ankleY),
+        A(g, sx * (g.ankleOut + g.s * 0.04), g.footY),
+        A(g, sx * (g.legIn * 0.2), g.footY),
+        Q(g, sx * g.legIn * 0.4, g.kneeY + g.s * 0.3, sx * g.legIn * 0.7, g.kneeY),
+        Q(g, sx * g.legIn * 0.9, g.hipY, sx * g.legIn, g.crotchY)]);
+      c.fill();
+    }
+    c.fillStyle = skin;
+    for (const sx of [-1, 1]) {
+      P(c, [A(g, sx * g.armInX, g.shoulderTopY),
+        Q(g, sx * g.shoulderX * 1.02, g.armTopY - g.s * 0.01, sx * g.elbowX, g.elbowY),
+        Q(g, sx * g.wristX * 1.05, g.wristY - g.s * 0.02, sx * g.wristX, g.handY),
+        A(g, sx * (g.wristX - g.s * 0.07), g.handY),
+        Q(g, sx * (g.elbowX - g.s * 0.08), g.elbowY, sx * (g.armInX - g.s * 0.03), g.shoulderY + g.s * 0.02)]);
+      c.fill();
+    }
+    c.fillStyle = skin;
+    P(c, [A(g, -g.shoulderX, g.shoulderY),
+      Q(g, -g.bustX * 1.05, g.bustY, -g.waistX, g.waistY),
+      Q(g, -g.hipX * 0.85, g.hipY - g.s * 0.06, -g.hipX, g.hipY),
+      Q(g, -g.hipX * 0.96, g.crotchY, -g.hipX * 0.62, g.crotchY),
+      A(g, g.hipX * 0.62, g.crotchY),
+      Q(g, g.hipX * 0.96, g.crotchY, g.hipX, g.hipY),
+      Q(g, g.hipX * 0.85, g.hipY - g.s * 0.06, g.waistX, g.waistY),
+      Q(g, g.bustX * 1.05, g.bustY, g.shoulderX, g.shoulderY),
+      Q(g, g.neckX * 1.4, g.shoulderY - g.s * 0.02, g.neckX, g.neckBaseY),
+      A(g, g.neckX, g.neckY),
+      A(g, -g.neckX, g.neckY),
+      A(g, -g.neckX, g.neckBaseY),
+      Q(g, -g.neckX * 1.4, g.shoulderY - g.s * 0.02, -g.shoulderX, g.shoulderY)]);
+    c.fill();
+    c.fillStyle = skin; c.fillRect(g.cx - g.neckX, g.neckY - g.s * 0.02, g.neckX * 2, g.neckBaseY - g.neckY + g.s * 0.02);
+    c.fillStyle = skin; c.beginPath(); c.ellipse(g.cx, g.headCy, g.headRx, g.headRy, 0, 0, 7); c.fill();
+    c.fillStyle = "rgba(214,140,130,0.24)";
+    for (const sx of [-1, 1]) { c.beginPath(); c.ellipse(g.cx + sx * g.headRx * 0.55, g.headCy + g.headRy * 0.28, g.headRx * 0.22, g.headRy * 0.13, 0, 0, 7); c.fill(); }
+    drawHairFront(c, g);
+  }
+  function gfill(c, item, y0, y1, drawPath) {
+    const hex = item.color;
+    drawPath();
+    const grd = c.createLinearGradient(0, y0, 0, y1);
+    grd.addColorStop(0, lift(hex, 0.14)); grd.addColorStop(0.5, hex); grd.addColorStop(1, shade(hex, 0.84));
+    c.fillStyle = grd; c.fill();
+    c.lineWidth = item._lw || 2; c.strokeStyle = shade(hex, 0.71); c.lineJoin = "round"; c.lineCap = "round"; c.stroke();
     if (item.pattern && item.pattern !== "むじ") { c.save(); drawPath(); c.clip(); mPattern(c, item); c.restore(); }
   }
   function mPattern(c, item) {
-    const hex = item.color, col = isLight(hex) ? shade(hex, 0.72) : lift(hex, 0.3);
+    const hex = item.color, col = isLight(hex) ? shade(hex, 0.74) : lift(hex, 0.32);
     const b = c._g.s; c.strokeStyle = col; c.fillStyle = col;
-    if (item.pattern === "ボーダー") { c.lineWidth = b * 0.05; for (let y = 0; y < c._g.H; y += b * 0.13) { c.beginPath(); c.moveTo(0, y); c.lineTo(c._g.W, y); c.stroke(); } }
-    else if (item.pattern === "ドット") { for (let y = 0; y < c._g.H; y += b * 0.16) for (let x = (y / (b * 0.16) % 2 ? b * 0.08 : 0); x < c._g.W; x += b * 0.16) { c.beginPath(); c.arc(x, y, b * 0.022, 0, 7); c.fill(); } }
-    else if (item.pattern === "チェック") { c.lineWidth = b * 0.03; for (let y = 0; y < c._g.H; y += b * 0.14) { c.beginPath(); c.moveTo(0, y); c.lineTo(c._g.W, y); c.stroke(); } for (let x = 0; x < c._g.W; x += b * 0.14) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, c._g.H); c.stroke(); } }
+    if (item.pattern === "ボーダー") { c.lineWidth = b * 0.035; for (let y = 0; y < c._g.H; y += b * 0.1) { c.beginPath(); c.moveTo(0, y); c.lineTo(c._g.W, y); c.stroke(); } }
+    else if (item.pattern === "ドット") { for (let y = 0; y < c._g.H; y += b * 0.13) for (let x = (y / (b * 0.13) % 2 ? b * 0.065 : 0); x < c._g.W; x += b * 0.13) { c.beginPath(); c.arc(x, y, b * 0.016, 0, 7); c.fill(); } }
+    else if (item.pattern === "チェック") { c.lineWidth = b * 0.022; for (let y = 0; y < c._g.H; y += b * 0.11) { c.beginPath(); c.moveTo(0, y); c.lineTo(c._g.W, y); c.stroke(); } for (let x = 0; x < c._g.W; x += b * 0.11) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, c._g.H); c.stroke(); } }
+    else if (item.pattern === "花柄") { for (let y = b * 0.2; y < c._g.H; y += b * 0.24) for (let x = (y / (b * 0.24) % 2 ? b * 0.12 : 0) + b * 0.05; x < c._g.W; x += b * 0.24) { for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283; c.beginPath(); c.arc(x + Math.cos(a) * b * 0.03, y + Math.sin(a) * b * 0.03, b * 0.02, 0, 7); c.fill(); } } }
   }
+  function softShadow(c, g, drawPath, alpha) { c.save(); drawPath(); c.clip(); c.fillStyle = `rgba(60,45,40,${alpha})`; c.fillRect(0, g.shoulderY, g.W, g.s * 0.18); c.restore(); }
+
   function drawBottom(c, g, item) {
-    const t = item.type; c._g = g; item._lw = g.s * 0.035;
+    const t = item.type; c._g = g; item._lw = g.s * 0.02;
     if (t === "スカート") {
-      const topY = g.waistY + g.s * 0.02, hemY = g.kneeY - g.s * 0.05;
-      mFill(c, item, () => mPoly(c, [[-g.waistX * 1.05, topY], [g.waistX * 1.05, topY], [g.hipX * 1.5, hemY], [-g.hipX * 1.5, hemY]].map(p => [g.cx + p[0], p[1]])));
+      const topY = g.waistY, hemY = g.kneeY + g.s * 0.02;
+      gfill(c, item, topY, hemY, () => P(c, [A(g, -g.waistX * 1.06, topY),
+        A(g, g.waistX * 1.06, topY),
+        Q(g, g.hipX * 1.35, g.hipY, g.hipX * 1.55, hemY),
+        Q(g, 0, hemY + g.s * 0.09, -g.hipX * 1.55, hemY),
+        Q(g, -g.hipX * 1.35, g.hipY, -g.waistX * 1.06, topY)]));
     } else {
-      const topY = g.waistY, hemY = t === "ショートパンツ" ? g.kneeY - g.s * 0.05 : g.ankleY + g.s * 0.02;
-      mFill(c, item, () => { c.beginPath(); const w = g.hipX * 1.06;
+      const topY = g.waistY, hemY = t === "ショートパンツ" ? g.kneeY - g.s * 0.02 : g.ankleY + g.s * 0.02;
+      const outW = g.ankleOut * 1.8;
+      gfill(c, item, topY, hemY, () => { c.beginPath(); const w = g.hipX * 1.04;
         c.moveTo(g.cx - w, topY); c.lineTo(g.cx + w, topY);
-        c.lineTo(g.cx + g.ankleOut * 1.5, hemY); c.lineTo(g.cx + g.ankleOut * 0.3, hemY);
-        c.lineTo(g.cx, g.crotchY + g.s * 0.05);
-        c.lineTo(g.cx - g.ankleOut * 0.3, hemY); c.lineTo(g.cx - g.ankleOut * 1.5, hemY); c.closePath(); });
+        c.quadraticCurveTo(g.cx + g.hipX * 0.9, g.hipY, g.cx + outW, hemY);
+        c.lineTo(g.cx + outW * 0.25, hemY);
+        c.quadraticCurveTo(g.cx, g.crotchY + g.s * 0.16, g.cx, g.crotchY + g.s * 0.04);
+        c.quadraticCurveTo(g.cx, g.crotchY + g.s * 0.16, g.cx - outW * 0.25, hemY);
+        c.lineTo(g.cx - outW, hemY);
+        c.quadraticCurveTo(g.cx - g.hipX * 0.9, g.hipY, g.cx - w, topY); c.closePath(); });
     }
   }
   function drawTop(c, g, item) {
-    const t = item.type; c._g = g; item._lw = g.s * 0.035;
+    const t = item.type; c._g = g; item._lw = g.s * 0.02;
     const long = (t === "ニット" || t === "シャツ" || t === "ブラウス");
-    const shoulderY = g.shoulderY - g.s * 0.04, hemY = g.hipY + g.s * 0.03, neckX = g.neckX * 1.4, sx = g.shoulderX * 1.06;
-    const wristY = long ? g.wristY : g.elbowY - g.s * 0.02;
-    const wristX = long ? g.wristX : g.elbowX - g.s * 0.02;
-    mFill(c, item, () => { c.beginPath();
-      c.moveTo(g.cx - neckX, shoulderY);
-      c.lineTo(g.cx - sx, shoulderY);
-      c.lineTo(g.cx - (wristX + g.s * 0.09), wristY);
-      c.lineTo(g.cx - (wristX - g.s * 0.02), wristY + g.s * 0.02);
-      c.lineTo(g.cx - g.waistX * 1.02, g.waistY + g.s * 0.04);
-      c.lineTo(g.cx - g.hipX * 1.02, hemY);
-      c.lineTo(g.cx + g.hipX * 1.02, hemY);
-      c.lineTo(g.cx + g.waistX * 1.02, g.waistY + g.s * 0.04);
-      c.lineTo(g.cx + (wristX - g.s * 0.02), wristY + g.s * 0.02);
-      c.lineTo(g.cx + (wristX + g.s * 0.09), wristY);
-      c.lineTo(g.cx + sx, shoulderY);
-      c.lineTo(g.cx + neckX, shoulderY);
-      c.quadraticCurveTo(g.cx, shoulderY + g.s * 0.12, g.cx - neckX, shoulderY); c.closePath(); });
-    if (t === "シャツ" || t === "ブラウス") { c.strokeStyle = shade(item.color, 0.6); c.lineWidth = g.s * 0.03;
-      c.beginPath(); c.moveTo(g.cx - neckX, shoulderY); c.lineTo(g.cx - g.s * 0.02, shoulderY + g.s * 0.1); c.lineTo(g.cx + neckX, shoulderY); c.stroke();
-      c.beginPath(); c.moveTo(g.cx, shoulderY + g.s * 0.12); c.lineTo(g.cx, hemY); c.stroke(); }
+    const puff = (t === "ブラウス");
+    const syT = g.shoulderY - g.s * 0.03, hemY = g.hipY - g.s * 0.02, neckX = g.neckX * 1.5, sxT = g.shoulderX * 1.02;
+    const wristY = long ? g.wristY : g.elbowY - g.s * 0.01, wristX = long ? g.wristX * 1.02 : g.elbowX - g.s * 0.01;
+    gfill(c, item, syT, hemY, () => { c.beginPath();
+      c.moveTo(g.cx - neckX, syT);
+      c.quadraticCurveTo(g.cx - sxT * 0.7, syT - g.s * 0.02, g.cx - sxT, syT + g.s * 0.01);
+      if (puff) c.quadraticCurveTo(g.cx - (wristX + g.s * 0.11), g.elbowY - g.s * 0.06, g.cx - (wristX + g.s * 0.05), wristY);
+      else c.quadraticCurveTo(g.cx - (wristX + g.s * 0.06), g.bustY + g.s * 0.05, g.cx - (wristX + g.s * 0.03), wristY);
+      c.lineTo(g.cx - (wristX - g.s * 0.03), wristY + g.s * 0.015);
+      c.quadraticCurveTo(g.cx - (g.wristX - g.s * 0.02), g.bustY + g.s * 0.06, g.cx - g.waistX * 1.04, g.waistY);
+      c.quadraticCurveTo(g.cx - g.hipX * 0.95, g.hipY - g.s * 0.06, g.cx - g.hipX * 0.9, hemY);
+      c.quadraticCurveTo(g.cx, hemY + g.s * 0.05, g.cx + g.hipX * 0.9, hemY);
+      c.quadraticCurveTo(g.cx + g.hipX * 0.95, g.hipY - g.s * 0.06, g.cx + g.waistX * 1.04, g.waistY);
+      c.quadraticCurveTo(g.cx + (g.wristX - g.s * 0.02), g.bustY + g.s * 0.06, g.cx + (wristX - g.s * 0.03), wristY + g.s * 0.015);
+      c.lineTo(g.cx + (wristX + g.s * 0.03), wristY);
+      if (puff) c.quadraticCurveTo(g.cx + (wristX + g.s * 0.11), g.elbowY - g.s * 0.06, g.cx + sxT, syT + g.s * 0.01);
+      else c.quadraticCurveTo(g.cx + (wristX + g.s * 0.06), g.bustY + g.s * 0.05, g.cx + sxT, syT + g.s * 0.01);
+      c.quadraticCurveTo(g.cx + sxT * 0.7, syT - g.s * 0.02, g.cx + neckX, syT);
+      c.quadraticCurveTo(g.cx, syT + g.s * 0.14, g.cx - neckX, syT); c.closePath(); });
+    softShadow(c, g, () => { c.beginPath(); c.moveTo(g.cx - neckX, syT); c.quadraticCurveTo(g.cx - sxT, syT, g.cx - g.waistX, g.waistY); c.lineTo(g.cx + g.waistX, g.waistY); c.quadraticCurveTo(g.cx + sxT, syT, g.cx + neckX, syT); c.quadraticCurveTo(g.cx, syT + g.s * 0.14, g.cx - neckX, syT); c.closePath(); }, 0.05);
+    if (t === "シャツ" || t === "ブラウス") { c.strokeStyle = shade(item.color, 0.7); c.lineWidth = g.s * 0.016;
+      c.beginPath(); c.moveTo(g.cx - neckX, syT); c.lineTo(g.cx - g.s * 0.015, syT + g.s * 0.08); c.lineTo(g.cx + neckX, syT); c.stroke(); }
   }
   function drawDress(c, g, item) {
-    c._g = g; item._lw = g.s * 0.035;
-    const shoulderY = g.shoulderY - g.s * 0.04, hemY = g.kneeY + g.s * 0.06, neckX = g.neckX * 1.4, sx = g.shoulderX * 1.02;
-    mFill(c, item, () => { c.beginPath();
-      c.moveTo(g.cx - neckX, shoulderY);
-      c.lineTo(g.cx - sx, shoulderY);
-      c.lineTo(g.cx - g.waistX * 1.05, g.waistY);
-      c.lineTo(g.cx - g.hipX * 1.7, hemY);
-      c.lineTo(g.cx + g.hipX * 1.7, hemY);
-      c.lineTo(g.cx + g.waistX * 1.05, g.waistY);
-      c.lineTo(g.cx + sx, shoulderY);
-      c.lineTo(g.cx + neckX, shoulderY);
-      c.quadraticCurveTo(g.cx, shoulderY + g.s * 0.12, g.cx - neckX, shoulderY); c.closePath(); });
+    c._g = g; item._lw = g.s * 0.02;
+    const syT = g.shoulderY - g.s * 0.03, hemY = g.kneeY + g.s * 0.06, neckX = g.neckX * 1.5, sxT = g.shoulderX * 1.0;
+    gfill(c, item, syT, hemY, () => { c.beginPath();
+      c.moveTo(g.cx - neckX, syT);
+      c.quadraticCurveTo(g.cx - sxT * 0.7, syT - g.s * 0.02, g.cx - sxT, syT + g.s * 0.01);
+      c.quadraticCurveTo(g.cx - g.bustX * 1.06, g.bustY, g.cx - g.waistX * 1.02, g.waistY);
+      c.quadraticCurveTo(g.cx - g.hipX * 1.3, g.hipY + g.s * 0.05, g.cx - g.hipX * 1.75, hemY);
+      c.quadraticCurveTo(g.cx, hemY + g.s * 0.12, g.cx + g.hipX * 1.75, hemY);
+      c.quadraticCurveTo(g.cx + g.hipX * 1.3, g.hipY + g.s * 0.05, g.cx + g.waistX * 1.02, g.waistY);
+      c.quadraticCurveTo(g.cx + g.bustX * 1.06, g.bustY, g.cx + sxT, syT + g.s * 0.01);
+      c.quadraticCurveTo(g.cx + sxT * 0.7, syT - g.s * 0.02, g.cx + neckX, syT);
+      c.quadraticCurveTo(g.cx, syT + g.s * 0.16, g.cx - neckX, syT); c.closePath(); });
+    c.strokeStyle = shade(item.color, 0.74); c.lineWidth = g.s * 0.012;
+    c.beginPath(); c.moveTo(g.cx - g.waistX * 1.02, g.waistY); c.quadraticCurveTo(g.cx, g.waistY + g.s * 0.03, g.cx + g.waistX * 1.02, g.waistY); c.stroke();
   }
   function drawOuter(c, g, item, open) {
-    const t = item.type; c._g = g; item._lw = g.s * 0.038;
-    const long = t === "コート";
-    const shoulderY = g.shoulderY - g.s * 0.06, hemY = long ? g.kneeY + g.s * 0.02 : g.hipY + g.s * 0.08;
-    const sx = g.shoulderX * 1.16, neckX = g.neckX * 1.8;
-    const wristY = g.wristY + g.s * 0.02, wristX = g.wristX + g.s * 0.02;
+    const t = item.type; c._g = g; item._lw = g.s * 0.022;
+    const long = (t === "コート" || t === "ロングコート");
+    const syO = g.shoulderY - g.s * 0.05, hemY = long ? g.kneeY - g.s * 0.02 : g.hipY + g.s * 0.04;
+    const sxO = g.shoulderX * 1.12, neckX = g.neckX * 1.9;
+    const wristY = g.wristY + g.s * 0.01, wristX = g.wristX + g.s * 0.03;
     const hex = item.color;
     function sleeve(side) {
-      c.beginPath();
-      c.moveTo(g.cx + side * sx, shoulderY);
-      c.lineTo(g.cx + side * (wristX + g.s * 0.12), wristY);
-      c.lineTo(g.cx + side * (wristX - g.s * 0.01), wristY + g.s * 0.02);
-      c.lineTo(g.cx + side * g.shoulderX * 1.02, g.shoulderY + g.s * 0.06);
-      c.closePath(); c.fillStyle = hex; c.fill(); c.lineWidth = item._lw; c.strokeStyle = shade(hex, 0.58); c.stroke();
+      P(c, [A(g, side * sxO, syO),
+        Q(g, side * g.shoulderX * 1.12, g.armTopY, side * (wristX + g.s * 0.05), wristY),
+        A(g, side * (wristX - g.s * 0.02), wristY + g.s * 0.02),
+        Q(g, side * (g.elbowX - g.s * 0.02), g.elbowY, side * g.shoulderX * 0.98, g.shoulderY + g.s * 0.05)]);
+      const grd = c.createLinearGradient(0, syO, 0, wristY); grd.addColorStop(0, lift(hex, 0.12)); grd.addColorStop(1, shade(hex, 0.82));
+      c.fillStyle = grd; c.fill(); c.lineWidth = item._lw; c.strokeStyle = shade(hex, 0.72); c.stroke();
     }
     sleeve(-1); sleeve(1);
     if (!open) {
-      mFill(c, item, () => { c.beginPath();
-        c.moveTo(g.cx - neckX, shoulderY);
-        c.lineTo(g.cx - sx, shoulderY);
-        c.lineTo(g.cx - g.waistX * 1.15, g.waistY);
-        c.lineTo(g.cx - (long ? g.hipX * 1.2 : g.hipX * 1.12), hemY);
-        c.lineTo(g.cx + (long ? g.hipX * 1.2 : g.hipX * 1.12), hemY);
-        c.lineTo(g.cx + g.waistX * 1.15, g.waistY);
-        c.lineTo(g.cx + sx, shoulderY);
-        c.lineTo(g.cx + neckX, shoulderY);
-        c.quadraticCurveTo(g.cx, shoulderY + g.s * 0.1, g.cx - neckX, shoulderY); c.closePath(); });
-      c.fillStyle = shade(hex, 0.55); for (let y = g.shoulderY + g.s * 0.14; y < hemY - g.s * 0.06; y += g.s * 0.18) { c.beginPath(); c.arc(g.cx, y, g.s * 0.018, 0, 7); c.fill(); }
-      c.strokeStyle = shade(hex, 0.58); c.lineWidth = g.s * 0.03; c.beginPath(); c.moveTo(g.cx - neckX, shoulderY); c.lineTo(g.cx - g.s * 0.02, shoulderY + g.s * 0.14); c.lineTo(g.cx + neckX, shoulderY); c.stroke();
+      gfill(c, item, syO, hemY, () => { c.beginPath();
+        c.moveTo(g.cx - neckX, syO);
+        c.quadraticCurveTo(g.cx - sxO * 0.8, syO - g.s * 0.02, g.cx - sxO, syO + g.s * 0.01);
+        c.quadraticCurveTo(g.cx - g.bustX * 1.12, g.bustY, g.cx - g.waistX * 1.15, g.waistY);
+        c.quadraticCurveTo(g.cx - g.hipX * 1.05, g.hipY, g.cx - (long ? g.hipX * 1.15 : g.hipX * 1.08), hemY);
+        c.quadraticCurveTo(g.cx, hemY + g.s * 0.05, g.cx + (long ? g.hipX * 1.15 : g.hipX * 1.08), hemY);
+        c.quadraticCurveTo(g.cx + g.hipX * 1.05, g.hipY, g.cx + g.waistX * 1.15, g.waistY);
+        c.quadraticCurveTo(g.cx + g.bustX * 1.12, g.bustY, g.cx + sxO, syO + g.s * 0.01);
+        c.quadraticCurveTo(g.cx + sxO * 0.8, syO - g.s * 0.02, g.cx + neckX, syO);
+        c.quadraticCurveTo(g.cx, syO + g.s * 0.12, g.cx - neckX, syO); c.closePath(); });
+      c.fillStyle = shade(hex, 0.62); for (let y = g.bustY; y < hemY - g.s * 0.04; y += g.s * 0.16) { c.beginPath(); c.arc(g.cx, y, g.s * 0.013, 0, 7); c.fill(); }
+      c.strokeStyle = shade(hex, 0.7); c.lineWidth = g.s * 0.016;
+      c.beginPath(); c.moveTo(g.cx - neckX, syO); c.lineTo(g.cx - g.s * 0.015, syO + g.s * 0.13); c.lineTo(g.cx + neckX, syO); c.stroke();
     } else {
-      const gap = g.s * 0.10;
+      const gap = g.s * 0.075;
       for (const side of [-1, 1]) {
-        mFill(c, item, () => { c.beginPath();
-          c.moveTo(g.cx + side * neckX, shoulderY);
-          c.lineTo(g.cx + side * sx, shoulderY);
-          c.lineTo(g.cx + side * g.waistX * 1.15, g.waistY);
-          c.lineTo(g.cx + side * (long ? g.hipX * 1.2 : g.hipX * 1.12), hemY);
+        gfill(c, item, syO, hemY, () => { c.beginPath();
+          c.moveTo(g.cx + side * neckX, syO);
+          c.quadraticCurveTo(g.cx + side * sxO * 0.8, syO - g.s * 0.02, g.cx + side * sxO, syO + g.s * 0.01);
+          c.quadraticCurveTo(g.cx + side * g.bustX * 1.12, g.bustY, g.cx + side * g.waistX * 1.16, g.waistY);
+          c.quadraticCurveTo(g.cx + side * g.hipX * 1.08, g.hipY, g.cx + side * (long ? g.hipX * 1.15 : g.hipX * 1.08), hemY);
           c.lineTo(g.cx + side * gap, hemY);
-          c.lineTo(g.cx + side * gap * 0.7, g.waistY);
-          c.lineTo(g.cx + side * gap * 0.6, shoulderY + g.s * 0.16);
+          c.quadraticCurveTo(g.cx + side * gap * 0.8, g.waistY, g.cx + side * gap * 0.7, g.bustY);
+          c.lineTo(g.cx + side * gap * 0.6, syO + g.s * 0.18);
           c.closePath(); });
-        c.strokeStyle = shade(hex, 0.58); c.lineWidth = g.s * 0.028; c.beginPath();
-        c.moveTo(g.cx + side * neckX, shoulderY); c.lineTo(g.cx + side * gap * 0.6, shoulderY + g.s * 0.16); c.lineTo(g.cx + side * gap, g.waistY); c.stroke();
+        c.strokeStyle = shade(hex, 0.7); c.lineWidth = g.s * 0.016; c.beginPath();
+        c.moveTo(g.cx + side * neckX, syO); c.quadraticCurveTo(g.cx + side * gap * 0.5, syO + g.s * 0.16, g.cx + side * gap * 0.85, g.waistY); c.stroke();
       }
     }
   }
   function drawShoes(c, g, item) {
-    c._g = g; const hex = item.color;
+    c._g = g; const hex = item.color; const heel = (item.type === "パンプス" || item.type === "ヒール");
     for (const sx of [-1, 1]) {
-      const fx = g.cx + sx * g.ankleOut * 0.9, fy = g.footY;
-      c.beginPath(); c.moveTo(fx - sx * g.s * 0.05, fy - g.s * 0.09);
-      c.quadraticCurveTo(fx + sx * g.s * 0.16, fy - g.s * 0.1, fx + sx * g.s * 0.19, fy + g.s * 0.02);
-      c.quadraticCurveTo(fx + sx * g.s * 0.2, fy + g.s * 0.06, fx + sx * g.s * 0.13, fy + g.s * 0.06);
-      c.lineTo(fx - sx * g.s * 0.07, fy + g.s * 0.06); c.closePath();
-      c.fillStyle = hex; c.fill(); c.lineWidth = g.s * 0.03; c.strokeStyle = shade(hex, 0.55); c.stroke();
-      if (item.type === "ブーツ") { c.fillStyle = hex; const bx = fx - sx * g.s * 0.06 - (sx < 0 ? g.s * 0.06 : 0); c.fillRect(bx, fy - g.s * 0.28, g.s * 0.13, g.s * 0.22); c.strokeRect(bx, fy - g.s * 0.28, g.s * 0.13, g.s * 0.22); }
+      const fx = g.cx + sx * (g.ankleOut + g.s * 0.02);
+      if (heel) {
+        c.beginPath(); c.moveTo(fx - sx * g.s * 0.03, g.footY - g.s * 0.08);
+        c.quadraticCurveTo(fx + sx * g.s * 0.12, g.footY - g.s * 0.09, fx + sx * g.s * 0.26, g.footY + g.s * 0.03);
+        c.quadraticCurveTo(fx + sx * g.s * 0.28, g.footY + g.s * 0.055, fx + sx * g.s * 0.2, g.footY + g.s * 0.05);
+        c.quadraticCurveTo(fx + sx * g.s * 0.05, g.footY + g.s * 0.02, fx - sx * g.s * 0.05, g.footY + g.s * 0.04);
+        c.closePath(); c.fillStyle = hex; c.fill(); c.lineWidth = g.s * 0.015; c.strokeStyle = shade(hex, 0.66); c.stroke();
+        c.strokeStyle = shade(hex, 0.6); c.lineWidth = g.s * 0.02; c.beginPath(); c.moveTo(fx - sx * g.s * 0.02, g.footY + g.s * 0.05); c.lineTo(fx - sx * g.s * 0.02, g.footY + g.s * 0.14); c.stroke();
+      } else {
+        c.beginPath(); c.moveTo(fx - sx * g.s * 0.05, g.footY - g.s * 0.075);
+        c.quadraticCurveTo(fx + sx * g.s * 0.14, g.footY - g.s * 0.085, fx + sx * g.s * 0.18, g.footY + g.s * 0.015);
+        c.quadraticCurveTo(fx + sx * g.s * 0.19, g.footY + g.s * 0.055, fx + sx * g.s * 0.12, g.footY + g.s * 0.055);
+        c.lineTo(fx - sx * g.s * 0.07, g.footY + g.s * 0.055); c.closePath();
+        c.fillStyle = hex; c.fill(); c.lineWidth = g.s * 0.015; c.strokeStyle = shade(hex, 0.66); c.stroke();
+        if (item.type === "ブーツ") { c.fillStyle = hex; const bw = g.s * 0.11, bx = fx - sx * g.s * 0.055 - (sx < 0 ? bw : 0);
+          c.beginPath(); c.moveTo(bx, g.footY - g.s * 0.07); c.lineTo(bx, g.footY - g.s * 0.34); c.quadraticCurveTo(bx + bw * 0.5, g.footY - g.s * 0.37, bx + bw, g.footY - g.s * 0.34); c.lineTo(bx + bw, g.footY - g.s * 0.07); c.closePath(); c.fill(); c.stroke(); }
+      }
     }
   }
   function drawAcc(c, g, item) {
-    c._g = g; const hex = item.color; c.fillStyle = hex; c.strokeStyle = shade(hex, 0.55); c.lineWidth = g.s * 0.03;
-    if (item.type === "ぼうし") { c.beginPath(); c.ellipse(g.cx, g.headCy - g.headR * 0.5, g.headR * 1.5, g.headR * 0.35, 0, 0, 7); c.fill(); c.stroke(); c.beginPath(); c.moveTo(g.cx - g.headR * 0.9, g.headCy - g.headR * 0.5); c.quadraticCurveTo(g.cx, g.headCy - g.headR * 1.7, g.cx + g.headR * 0.9, g.headCy - g.headR * 0.5); c.fill(); c.stroke(); }
-    else if (item.type === "めがね") { c.lineWidth = g.s * 0.02; for (const sx of [-1, 1]) { c.beginPath(); c.arc(g.cx + sx * g.headR * 0.42, g.headCy + g.headR * 0.05, g.headR * 0.3, 0, 7); c.stroke(); } c.beginPath(); c.moveTo(g.cx - g.headR * 0.12, g.headCy + g.headR * 0.05); c.lineTo(g.cx + g.headR * 0.12, g.headCy + g.headR * 0.05); c.stroke(); }
-    else { const bx = g.cx + g.hipX * 1.9, by = g.hipY + g.s * 0.05; c.beginPath(); c.rect(bx - g.s * 0.11, by, g.s * 0.22, g.s * 0.28); c.fill(); c.stroke(); c.beginPath(); c.arc(bx, by, g.s * 0.11, Math.PI, 0); c.stroke(); }
+    c._g = g; const hex = item.color; c.fillStyle = hex; c.strokeStyle = shade(hex, 0.62); c.lineWidth = g.s * 0.016;
+    if (item.type === "ぼうし") {
+      c.beginPath(); c.ellipse(g.cx, g.headCy - g.headRy * 0.35, g.headRx * 1.75, g.headRy * 0.32, 0, 0, 7); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(g.cx - g.headRx * 0.95, g.headCy - g.headRy * 0.35); c.quadraticCurveTo(g.cx, g.headCy - g.headRy * 1.55, g.cx + g.headRx * 0.95, g.headCy - g.headRy * 0.35); c.fill(); c.stroke();
+      c.strokeStyle = shade(hex, 0.55); c.lineWidth = g.s * 0.02; c.beginPath(); c.moveTo(g.cx - g.headRx * 0.9, g.headCy - g.headRy * 0.42); c.quadraticCurveTo(g.cx, g.headCy - g.headRy * 0.2, g.cx + g.headRx * 0.9, g.headCy - g.headRy * 0.42); c.stroke();
+    }
+    else if (item.type === "めがね") { c.lineWidth = g.s * 0.014; c.strokeStyle = "#5b4a3f"; for (const sx of [-1, 1]) { c.beginPath(); c.ellipse(g.cx + sx * g.headRx * 0.44, g.headCy + g.headRy * 0.06, g.headRx * 0.32, g.headRy * 0.2, 0, 0, 7); c.stroke(); } c.beginPath(); c.moveTo(g.cx - g.headRx * 0.12, g.headCy + g.headRy * 0.06); c.lineTo(g.cx + g.headRx * 0.12, g.headCy + g.headRy * 0.06); c.stroke(); }
+    else {
+      const bx = g.cx + g.hipX * 1.55, by = g.hipY + g.s * 0.04, bw = g.s * 0.2, bh = g.s * 0.16;
+      c.strokeStyle = shade(hex, 0.5); c.lineWidth = g.s * 0.01; c.beginPath(); c.arc(bx, by - g.s * 0.02, bw * 0.55, Math.PI * 1.05, -0.05); c.stroke();
+      c.fillStyle = hex; c.strokeStyle = shade(hex, 0.62); c.lineWidth = g.s * 0.014;
+      c.beginPath(); c.moveTo(bx - bw / 2, by); c.lineTo(bx + bw / 2, by); c.quadraticCurveTo(bx + bw / 2 + g.s * 0.01, by + bh, bx + bw * 0.36, by + bh); c.lineTo(bx - bw * 0.36, by + bh); c.quadraticCurveTo(bx - bw / 2 - g.s * 0.01, by + bh, bx - bw / 2, by); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = shade(hex, 0.55); c.fillRect(bx - g.s * 0.015, by + bh * 0.35, g.s * 0.03, g.s * 0.03);
+    }
   }
   function drawOutfit(c, W, H, o, bg) {
     c.clearRect(0, 0, W, H);
     if (bg) { c.fillStyle = bg; c.fillRect(0, 0, W, H); }
     const g = bodyGeo(W, H); c._g = g;
+    drawGround(c, g);
     drawBody(c, g);
     if (o.dress) { if (o.shoes) drawShoes(c, g, o.shoes); drawDress(c, g, o.dress); }
     else {
@@ -554,14 +664,17 @@
   // seed a few sample clothes the very first time (easy to delete/replace)
   if (!store.get("seeded", false)) {
     const demo = [
-      { cat: "top", type: "Tシャツ", color: "#f2efe8", pattern: "むじ", name: "しろT" },
-      { cat: "top", type: "ニット", color: "#2f3a54", pattern: "むじ", name: "ネイビーニット" },
-      { cat: "top", type: "シャツ", color: "#9cc3e0", pattern: "ボーダー", name: "ボーダーシャツ" },
-      { cat: "bottom", type: "パンツ", color: "#2f2b27", pattern: "むじ", name: "くろパンツ" },
-      { cat: "bottom", type: "スカート", color: "#7a5a41", pattern: "チェック", name: "チェックスカート" },
-      { cat: "outer", type: "コート", color: "#cdb99c", pattern: "むじ", name: "ベージュコート" },
-      { cat: "shoes", type: "スニーカー", color: "#f2efe8", pattern: "むじ", name: "しろスニーカー" },
-      { cat: "acc", type: "バッグ", color: "#7c6193", pattern: "むじ", name: "むらさきバッグ" },
+      { cat: "top", type: "シャツ", color: "#f4f0ea", pattern: "むじ", name: "しろブラウス" },
+      { cat: "top", type: "ニット", color: "#8a5f6d", pattern: "むじ", name: "くすみピンクニット" },
+      { cat: "top", type: "Tシャツ", color: "#eae6df", pattern: "ボーダー", name: "ボーダーカットソー" },
+      { cat: "bottom", type: "パンツ", color: "#7c9ac2", pattern: "むじ", name: "デニムパンツ" },
+      { cat: "bottom", type: "スカート", color: "#3a3f52", pattern: "チェック", name: "チェックスカート" },
+      { cat: "dress", type: "ワンピース", color: "#d98aa6", pattern: "花柄", name: "花柄ワンピース" },
+      { cat: "outer", type: "コート", color: "#d8c3a5", pattern: "むじ", name: "ベージュコート" },
+      { cat: "shoes", type: "パンプス", color: "#c98a8a", pattern: "むじ", name: "ピンクパンプス" },
+      { cat: "shoes", type: "ブーツ", color: "#4a3f38", pattern: "むじ", name: "こげ茶ブーツ" },
+      { cat: "acc", type: "ぼうし", color: "#6d5a4a", pattern: "むじ", name: "ハット" },
+      { cat: "acc", type: "バッグ", color: "#b98a5e", pattern: "むじ", name: "レザーバッグ" },
     ];
     for (const d of demo) items.push({ id: uid++, ...d, img: null });
     store.set("seeded", true); saveItems();
