@@ -82,6 +82,7 @@
   .card:nth-child(4) { animation-delay: 0.4s; }
   .card:nth-child(5) { animation-delay: 0.5s; }
   .card:nth-child(6) { animation-delay: 0.6s; }
+  .card:nth-child(7) { animation-delay: 0.7s; }
   .card:hover { transform: translateY(-8px); border-color: rgba(255,255,255,0.22); }
   .card:hover .art canvas { transform: scale(1.06); }
   .card:hover .go { gap: 16px; }
@@ -146,6 +147,11 @@
   .card.doubutsu:hover { box-shadow: 0 26px 60px rgba(120, 80, 20, 0.5); }
   .card.doubutsu h2 { color: #fff2df; }
   .card.doubutsu .en, .card.doubutsu .go { color: #ffb84a; }
+  /* closet (CLOSET) theming */
+  .card.closet .tag { background: rgba(201, 138, 94, 0.16); color: #e2b491; border: 1px solid rgba(201,138,94,0.34); }
+  .card.closet:hover { box-shadow: 0 26px 60px rgba(90, 60, 40, 0.5); }
+  .card.closet h2 { color: #f5ece2; letter-spacing: 0.12em; }
+  .card.closet .en, .card.closet .go { color: #d9a880; }
 
   footer {
     margin-top: auto; padding-top: 54px;
@@ -165,8 +171,8 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">INTERACTIVE WORLDS</div>
-    <h1>銀河と、深海と、大地と、縁起と、いきもの、そして まなび。</h1>
-    <p>ブラウザだけで動く、6つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところ、生命の営み、形と空(くう)のあわい、小さないきもの、そして こどもの まなびまで。</p>
+    <h1>7つの、小さな世界。</h1>
+    <p>ブラウザだけで動く、7つの体験。<br>宇宙のいちばん大きなものから、深海、大地、形と空(くう)のあわい、小さないきもの、こどものまなび、そして 毎日の服まで。</p>
   </header>
 
   <div class="cards">
@@ -241,10 +247,22 @@
         <div class="go"><span>あそぶ</span><span class="arrow">→</span></div>
       </div>
     </a>
+
+    <a class="card closet" href="closet.html">
+      <div class="art"><canvas id="art-closet"></canvas></div>
+      <div class="body">
+        <span class="tag">WARDROBE · コーデ</span>
+        <h2>CLOSET</h2>
+        <div class="en">じぶんの服でコーデ</div>
+        <div class="desc">自分の持っている服を(写真でも、しゅるい＋色でも)登録して、トップス・ボトムス・アウターの組み合わせを何通りもシミュレーション。シャッフルで新しいコーデ、お気に入りは保存。</div>
+        <div class="feat"><span>👗 服を登録</span><span>🎲 コーデ生成</span><span>💛 保存</span></div>
+        <div class="go"><span>コーデする</span><span class="arrow">→</span></div>
+      </div>
+    </a>
   </div>
 
   <footer>
-    Canvas &amp; Web Audio でつくった、依存ライブラリなしの6作品。<br>
+    Canvas &amp; Web Audio でつくった、依存ライブラリなしの7作品。<br>
     <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a>
     <div class="hint">カードをクリックで起動 ・ どれもフルスクリーン推奨</div>
   </footer>
@@ -299,6 +317,11 @@
 
   // ku preview: a small 縁起 network — nodes joined by 縁 that sever and re-form
   const K = setup("art-ku");
+  // closet preview: a little outfit whose colours shuffle
+  const CL = setup("art-closet");
+  const clPalette = ["#e8e2d6", "#2f3a54", "#b8453f", "#6f8f5a", "#d98a4b", "#7c6193", "#5b7fb0", "#cdb99c"];
+  let clTop = 0, clBot = 1, clSho = 2, clShufT = 0;
+
   // doubutsu preview: animals bobbing with a little sum + stars
   const D = setup("art-doubutsu");
   const dAnimals = ["🐰", "🐘", "🐧", "🦊", "🐼"];
@@ -539,6 +562,30 @@
     }
   }
   function roundRectP(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+  // ---- closet card: a tiny shuffling outfit (top / bottom / shoes) ----
+  {
+    const { c, w, h } = CL;
+    c.fillStyle = "#f3f1ec"; c.fillRect(0, 0, w, h);
+    // re-shuffle colours periodically
+    if (t - clShufT > 2.4) { clShufT = t; clTop = (clTop + 1 + (Math.random() * 3 | 0)) % clPalette.length; clBot = (clBot + 1 + (Math.random() * 3 | 0)) % clPalette.length; clSho = (clSho + 2) % clPalette.length; }
+    const cx = w / 2, u = Math.min(w, h) * 0.16;
+    const shade = (hex, f) => { const n = parseInt(hex.slice(1), 16); return `rgb(${(n>>16&255)*f|0},${(n>>8&255)*f|0},${(n&255)*f|0})`; };
+    // top (tshirt)
+    (() => { const y = h * 0.3, col = clPalette[clTop]; c.fillStyle = col; c.strokeStyle = shade(col, 0.62); c.lineWidth = 2.5; c.lineJoin = "round";
+      c.beginPath(); const P = [[-.55,-.6],[-.95,-.32],[-.7,-.05],[-.55,-.22],[-.55,.8],[.55,.8],[.55,-.22],[.7,-.05],[.95,-.32],[.55,-.6],[.28,-.5],[0,-.4],[-.28,-.5]];
+      c.moveTo(cx+P[0][0]*u, y+P[0][1]*u); for (let i=1;i<P.length;i++) c.lineTo(cx+P[i][0]*u, y+P[i][1]*u); c.closePath(); c.fill(); c.stroke(); })();
+    // bottom (skirt)
+    (() => { const y = h * 0.62, col = clPalette[clBot]; c.fillStyle = col; c.strokeStyle = shade(col, 0.62); c.lineWidth = 2.5;
+      c.beginPath(); const P = [[-.34,-.5],[.34,-.5],[.6,.6],[-.6,.6]];
+      c.moveTo(cx+P[0][0]*u, y+P[0][1]*u); for (let i=1;i<P.length;i++) c.lineTo(cx+P[i][0]*u, y+P[i][1]*u); c.closePath(); c.fill(); c.stroke(); })();
+    // shoes (two dots)
+    (() => { const y = h * 0.85, col = clPalette[clSho]; c.fillStyle = col; c.strokeStyle = shade(col, 0.6); c.lineWidth = 2;
+      for (const sx of [-1, 1]) { c.beginPath(); c.ellipse(cx + sx * u * 0.28, y, u * 0.22, u * 0.12, 0, 0, TAU); c.fill(); c.stroke(); } })();
+    // sparkle
+    c.fillStyle = "rgba(201,138,94,0.5)"; c.font = "16px serif"; c.textAlign = "center";
+    c.globalAlpha = 0.4 + 0.4 * Math.sin(t * 3); c.fillText("✨", w * 0.78, h * 0.28); c.globalAlpha = 1; c.textAlign = "left";
+  }
   requestAnimationFrame(frame);
 })();
 </script>

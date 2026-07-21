@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Closet ― じぶんの服でコーデ</title>
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --panel: #ffffff;
+    --ink: #2c2824;
+    --dim: #948d82;
+    --line: rgba(44, 40, 36, 0.1);
+    --accent: #c98a5e;
+    --accent-d: #a96e44;
+    --shadow: rgba(60, 50, 40, 0.14);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  #app { position: relative; width: 100%; height: 100%; max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; }
+
+  /* header */
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
+  header .logo { font-size: 19px; font-weight: 800; letter-spacing: 0.14em; }
+  header .logo small { font-size: 11px; font-weight: 600; color: var(--dim); letter-spacing: 0.08em; margin-left: 6px; }
+  header .sp { flex: 1; }
+
+  /* screens */
+  .screen { flex: 1; overflow-y: auto; display: none; padding: 0 14px 20px; }
+  .screen.on { display: block; }
+
+  /* ---------- closet ---------- */
+  #cat-filter { display: flex; gap: 7px; overflow-x: auto; padding: 6px 2px 12px; scrollbar-width: none; }
+  #cat-filter::-webkit-scrollbar { display: none; }
+  .fchip { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--dim); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; white-space: nowrap; }
+  .fchip.on { color: #fff; background: var(--ink); border-color: var(--ink); }
+  #closet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+  .item { position: relative; background: var(--panel); border-radius: 16px; box-shadow: 0 3px 10px var(--shadow); overflow: hidden; aspect-ratio: 1; }
+  .item canvas, .item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .item .tag { position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 800; color: #fff; background: rgba(44,40,36,0.6); border-radius: 6px; padding: 2px 7px; }
+  .item .nm { position: absolute; bottom: 0; left: 0; right: 0; font-size: 11px; font-weight: 700; padding: 4px 6px; background: linear-gradient(transparent, rgba(255,255,255,0.92)); }
+  .item.add { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; color: var(--dim); border: 2px dashed var(--line); box-shadow: none; background: transparent; }
+  .item.add .plus { font-size: 30px; font-weight: 300; line-height: 1; }
+  .item.add .t { font-size: 11px; font-weight: 700; }
+  #empty { text-align: center; color: var(--dim); font-size: 13px; line-height: 2; padding: 50px 20px; }
+
+  /* ---------- coordinate ---------- */
+  #coord { display: flex; flex-direction: column; }
+  #board { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 6px 0 10px; }
+  .slot { position: relative; width: min(230px, 74vw); display: flex; align-items: center; gap: 8px; }
+  .slot .nav { width: 34px; height: 34px; border-radius: 50%; background: var(--panel); box-shadow: 0 2px 6px var(--shadow); font-size: 15px; color: var(--ink); flex: 0 0 auto; }
+  .slot .nav:active { transform: scale(0.9); }
+  .slot .frame { flex: 1; aspect-ratio: 1.15; background: var(--panel); border-radius: 16px; box-shadow: 0 3px 12px var(--shadow); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .slot .frame canvas, .slot .frame img { width: 100%; height: 100%; object-fit: contain; }
+  .slot .frame .ph { color: var(--dim); font-size: 12px; font-weight: 700; }
+  .slot .lb { position: absolute; top: 6px; left: 8px; font-size: 10px; font-weight: 800; color: var(--dim); letter-spacing: 0.1em; z-index: 2; }
+  .slot .lock { position: absolute; top: 5px; right: 6px; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; background: rgba(255,255,255,0.85); z-index: 2; }
+  .slot .lock.on { background: var(--ink); color: #fff; }
+  .slot.small .frame { aspect-ratio: 1.6; }
+  #acc-row { display: flex; gap: 8px; justify-content: center; }
+  #coord-bar { display: flex; gap: 8px; padding: 8px 14px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  #coord-bar button { flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 800; box-shadow: 0 4px 0 var(--sd, rgba(0,0,0,0.15)); }
+  #coord-bar button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--sd, rgba(0,0,0,0.15)); }
+  .btn-shuffle { background: var(--ink); color: #fff; --sd: #000; }
+  .btn-save { background: var(--accent); color: #fff; --sd: var(--accent-d); }
+
+  /* ---------- saved ---------- */
+  #saved-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .look { background: var(--panel); border-radius: 16px; box-shadow: 0 3px 10px var(--shadow); padding: 8px; }
+  .look canvas { width: 100%; display: block; border-radius: 10px; background: var(--bg); }
+  .look .row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+  .look .dt { font-size: 10.5px; color: var(--dim); font-weight: 700; }
+  .look .del { font-size: 15px; color: var(--dim); padding: 2px 6px; }
+
+  /* ---------- bottom nav ---------- */
+  nav { display: flex; background: var(--panel); box-shadow: 0 -2px 12px var(--shadow); border-top: 1px solid var(--line); }
+  .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 0 calc(9px + env(safe-area-inset-bottom, 0px)); color: var(--dim); }
+  .nav-btn .ic { font-size: 20px; } .nav-btn .lb { font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; }
+  .nav-btn.on { color: var(--ink); }
+
+  /* ---------- add-item modal ---------- */
+  .modal { position: fixed; inset: 0; z-index: 40; display: none; align-items: flex-end; justify-content: center; background: rgba(30,26,22,0.45); }
+  .modal.on { display: flex; }
+  .sheet { background: var(--panel); width: 100%; max-width: 620px; border-radius: 24px 24px 0 0; padding: 18px 18px calc(20px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -10px 40px rgba(40,30,20,0.35); animation: up .3s cubic-bezier(.2,.9,.3,1); max-height: 92vh; overflow-y: auto; }
+  @keyframes up { from { transform: translateY(100%); } }
+  .sheet h3 { font-size: 16px; font-weight: 800; margin-bottom: 12px; text-align: center; }
+  .field { margin-bottom: 14px; }
+  .field .fl { font-size: 12px; font-weight: 800; color: var(--dim); margin-bottom: 7px; }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+  .chips .c { font-size: 13px; font-weight: 700; color: var(--ink); background: var(--bg); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 13px; }
+  .chips .c.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .colors { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sw { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 2px 5px var(--shadow); border: 3px solid transparent; }
+  .sw.on { border-color: var(--ink); transform: scale(1.1); }
+  #preview-wrap { display: flex; justify-content: center; margin-bottom: 12px; }
+  #add-preview { width: 130px; height: 130px; background: var(--bg); border-radius: 16px; object-fit: contain; }
+  #name-in { width: 100%; font-family: inherit; font-size: 15px; font-weight: 700; padding: 11px 14px; border: 1.5px solid var(--line); border-radius: 12px; outline: none; }
+  #name-in:focus { border-color: var(--accent); }
+  .photo-btns { display: flex; gap: 8px; }
+  .photo-btns label { flex: 1; text-align: center; font-size: 13px; font-weight: 800; padding: 12px; border-radius: 12px; background: var(--bg); border: 1.5px solid var(--line); cursor: pointer; }
+  .sheet .save { width: 100%; margin-top: 4px; padding: 15px; border-radius: 14px; font-size: 16px; font-weight: 800; color: #fff; background: var(--accent); box-shadow: 0 4px 0 var(--accent-d); }
+  .sheet .save:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-d); }
+  .sheet .cancel { width: 100%; margin-top: 8px; padding: 12px; font-size: 14px; font-weight: 700; color: var(--dim); }
+  .sheet .danger { color: #c0564f; }
+
+  #toast { position: fixed; top: 62px; left: 50%; transform: translate(-50%, -8px); z-index: 50; background: rgba(44,40,36,0.92); color: #fff; font-size: 13px; font-weight: 700; padding: 9px 20px; border-radius: 999px; opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; white-space: nowrap; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* intro */
+  #intro { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); text-align: center; padding: 26px; transition: opacity .7s; }
+  #intro.gone { opacity: 0; pointer-events: none; }
+  #intro .big { font-size: 64px; }
+  #intro h1 { font-size: clamp(26px, 7vw, 36px); font-weight: 800; letter-spacing: 0.12em; margin-top: 8px; }
+  #intro p { font-size: 13.5px; color: var(--dim); line-height: 2; margin-top: 10px; max-width: 340px; }
+  #intro .go { margin-top: 30px; padding: 15px 44px; border-radius: 999px; font-size: 16px; font-weight: 800; color: #fff; background: var(--ink); box-shadow: 0 6px 16px var(--shadow); }
+  #intro .go:active { transform: translateY(2px); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">CLOSET<small>じぶんの服でコーデ</small></div>
+    <div class="sp"></div>
+  </header>
+
+  <!-- CLOSET -->
+  <section class="screen on" id="s-closet">
+    <div id="cat-filter"></div>
+    <div id="closet-grid"></div>
+    <div id="empty" style="display:none">まだ 服が ありません。<br>「+ ついか」で じぶんの服を とうろくしよう。<br><span style="font-size:11px">写真でも、しゅるい＋色でもOK</span></div>
+  </section>
+
+  <!-- COORDINATE -->
+  <section class="screen" id="s-coord">
+    <div id="coord">
+      <div id="board"></div>
+    </div>
+  </section>
+  <div id="coord-bar" style="display:none">
+    <button class="btn-shuffle" id="btn-shuffle">🎲 シャッフル</button>
+    <button class="btn-save" id="btn-savelook">💾 ほぞん</button>
+  </div>
+
+  <!-- SAVED -->
+  <section class="screen" id="s-saved">
+    <div id="saved-grid"></div>
+    <div id="saved-empty" style="display:none; text-align:center; color:var(--dim); font-size:13px; line-height:2; padding:50px 20px">まだ 保存した コーデが ありません。<br>「コーデ」で つくって 💾 しよう。</div>
+  </section>
+
+  <nav>
+    <button class="nav-btn on" data-scr="closet"><span class="ic">👚</span><span class="lb">クローゼット</span></button>
+    <button class="nav-btn" data-scr="coord"><span class="ic">✨</span><span class="lb">コーデ</span></button>
+    <button class="nav-btn" data-scr="saved"><span class="ic">💛</span><span class="lb">おきにいり</span></button>
+  </nav>
+</div>
+
+<!-- add-item sheet -->
+<div class="modal" id="add-modal"><div class="sheet">
+  <h3 id="add-title">服を ついか</h3>
+  <div id="preview-wrap"><canvas id="add-preview" width="260" height="260"></canvas></div>
+  <div class="field">
+    <div class="fl">写真から</div>
+    <div class="photo-btns">
+      <label>📷 カメラ／写真<input type="file" id="photo-in" accept="image/*" hidden></label>
+      <button class="c" id="clear-photo" style="border-radius:12px">🎨 えらんで作る</button>
+    </div>
+  </div>
+  <div class="field"><div class="fl">カテゴリー</div><div class="chips" id="cat-chips"></div></div>
+  <div class="field" id="type-field"><div class="fl">しゅるい</div><div class="chips" id="type-chips"></div></div>
+  <div class="field" id="color-field"><div class="fl">いろ</div><div class="colors" id="color-sw"></div></div>
+  <div class="field" id="pattern-field"><div class="fl">がら</div><div class="chips" id="pattern-chips"></div></div>
+  <div class="field"><div class="fl">なまえ（にんい）</div><input id="name-in" type="text" maxlength="16" placeholder="れい：おきにいりニット"></div>
+  <button class="save" id="add-save">とうろく</button>
+  <button class="cancel" id="add-del" style="display:none">この服を さくじょ</button>
+  <button class="cancel" id="add-cancel">やめる</button>
+</div></div>
+
+<div id="toast"></div>
+
+<div id="intro">
+  <div class="big">👗</div>
+  <h1>CLOSET</h1>
+  <p>じぶんの持っている服を とうろくして、<br>くみあわせを 何どうりも シミュレーション。<br>写真でも、しゅるい＋色でも つくれます。</p>
+  <button class="go" id="intro-go">はじめる</button>
+</div>
+<script>
+"use strict";
+(() => {
+  // ============================================================
+  //  CLOSET ― register your clothes, simulate outfits
+  // ============================================================
+  const $ = id => document.getElementById(id);
+  const ri = n => (Math.random() * n) | 0;
+  const pick = a => a[ri(a.length)];
+
+  // ---------------- categories / types / colors / patterns ----------------
+  const CATS = [
+    { key: "outer", label: "アウター", types: ["コート", "ジャケット", "パーカー"] },
+    { key: "top", label: "トップス", types: ["Tシャツ", "シャツ", "ニット"] },
+    { key: "bottom", label: "ボトムス", types: ["パンツ", "スカート"] },
+    { key: "dress", label: "ワンピース", types: ["ワンピース"] },
+    { key: "shoes", label: "シューズ", types: ["スニーカー", "ブーツ", "パンプス"] },
+    { key: "acc", label: "こもの", types: ["バッグ", "ぼうし", "めがね"] },
+  ];
+  const CAT_BY = {}; CATS.forEach(c => CAT_BY[c.key] = c);
+  const COLORS = [
+    ["しろ", "#f2efe8"], ["くろ", "#2f2b27"], ["グレー", "#9a958c"], ["ネイビー", "#2f3a54"],
+    ["ブルー", "#5b7fb0"], ["みずいろ", "#9cc3e0"], ["あか", "#b8453f"], ["ピンク", "#e39aae"],
+    ["オレンジ", "#d98a4b"], ["きいろ", "#e6c257"], ["グリーン", "#6f8f5a"], ["カーキ", "#8a8455"],
+    ["ブラウン", "#7a5a41"], ["ベージュ", "#cdb99c"], ["パープル", "#7c6193"],
+  ];
+  const PATTERNS = ["むじ", "ボーダー", "ドット", "チェック"];
+
+  // ---------------- color helpers ----------------
+  function shade(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = ((n >> 16) & 255) * f, g = ((n >> 8) & 255) * f, b = (n & 255) * f;
+    return `rgb(${r | 0},${g | 0},${b | 0})`;
+  }
+  function lift(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = ((n >> 16) & 255), g = ((n >> 8) & 255), b = (n & 255);
+    return `rgb(${(r + (255 - r) * f) | 0},${(g + (255 - g) * f) | 0},${(b + (255 - b) * f) | 0})`;
+  }
+  function isLight(hex) { const n = parseInt(hex.slice(1), 16); return (((n >> 16 & 255) * 0.3 + (n >> 8 & 255) * 0.59 + (n & 255) * 0.11)) > 150; }
+
+  // ============================================================
+  //  GARMENT SILHOUETTES (recolorable)
+  // ============================================================
+  function poly(c, pts) { c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]); c.closePath(); }
+
+  // build the main silhouette path (in unit space around 0,0). returns a fn(c) that traces it.
+  function pathFor(type) {
+    switch (type) {
+      case "Tシャツ": return c => poly(c, [[-.55,-.62],[-.95,-.35],[-.7,-.08],[-.55,-.24],[-.55,.82],[.55,.82],[.55,-.24],[.7,-.08],[.95,-.35],[.55,-.62],[.28,-.52],[0,-.42],[-.28,-.52]]);
+      case "シャツ": return c => poly(c, [[-.52,-.6],[-.9,-.32],[-.78,.55],[-.6,.5],[-.55,-.2],[-.55,.85],[.55,.85],[.55,-.2],[.6,.5],[.78,.55],[.9,-.32],[.52,-.6],[.2,-.5],[0,-.3],[-.2,-.5]]);
+      case "ニット": return c => poly(c, [[-.56,-.58],[-.92,-.3],[-.82,.55],[-.58,.5],[-.56,-.16],[-.56,.86],[.56,.86],[.56,-.16],[.58,.5],[.82,.55],[.92,-.3],[.56,-.58],[.24,-.5],[0,-.4],[-.24,-.5]]);
+      case "パーカー": return c => poly(c, [[-.55,-.5],[-.95,-.22],[-.82,.6],[-.58,.55],[-.56,-.1],[-.56,.86],[.56,.86],[.56,-.1],[.58,.55],[.82,.6],[.95,-.22],[.55,-.5],[.4,-.62],[-.4,-.62]]);
+      case "ジャケット": return c => poly(c, [[-.55,-.6],[-.92,-.3],[-.8,.6],[-.6,.55],[-.56,-.2],[-.56,.86],[.56,.86],[.56,-.2],[.6,.55],[.8,.6],[.92,-.3],[.55,-.6],[.18,-.5],[0,-.28],[-.18,-.5]]);
+      case "コート": return c => poly(c, [[-.5,-.6],[-.86,-.32],[-.74,.7],[-.56,.66],[-.52,-.2],[-.52,1.05],[.52,1.05],[.52,-.2],[.56,.66],[.74,.7],[.86,-.32],[.5,-.6],[.16,-.48],[0,-.26],[-.16,-.48]]);
+      case "パンツ": return c => poly(c, [[-.42,-.7],[.42,-.7],[.42,-.4],[.34,1.0],[.06,1.0],[0,-.1],[-.06,1.0],[-.34,1.0],[-.42,-.4]]);
+      case "スカート": return c => poly(c, [[-.34,-.62],[.34,-.62],[.62,.75],[-.62,.75]]);
+      case "ワンピース": return c => poly(c, [[-.42,-.72],[-.72,-.44],[-.5,-.2],[-.34,-.34],[-.32,.0],[-.6,1.02],[.6,1.02],[.32,.0],[.34,-.34],[.5,-.2],[.72,-.44],[.42,-.72],[.2,-.6],[0,-.5],[-.2,-.6]]);
+      case "スニーカー": return c => { c.beginPath(); c.moveTo(-.85,.28); c.lineTo(-.8,-.1); c.quadraticCurveTo(-.5,-.34,0,-.3); c.quadraticCurveTo(.55,-.26,.86,.12); c.lineTo(.9,.32); c.quadraticCurveTo(.9,.5,.7,.5); c.lineTo(-.75,.5); c.quadraticCurveTo(-.9,.5,-.85,.28); c.closePath(); };
+      case "ブーツ": return c => poly(c, [[-.4,-.8],[.28,-.8],[.34,.35],[.9,.4],[.92,.72],[-.42,.72],[-.4,.35]]);
+      case "パンプス": return c => { c.beginPath(); c.moveTo(-.7,-.2); c.quadraticCurveTo(-.2,-.35,.55,-.05); c.quadraticCurveTo(.92,.1,.9,.42); c.lineTo(.78,.42); c.quadraticCurveTo(.4,.2,-.2,.28); c.lineTo(-.7,.3); c.lineTo(-.66,.55); c.lineTo(-.82,.55); c.lineTo(-.86,.05); c.closePath(); };
+      case "バッグ": return c => poly(c, [[-.55,-.05],[.55,-.05],[.66,.72],[-.66,.72]]);
+      case "ぼうし": return c => { c.beginPath(); c.moveTo(-.8,.32); c.quadraticCurveTo(0,.55,.8,.32); c.quadraticCurveTo(.86,.28,.75,.18); c.quadraticCurveTo(.5,.24,-.5,.24); c.quadraticCurveTo(-.75,.24,-.75,.1); c.quadraticCurveTo(-.7,-.55,0,-.55); c.quadraticCurveTo(.7,-.55,.75,.18); c.closePath(); };
+      case "めがね": return c => { c.beginPath(); c.ellipse(-.42,0,.34,.28,0,0,6.283); c.ellipse(.42,0,.34,.28,0,0,6.283); };
+      default: return c => poly(c, [[-.5,-.5],[.5,-.5],[.5,.6],[-.5,.6]]);
+    }
+  }
+  function details(c, type, u, hex) {
+    c.lineWidth = u * 0.035; c.strokeStyle = shade(hex, 0.6); c.lineJoin = "round"; c.lineCap = "round";
+    const L = (a, b) => { c.beginPath(); c.moveTo(a[0] * u, a[1] * u); c.lineTo(b[0] * u, b[1] * u); c.stroke(); };
+    if (type === "シャツ" || type === "ジャケット" || type === "コート") { // collar + placket
+      L([0, -.34], [-.2, -.5]); L([0, -.34], [.2, -.5]); L([0, -.28], [0, type === "コート" ? 1.02 : .84]);
+      const btnY = type === "コート" ? [-.05, .25, .55, .85] : [-.05, .25, .55];
+      c.fillStyle = shade(hex, 0.55); for (const y of btnY) { c.beginPath(); c.arc(0, y * u, u * 0.035, 0, 6.283); c.fill(); }
+    }
+    if (type === "パーカー") { // pocket + strings
+      c.beginPath(); c.moveTo(-.3 * u, .3 * u); c.lineTo(-.34 * u, .62 * u); c.lineTo(.34 * u, .62 * u); c.lineTo(.3 * u, .3 * u); c.stroke();
+      L([-.12, -.48], [-.1, -.15]); L([.12, -.48], [.1, -.15]);
+    }
+    if (type === "ニット") { c.strokeStyle = shade(hex, 0.72); for (let i = -3; i <= 3; i++) L([i * .14, -.1], [i * .14, .84]); }
+    if (type === "パンツ" || type === "ブーツ") { L([0, type === "ブーツ" ? -.6 : -.1], [0, type === "ブーツ" ? .3 : -.68]); }
+    if (type === "スカート") { for (let i = -2; i <= 2; i++) L([i * .22, -.5], [i * .3, .72]); }
+    if (type === "スニーカー") { c.strokeStyle = shade(hex, 0.55); L([-.75, .38], [.86, .38]); L([-.2, -.3], [-.1, .3]); L([.05, -.3], [.15, .3]); }
+    if (type === "パンプス") { L([-.82, .05], [-.66, .5]); }
+    if (type === "バッグ") { c.beginPath(); c.arc(0, -.05 * u, .38 * u, Math.PI, 0); c.stroke(); c.fillStyle = shade(hex, 0.5); c.fillRect(-.1 * u, .28 * u, .2 * u, .08 * u); }
+    if (type === "ぼうし") { c.beginPath(); c.moveTo(-.5 * u, .2 * u); c.quadraticCurveTo(0, .32 * u, .5 * u, .2 * u); c.stroke(); }
+    if (type === "めがね") { c.beginPath(); c.moveTo(-.08 * u, 0); c.lineTo(.08 * u, 0); c.stroke(); L([-.76, -.06], [-.95, -.12]); L([.76, -.06], [.95, -.12]); }
+  }
+  function drawPattern(c, u, pattern, hex) {
+    const col = isLight(hex) ? shade(hex, 0.7) : lift(hex, 0.35);
+    c.strokeStyle = col; c.fillStyle = col; c.lineWidth = u * 0.09;
+    if (pattern === "ボーダー") { for (let y = -1.2; y <= 1.2; y += 0.28) { c.beginPath(); c.moveTo(-1.3 * u, y * u); c.lineTo(1.3 * u, y * u); c.stroke(); } }
+    else if (pattern === "ドット") { for (let y = -1.1; y <= 1.1; y += 0.34) for (let x = -1.1; x <= 1.1; x += 0.34) { c.beginPath(); c.arc(x * u, y * u, u * 0.05, 0, 6.283); c.fill(); } }
+    else if (pattern === "チェック") { c.lineWidth = u * 0.06; for (let y = -1.2; y <= 1.2; y += 0.3) { c.beginPath(); c.moveTo(-1.3 * u, y * u); c.lineTo(1.3 * u, y * u); c.stroke(); } for (let x = -1.2; x <= 1.2; x += 0.3) { c.beginPath(); c.moveTo(x * u, -1.3 * u); c.lineTo(x * u, 1.3 * u); c.stroke(); } }
+  }
+
+  function drawGarment(c, item, w, h) {
+    c.clearRect(0, 0, w, h);
+    const u = Math.min(w, h) * 0.4, hex = item.color || "#cccccc";
+    c.save(); c.translate(w / 2, h / 2 + (item.cat === "shoes" || item.cat === "acc" ? h * 0.06 : -h * 0.02));
+    const trace = pathFor(item.type);
+    c.save(); c.scale(u, u); trace(c); c.restore();      // path in scaled space
+    c.fillStyle = hex; c.fill();
+    c.lineWidth = u * 0.05; c.strokeStyle = shade(hex, 0.62); c.lineJoin = "round"; c.stroke();
+    if (item.pattern && item.pattern !== "むじ") { c.save(); c.save(); c.scale(u, u); trace(c); c.restore(); c.clip(); drawPattern(c, u, item.pattern, hex); c.restore(); }
+    details(c, item.type, u, hex);
+    c.restore();
+  }
+
+  // ============================================================
+  //  render an item into a container (photo => <img>, else <canvas>)
+  // ============================================================
+  function itemNode(item, cls) {
+    if (item.img) { const im = document.createElement("img"); im.src = item.img; if (cls) im.className = cls; return im; }
+    const cv = document.createElement("canvas"); cv.width = 220; cv.height = 220; if (cls) cv.className = cls;
+    drawGarment(cv.getContext("2d"), item, 220, 220); return cv;
+  }
+
+  // ============================================================
+  //  PHOTO processing: resize + compress to a thumbnail dataURL
+  // ============================================================
+  function processPhoto(file, cb) {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 360, sc = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * sc), h = Math.round(img.height * sc);
+        const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+        const c = cv.getContext("2d"); c.fillStyle = "#f6f4ef"; c.fillRect(0, 0, w, h); c.drawImage(img, 0, 0, w, h);
+        cb(cv.toDataURL("image/jpeg", 0.72));
+      };
+      img.onerror = () => cb(null);
+      img.src = fr.result;
+    };
+    fr.onerror = () => cb(null);
+    fr.readAsDataURL(file);
+  }
+
+  // ============================================================
+  //  STATE & PERSISTENCE
+  // ============================================================
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("closet." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("closet." + k, JSON.stringify(v)); return true; } catch { toast("ほぞんが いっぱいです。すこし へらしてね"); return false; } },
+  };
+  let items = store.get("items", []);
+  let looks = store.get("looks", []);
+  let uid = store.get("uid", 1);
+  const saveItems = () => store.set("items", items) && store.set("uid", uid);
+  const saveLooks = () => store.set("looks", looks);
+  const byId = id => items.find(i => i.id === id);
+  const inCat = cat => items.filter(i => i.cat === cat);
+
+  // seed a few sample clothes the very first time (easy to delete/replace)
+  if (!store.get("seeded", false)) {
+    const demo = [
+      { cat: "top", type: "Tシャツ", color: "#f2efe8", pattern: "むじ", name: "しろT" },
+      { cat: "top", type: "ニット", color: "#2f3a54", pattern: "むじ", name: "ネイビーニット" },
+      { cat: "top", type: "シャツ", color: "#9cc3e0", pattern: "ボーダー", name: "ボーダーシャツ" },
+      { cat: "bottom", type: "パンツ", color: "#2f2b27", pattern: "むじ", name: "くろパンツ" },
+      { cat: "bottom", type: "スカート", color: "#7a5a41", pattern: "チェック", name: "チェックスカート" },
+      { cat: "outer", type: "コート", color: "#cdb99c", pattern: "むじ", name: "ベージュコート" },
+      { cat: "shoes", type: "スニーカー", color: "#f2efe8", pattern: "むじ", name: "しろスニーカー" },
+      { cat: "acc", type: "バッグ", color: "#7c6193", pattern: "むじ", name: "むらさきバッグ" },
+    ];
+    for (const d of demo) items.push({ id: uid++, ...d, img: null });
+    store.set("seeded", true); saveItems();
+  }
+
+  // ============================================================
+  //  NAV / SCREENS
+  // ============================================================
+  let screen = "closet";
+  function show(name) {
+    screen = name;
+    for (const s of document.querySelectorAll(".screen")) s.classList.toggle("on", s.id === "s-" + name);
+    for (const b of document.querySelectorAll(".nav-btn")) b.classList.toggle("on", b.dataset.scr === name);
+    $("coord-bar").style.display = name === "coord" ? "flex" : "none";
+    if (name === "closet") buildCloset();
+    if (name === "coord") buildCoord();
+    if (name === "saved") buildSaved();
+  }
+  document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => show(b.dataset.scr)));
+
+  let toastT = 0;
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2200); }
+
+  // ============================================================
+  //  CLOSET
+  // ============================================================
+  let filter = "all";
+  function buildFilter() {
+    const box = $("cat-filter"); box.innerHTML = "";
+    const mk = (key, label) => { const b = document.createElement("button"); b.className = "fchip" + (filter === key ? " on" : ""); b.textContent = label; b.onclick = () => { filter = key; buildCloset(); }; box.appendChild(b); };
+    mk("all", "すべて"); for (const c of CATS) mk(c.key, c.label);
+  }
+  function buildCloset() {
+    buildFilter();
+    const grid = $("closet-grid"); grid.innerHTML = "";
+    const list = filter === "all" ? items : inCat(filter);
+    $("empty").style.display = items.length ? "none" : "block";
+    // add tile
+    const add = document.createElement("div"); add.className = "item add"; add.innerHTML = `<div class="plus">＋</div><div class="t">ついか</div>`;
+    add.onclick = () => openAdd(null);
+    grid.appendChild(add);
+    for (const it of list) {
+      const cell = document.createElement("div"); cell.className = "item";
+      cell.appendChild(itemNode(it));
+      const tag = document.createElement("div"); tag.className = "tag"; tag.textContent = CAT_BY[it.cat].label; cell.appendChild(tag);
+      if (it.name) { const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = it.name; cell.appendChild(nm); }
+      cell.onclick = () => openAdd(it);
+      grid.appendChild(cell);
+    }
+  }
+
+  // ============================================================
+  //  ADD / EDIT ITEM
+  // ============================================================
+  let work = null, editingId = null, previewImg = null;
+  function openAdd(item) {
+    editingId = item ? item.id : null;
+    work = item ? { ...item } : { cat: "top", type: "Tシャツ", color: COLORS[0][1], pattern: "むじ", img: null, name: "" };
+    previewImg = null;
+    $("add-title").textContent = item ? "服を へんしゅう" : "服を ついか";
+    $("add-del").style.display = item ? "block" : "none";
+    $("name-in").value = work.name || "";
+    buildCatChips(); buildTypeChips(); buildColorSw(); buildPatternChips();
+    updateFields(); renderPreview();
+    $("add-modal").classList.add("on");
+  }
+  function closeAdd() { $("add-modal").classList.remove("on"); }
+  function buildCatChips() {
+    const box = $("cat-chips"); box.innerHTML = "";
+    for (const c of CATS) { const b = document.createElement("button"); b.className = "c" + (work.cat === c.key ? " on" : ""); b.textContent = c.label;
+      b.onclick = () => { work.cat = c.key; if (!c.types.includes(work.type)) work.type = c.types[0]; buildCatChips(); buildTypeChips(); renderPreview(); }; box.appendChild(b); }
+  }
+  function buildTypeChips() {
+    const box = $("type-chips"); box.innerHTML = "";
+    for (const t of CAT_BY[work.cat].types) { const b = document.createElement("button"); b.className = "c" + (work.type === t ? " on" : ""); b.textContent = t;
+      b.onclick = () => { work.type = t; buildTypeChips(); renderPreview(); }; box.appendChild(b); }
+  }
+  function buildColorSw() {
+    const box = $("color-sw"); box.innerHTML = "";
+    for (const [nm, hex] of COLORS) { const b = document.createElement("button"); b.className = "sw" + (work.color === hex ? " on" : ""); b.style.background = hex; b.title = nm;
+      b.onclick = () => { work.color = hex; buildColorSw(); renderPreview(); }; box.appendChild(b); }
+  }
+  function buildPatternChips() {
+    const box = $("pattern-chips"); box.innerHTML = "";
+    for (const p of PATTERNS) { const b = document.createElement("button"); b.className = "c" + (work.pattern === p ? " on" : ""); b.textContent = p;
+      b.onclick = () => { work.pattern = p; buildPatternChips(); renderPreview(); }; box.appendChild(b); }
+  }
+  function updateFields() {
+    const hasPhoto = !!work.img;
+    for (const f of ["type-field", "color-field", "pattern-field"]) $(f).style.display = hasPhoto ? "none" : "block";
+    $("clear-photo").style.display = hasPhoto ? "inline-block" : "none";
+  }
+  function renderPreview() {
+    const cv = $("add-preview"), c = cv.getContext("2d");
+    if (work.img) {
+      if (!previewImg || previewImg.src !== work.img) { previewImg = new Image(); previewImg.onload = () => drawContain(c, previewImg, cv.width, cv.height); previewImg.src = work.img; }
+      else drawContain(c, previewImg, cv.width, cv.height);
+    } else drawGarment(c, work, cv.width, cv.height);
+  }
+  function drawContain(c, img, W, H) { c.clearRect(0, 0, W, H); c.fillStyle = "#f6f4ef"; c.fillRect(0, 0, W, H); const s = Math.min(W / img.width, H / img.height); const w = img.width * s, h = img.height * s; c.drawImage(img, (W - w) / 2, (H - h) / 2, w, h); }
+
+  $("photo-in").addEventListener("change", e => {
+    const f = e.target.files[0]; if (!f) return;
+    processPhoto(f, url => { if (!url) { toast("しゃしんを よみこめませんでした"); return; } work.img = url; previewImg = null; updateFields(); renderPreview(); });
+    e.target.value = "";
+  });
+  $("clear-photo").addEventListener("click", () => { work.img = null; previewImg = null; updateFields(); renderPreview(); });
+  $("name-in").addEventListener("input", e => work.name = e.target.value);
+  $("add-cancel").addEventListener("click", closeAdd);
+  $("add-modal").addEventListener("click", e => { if (e.target.id === "add-modal") closeAdd(); });
+  $("add-save").addEventListener("click", () => {
+    work.name = ($("name-in").value || "").trim();
+    if (editingId != null) { const idx = items.findIndex(i => i.id === editingId); items[idx] = { ...work, id: editingId }; toast("へんしゅう しました"); }
+    else { items.push({ ...work, id: uid++ }); toast("とうろく しました 👚"); }
+    saveItems(); closeAdd(); buildCloset();
+  });
+  $("add-del").addEventListener("click", () => {
+    if (editingId == null) return;
+    items = items.filter(i => i.id !== editingId);
+    for (const l of looks) for (const k in l.sel) if (l.sel[k] === editingId) l.sel[k] = null;
+    saveItems(); saveLooks(); closeAdd(); buildCloset(); toast("さくじょ しました");
+  });
+
+  // ============================================================
+  //  COORDINATE
+  // ============================================================
+  const SLOTS = [
+    { key: "outer", label: "アウター", pool: () => inCat("outer"), optional: true },
+    { key: "main", label: "トップス／ワンピース", pool: () => [...inCat("top"), ...inCat("dress")] },
+    { key: "bottom", label: "ボトムス", pool: () => inCat("bottom") },
+    { key: "shoes", label: "シューズ", pool: () => inCat("shoes"), optional: true },
+    { key: "acc", label: "こもの", pool: () => inCat("acc"), optional: true, small: true },
+  ];
+  let sel = { outer: null, main: null, bottom: null, shoes: null, acc: null };
+  let locks = { outer: false, main: false, bottom: false, shoes: false, acc: false };
+  function mainIsDress() { const it = byId(sel.main); return it && it.cat === "dress"; }
+
+  function buildCoord() {
+    if (!items.length) { $("board").innerHTML = `<div style="text-align:center;color:var(--dim);font-size:13px;line-height:2;padding:50px 20px">まだ 服が ありません。<br>「クローゼット」で とうろく してね。</div>`; return; }
+    // initialise selection if empty
+    for (const s of SLOTS) if (sel[s.key] == null && !s.optional) { const p = s.pool(); if (p.length) sel[s.key] = p[0].id; }
+    if (sel.outer == null) { const p = inCat("outer"); if (p.length) sel.outer = p[0].id; }
+    if (sel.shoes == null) { const p = inCat("shoes"); if (p.length) sel.shoes = p[0].id; }
+    renderBoard();
+  }
+  function renderBoard() {
+    const board = $("board"); board.innerHTML = "";
+    const dress = mainIsDress();
+    for (const s of SLOTS) {
+      if (s.key === "bottom" && dress) continue;   // dress hides bottom
+      if (s.key === "acc") continue;               // acc rendered in its own row
+      board.appendChild(slotEl(s));
+    }
+    // accessory row (small)
+    const accRow = document.createElement("div"); accRow.id = "acc-row"; accRow.appendChild(slotEl(SLOTS[4])); board.appendChild(accRow);
+  }
+  function slotEl(s) {
+    const pool = s.pool();
+    const el = document.createElement("div"); el.className = "slot" + (s.small ? " small" : "");
+    const cur = byId(sel[s.key]);
+    el.innerHTML = `<button class="nav">◀</button><div class="frame"><span class="lb">${s.label}</span><button class="lock${locks[s.key] ? " on" : ""}">${locks[s.key] ? "🔒" : "🔓"}</button></div><button class="nav">▶</button>`;
+    const frame = el.querySelector(".frame");
+    if (cur) frame.appendChild(itemNode(cur));
+    else { const ph = document.createElement("span"); ph.className = "ph"; ph.textContent = pool.length ? "えらぶ →" : "なし"; frame.appendChild(ph); }
+    const navs = el.querySelectorAll(".nav");
+    navs[0].onclick = () => cycle(s.key, -1); navs[1].onclick = () => cycle(s.key, 1);
+    frame.onclick = e => { if (e.target.classList.contains("lock")) return; if (!cur && pool.length) cycle(s.key, 1); };
+    el.querySelector(".lock").onclick = () => { locks[s.key] = !locks[s.key]; renderBoard(); };
+    return el;
+  }
+  function cycle(key, dir) {
+    const s = SLOTS.find(x => x.key === key), pool = s.pool();
+    if (!pool.length) return;
+    const arr = s.optional ? [null, ...pool.map(i => i.id)] : pool.map(i => i.id);
+    let idx = arr.indexOf(sel[key]); if (idx < 0) idx = 0;
+    idx = (idx + dir + arr.length) % arr.length;
+    sel[key] = arr[idx];
+    if (key === "main") { if (mainIsDress()) sel.bottom = sel.bottom; else if (sel.bottom == null) { const b = inCat("bottom"); if (b.length) sel.bottom = b[0].id; } }
+    renderBoard();
+  }
+  $("btn-shuffle").addEventListener("click", () => {
+    const dresses = inCat("dress"), tops = inCat("top"), useDress = dresses.length && (!tops.length || Math.random() < 0.35);
+    for (const s of SLOTS) {
+      if (locks[s.key]) continue;
+      if (s.key === "main") { const p = useDress ? dresses : tops; sel.main = p.length ? pick(p).id : (s.pool().length ? pick(s.pool()).id : null); }
+      else if (s.key === "bottom") { if (mainIsDress()) { sel.bottom = null; } else { const b = inCat("bottom"); sel.bottom = b.length ? pick(b).id : null; } }
+      else { const p = s.pool(); if (!p.length) { sel[s.key] = null; continue; } sel[s.key] = (s.optional && Math.random() < 0.25) ? null : pick(p).id; }
+    }
+    renderBoard();
+  });
+  $("btn-savelook").addEventListener("click", () => {
+    if (!items.length) return;
+    looks.unshift({ id: "L" + Date.now(), sel: { ...sel }, dress: mainIsDress(), t: Date.now() });
+    saveLooks(); toast("コーデを ほぞん しました 💛");
+  });
+
+  // ============================================================
+  //  SAVED
+  // ============================================================
+  function buildSaved() {
+    const grid = $("saved-grid"); grid.innerHTML = "";
+    $("saved-empty").style.display = looks.length ? "none" : "block";
+    for (const lk of looks) {
+      const el = document.createElement("div"); el.className = "look";
+      const stack = document.createElement("div"); stack.style.cssText = "display:flex;flex-direction:column;gap:4px;align-items:center";
+      const order = lk.dress ? ["outer", "main", "shoes", "acc"] : ["outer", "main", "bottom", "shoes", "acc"];
+      for (const k of order) { const it = byId(lk.sel[k]); if (!it) continue; const n = itemNode(it); n.style.cssText = "width:56px;height:56px;object-fit:contain;background:var(--bg);border-radius:8px"; stack.appendChild(n); }
+      el.appendChild(stack);
+      const row = document.createElement("div"); row.className = "row";
+      const d = new Date(lk.t); row.innerHTML = `<span class="dt">${d.getMonth() + 1}/${d.getDate()}</span>`;
+      const del = document.createElement("button"); del.className = "del"; del.textContent = "🗑";
+      del.onclick = () => { looks = looks.filter(x => x.id !== lk.id); saveLooks(); buildSaved(); };
+      row.appendChild(del); el.appendChild(row);
+      el.onclick = e => { if (e.target === del) return; sel = { outer: null, main: null, bottom: null, shoes: null, acc: null, ...lk.sel }; show("coord"); };
+      grid.appendChild(el);
+    }
+  }
+
+  // ============================================================
+  //  BOOT
+  // ============================================================
+  $("intro-go").addEventListener("click", () => { $("intro").classList.add("gone"); if (!store.get("seeded_toast", false)) { toast("サンプルの服を入れました。じぶんの服に入れかえてね"); store.set("seeded_toast", true); } });
+  buildCloset();
+
+  window.__closet = {
+    get items() { return items; }, get looks() { return looks; },
+    show, openAdd, addProc(cat, type, color, pattern, name) { items.push({ id: uid++, cat, type, color, pattern, img: null, name: name || "" }); saveItems(); buildCloset(); },
+    shuffle: () => $("btn-shuffle").click(), saveLook: () => $("btn-savelook").click(),
+    reset() { items = []; looks = []; uid = 1; store.set("items", []); store.set("looks", []); store.set("seeded", true); buildCloset(); },
+  };
+})();
+</script>
+</body>
+</html>
