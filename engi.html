@@ -102,7 +102,19 @@
   }
   #start .rules b.g { color: var(--gold); } #start .rules b.v { color: var(--void); }
   #start .rules .small { font-size: 11.5px; color: var(--dim); line-height: 1.9; }
-  #start .choose { margin-top: 24px; font-size: 11px; letter-spacing: 0.3em; color: var(--dim); }
+  #start .choose { margin-top: 24px; font-size: 11px; letter-spacing: 0.3em; color: var(--gold); }
+  #start .sub-note { margin-top: 6px; font-size: 11px; letter-spacing: 0.06em; color: var(--dim); }
+  #start .stages { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 660px; }
+  .stage-btn { width: 96px; padding: 12px 6px; border-radius: 12px; background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line); color: var(--ink); cursor: pointer; text-align: center; font-family: inherit;
+    transition: transform .2s, border-color .2s, box-shadow .2s; }
+  .stage-btn:not(.locked):hover { transform: translateY(-3px); border-color: var(--gold); box-shadow: 0 0 20px rgba(227,192,118,0.25); }
+  .stage-btn .k { font-family: "Hiragino Mincho ProN","Yu Mincho",serif; font-size: 26px; color: var(--gold); line-height: 1.1; }
+  .stage-btn .nm { margin-top: 3px; font-size: 9.5px; color: var(--dim); letter-spacing: 0.04em; }
+  .stage-btn .st { margin-top: 6px; font-size: 10.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .stage-btn.locked { opacity: 0.35; cursor: not-allowed; }
+  .stage-btn.cleared { border-color: rgba(227,192,118,0.4); }
+  .stage-btn.cleared .st { color: var(--gold); }
   #start .sides { margin-top: 14px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
   .side-btn {
     font-family: inherit; cursor: pointer; width: 190px; padding: 18px 16px; border-radius: 16px;
@@ -179,7 +191,11 @@
       断たれた縁は、数手ののち結び直される。縁を<b>輪</b>に厚く結べば、一手では崩れない。
     </span>
   </div>
-  <div class="choose">どちらで戦いますか</div>
+  <div class="choose">ひとり ― 試練</div>
+  <div class="sub-note">色として、しだいに強くなる空に挑む。突破で次が開く。</div>
+  <div class="stages" id="stage-grid"></div>
+
+  <div class="choose" style="margin-top: 24px">自由対局</div>
   <div class="sides">
     <button class="side-btn color" data-side="color">
       <div class="big">色</div><div class="nm">形を紡ぐ</div>
@@ -221,6 +237,24 @@
   const $ = id => document.getElementById(id);
 
   const CONF = { R: 3, roundLimit: 19, colorPlaces: 2, voidCuts: 1, heal: 3 };
+
+  // solo campaign — you play 色; 空 grows smarter and the clock tightens
+  const STAGES = [
+    { key: "序", name: "いとぐち", rl: 24, smart: false },
+    { key: "破", name: "ほころび", rl: 21, smart: false },
+    { key: "急", name: "せめぎあい", rl: 19, smart: true },
+    { key: "転", name: "ゆらぎ", rl: 18, smart: true },
+    { key: "妙", name: "きわみ", rl: 17, smart: true },
+    { key: "空", name: "無常", rl: 16, smart: true },
+  ];
+  const store = {
+    get() { try { return +localStorage.getItem("engi.cleared") || 0; } catch { return 0; } },
+    set(v) { try { localStorage.setItem("engi.cleared", v); } catch {} },
+  };
+  let cleared = store.get();   // number of stages cleared (stage i unlocked iff i <= cleared)
+  let soloStage = -1;          // -1 = free play
+  let activeVoid = null;       // voidAI | voidAISmart
+  let lastCfg = { side: "color", rl: 19, smart: true, solo: -1 };
 
   // ---------------- engine ----------------
   function makeGame(o) {
@@ -318,6 +352,45 @@
       const touch = st.cells[i].type === "shrine" || st.cells[j].type === "shrine";
       let s = col * 22 + sh * 200 + (touch ? 8 : 0) + Math.random() * 3;
       if (s > bs) { bs = s; best = [i, j]; }
+    }
+    return best;
+  }
+  // how close 色 is to winning (higher = worse for 空)
+  function colorProgress(st) {
+    let formed = 0, secured = 0;
+    for (const s of st.shrines) if (st.isForm(s)) { formed++; if (st.activeLinks(s) >= 2) secured++; }
+    const unmet = st.shrines.filter(s => !st.isForm(s));
+    let dsum = 6;
+    if (unmet.length) { const d = gridDistFrom(st, unmet); let sum = 0, blob = 0; for (let i = 0; i < st.N; i++) if (st.isForm(i)) { sum += d[i] < 0 ? 6 : Math.min(d[i], 6); blob++; } dsum = blob ? sum / blob : 6; }
+    return formed * 100 + secured * 120 - dsum * 8;
+  }
+  // Stronger 空: 1-ply lookahead — minimise 色's progress after its best reply.
+  function voidAISmart(st) {
+    const moves = st.voidMoves(); if (!moves.length) return null;
+    const scored = moves.map(([i, j]) => {
+      const key = st.ekey(i, j), had = st.cut.get(key);
+      st.cut.set(key, st.round + st.conf.heal);
+      const seen = st.reachFromSources();
+      let col = 0, sh = 0;
+      for (let k = 0; k < st.N; k++) if (st.cells[k].state === "form" && !st.isSource(k) && !seen[k]) { col++; if (st.cells[k].type === "shrine") sh++; }
+      let linkHit = 0;
+      if (st.cells[i].type === "shrine" && st.isForm(i)) linkHit++;
+      if (st.cells[j].type === "shrine" && st.isForm(j)) linkHit++;
+      const prog = colorProgress(st);
+      if (had === undefined) st.cut.delete(key); else st.cut.set(key, had);
+      return { mv: [i, j], key, quick: col * 20 + sh * 260 + linkHit * 60 - prog };
+    }).sort((a, b) => b.quick - a.quick);
+    const K = Math.min(6, scored.length);
+    let best = scored[0].mv, bestVal = 1e9;
+    for (let t = 0; t < K; t++) {
+      const { mv, key } = scored[t], had = st.cut.get(key);
+      const snap = st.cells.map(c => c.state);   // snapshot BEFORE mutating
+      st.cut.set(key, st.round + st.conf.heal); st.cascade();
+      for (let p = 0; p < st.conf.colorPlaces; p++) { const cm = colorAI(st); if (cm == null) break; st.cells[cm].state = "form"; }
+      const val = colorProgress(st) + (st.shrines.every(s => st.isForm(s)) ? 1000 : 0);
+      st.cells.forEach((c, i) => c.state = snap[i]);   // restore
+      if (had === undefined) st.cut.delete(key); else st.cut.set(key, had);
+      if (val < bestVal) { bestVal = val; best = mv; }
     }
     return best;
   }
@@ -569,7 +642,7 @@
     aiTimer = setTimeout(() => {
       if (myGen !== gen || !G || G.winner) { return; }
       if (G.turn === "color") { const m = colorAI(G); if (m == null) { passTurn(); return; } doColorMove(m); }
-      else { const e = voidAI(G); if (e == null) { passTurn(); return; } doVoidMove(e); }
+      else { const e = (activeVoid || voidAI)(G); if (e == null) { passTurn(); return; } doVoidMove(e); }
     }, humanSide === null ? 520 : 620);
   }
   function passTurn() {
@@ -630,18 +703,23 @@
   // ============================================================
   //  START / END
   // ============================================================
-  function startGame(side) {
+  function startGame(cfg) {
+    if (typeof cfg === "string") cfg = { side: cfg, rl: 19, smart: true, solo: -1 };
+    lastCfg = cfg;
     gen++; clearTimeout(aiTimer);
+    soloStage = cfg.solo ?? -1;
+    CONF.roundLimit = cfg.rl ?? 19;
+    activeVoid = cfg.smart ? voidAISmart : voidAI;
+    const side = cfg.side;
     humanSide = side === "watch" ? null : side;
     G = makeGame(CONF);
     layout();
     busy = false; parts.length = 0;
     $("start").classList.add("gone");
     $("result").classList.remove("show");
-    $("you-side").textContent = side === "watch" ? "観戦" : side === "color" ? "色（形を紡ぐ）" : "空（縁を断つ）";
-    $("you-side").style.color = side === "watch" ? "var(--ink)" : colorRaw(side);
+    if (soloStage >= 0) { $("you-side").innerHTML = `試練 <b>${STAGES[soloStage].key}</b> ・ ${STAGES[soloStage].name}`; $("you-side").style.color = "var(--gold)"; }
+    else { $("you-side").textContent = side === "watch" ? "観戦" : side === "color" ? "色（形を紡ぐ）" : "空（縁を断つ）"; $("you-side").style.color = side === "watch" ? "var(--ink)" : colorRaw(side); }
     updateHUD();
-    // color moves first; if human isn't color, AI starts
     scheduleNext();
     if (!AU) initAudio();
   }
@@ -655,13 +733,42 @@
     const humanWon = humanSide && win === humanSide;
     if (win === "color") { big.textContent = "色 ― 曼荼羅、成る"; big.style.color = "#e3c076"; bowl(523, 0.5); setTimeout(() => bowl(784, 0.4), 180); }
     else { big.textContent = "空 ― すべては、還る"; big.style.color = "#8fa0d6"; thud(0.5); }
-    let s;
-    if (humanSide === null) s = win === "color" ? "3つの縁座に形が灯り、曼荼羅が完成した。" : "形は保てず、大地は空へと還った。";
-    else if (humanWon) s = win === "color" ? "あなたは縁を織りきり、3つの縁座を灯した。" : "あなたは縁を断ち、形を空へ還した。";
-    else s = win === "color" ? "相手は曼荼羅を完成させた。縁の輪を、断ちきれなかった。" : "縁は断たれ、形は保てなかった。19局を、耐えられなかった。";
-    sub.textContent = s;
+
+    const again = $("res-again"), menu = $("res-menu");
+    if (soloStage >= 0) {
+      // solo campaign
+      if (win === "color") {
+        const wasNew = soloStage + 1 > cleared;
+        if (wasNew) { cleared = soloStage + 1; store.set(cleared); }
+        const next = soloStage + 1;
+        const allDone = next >= STAGES.length;
+        big.textContent = allDone ? "空 ― すべての試練を越えて" : "色 ― 試練 突破";
+        sub.textContent = allDone
+          ? "全ての試練を制覇した。形と空のあわいを、あなたは往き来した。"
+          : `試練「${STAGES[soloStage].key}」を越えた。${wasNew ? `次なる試練「${STAGES[next].key}」が開かれた。` : ""}`;
+        again.textContent = allDone ? "もう一度" : "次の試練へ";
+        again.onclick = () => allDone ? startGame(lastCfg) : startGame({ side: "color", rl: STAGES[next].rl, smart: STAGES[next].smart, solo: next });
+      } else {
+        big.textContent = "空 ― まだ、届かず";
+        sub.textContent = `試練「${STAGES[soloStage].key}」― ${CONF.roundLimit}局のうちに曼荼羅は成らなかった。縁を、より厚い輪に。`;
+        again.textContent = "もう一度";
+        again.onclick = () => startGame(lastCfg);
+      }
+      menu.textContent = "試練を選ぶ";
+      menu.onclick = backToMenu;
+    } else {
+      // free play
+      let s;
+      if (humanSide === null) s = win === "color" ? "3つの縁座に形が灯り、曼荼羅が完成した。" : "形は保てず、大地は空へと還った。";
+      else if (humanWon) s = win === "color" ? "あなたは縁を織りきり、3つの縁座を灯した。" : "あなたは縁を断ち、形を空へ還した。";
+      else s = win === "color" ? "相手は曼荼羅を完成させた。縁の輪を、断ちきれなかった。" : `縁は断たれ、形は保てなかった。${CONF.roundLimit}局を、耐えられなかった。`;
+      sub.textContent = s;
+      again.textContent = "もう一局"; again.onclick = () => startGame(lastCfg);
+      menu.textContent = "手番を変える"; menu.onclick = backToMenu;
+    }
     setTimeout(() => res.classList.add("show"), 900);
   }
+  function backToMenu() { $("result").classList.remove("show"); $("start").classList.remove("gone"); G = null; buildStages(); }
 
   // ============================================================
   //  MAIN LOOP
@@ -690,11 +797,25 @@
   window.addEventListener("resize", resize);
   resize();
 
-  document.querySelectorAll(".side-btn").forEach(b => b.addEventListener("click", () => startGame(b.dataset.side)));
-  $("btn-restart").addEventListener("click", () => { if (humanSide !== undefined) startGame(humanSide === null ? "watch" : humanSide); });
-  $("btn-menu").addEventListener("click", () => { $("result").classList.remove("show"); $("start").classList.remove("gone"); G = null; });
-  $("res-again").addEventListener("click", () => startGame(humanSide === null ? "watch" : humanSide));
-  $("res-menu").addEventListener("click", () => { $("result").classList.remove("show"); $("start").classList.remove("gone"); G = null; });
+  // build the solo stage-select buttons (reflect unlocked / cleared state)
+  function buildStages() {
+    const grid = $("stage-grid"); if (!grid) return;
+    grid.innerHTML = "";
+    STAGES.forEach((sg, i) => {
+      const locked = i > cleared, done = i < cleared;
+      const b = document.createElement("button");
+      b.className = "stage-btn" + (locked ? " locked" : "") + (done ? " cleared" : "");
+      b.innerHTML = `<div class="k">${sg.key}</div><div class="nm">${sg.name}</div><div class="st">${locked ? "🔒" : done ? "✓ 制覇" : sg.rl + "局"}</div>`;
+      if (!locked) b.addEventListener("click", () => startGame({ side: "color", rl: sg.rl, smart: sg.smart, solo: i }));
+      grid.appendChild(b);
+    });
+  }
+  buildStages();
+
+  // free-play side buttons carry data-side; play at a balanced fixed setting
+  document.querySelectorAll(".side-btn").forEach(b => b.addEventListener("click", () => startGame({ side: b.dataset.side, rl: 19, smart: true, solo: -1 })));
+  $("btn-restart").addEventListener("click", () => startGame(lastCfg));
+  $("btn-menu").addEventListener("click", backToMenu);
   $("btn-sound").addEventListener("click", () => setSound(!soundOn));
 
   requestAnimationFrame(loop);
@@ -702,9 +823,11 @@
   // test hook
   window.__engi = {
     start: startGame, get game() { return G; },
-    colorAI, voidAI,
-    step() { if (G && !G.winner) { const s = G.turn; const m = s === "color" ? colorAI(G) : voidAI(G); if (m != null) G.move(m); else passTurn(); updateHUD(); } },
+    colorAI, voidAI, voidAISmart,
+    step() { if (G && !G.winner) { const s = G.turn; const m = s === "color" ? colorAI(G) : (activeVoid || voidAI)(G); if (m != null) G.move(m); else passTurn(); updateHUD(); } },
     get winner() { return G && G.winner; },
+    get cleared() { return cleared; }, resetProgress() { cleared = 0; store.set(0); buildStages(); },
+    finish(side) { if (G) { G.winner = side; endGame(); } },   // test hook: force a result
   };
 })();
 </script>
