@@ -81,6 +81,7 @@
   .card:nth-child(3) { animation-delay: 0.3s; }
   .card:nth-child(4) { animation-delay: 0.4s; }
   .card:nth-child(5) { animation-delay: 0.5s; }
+  .card:nth-child(6) { animation-delay: 0.6s; }
   .card:hover { transform: translateY(-8px); border-color: rgba(255,255,255,0.22); }
   .card:hover .art canvas { transform: scale(1.06); }
   .card:hover .go { gap: 16px; }
@@ -140,6 +141,11 @@
   .card.mebae:hover { box-shadow: 0 26px 60px rgba(40, 90, 40, 0.5); }
   .card.mebae h2 { color: #eafff0; }
   .card.mebae .en, .card.mebae .go { color: #9bd97a; }
+  /* doubutsu (どうぶつがっこう) theming */
+  .card.doubutsu .tag { background: rgba(255, 176, 74, 0.16); color: #ffcf8a; border: 1px solid rgba(255,176,74,0.34); }
+  .card.doubutsu:hover { box-shadow: 0 26px 60px rgba(120, 80, 20, 0.5); }
+  .card.doubutsu h2 { color: #fff2df; }
+  .card.doubutsu .en, .card.doubutsu .go { color: #ffb84a; }
 
   footer {
     margin-top: auto; padding-top: 54px;
@@ -159,8 +165,8 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">INTERACTIVE WORLDS</div>
-    <h1>銀河と、深海と、大地と、縁起と、いきもの。</h1>
-    <p>ブラウザだけで動く、5つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところ、生命の営み、形と空(くう)のあわい、そして小さないきものまで。</p>
+    <h1>銀河と、深海と、大地と、縁起と、いきもの、そして まなび。</h1>
+    <p>ブラウザだけで動く、6つの体験。<br>宇宙のいちばん大きなものから、地球のいちばん深いところ、生命の営み、形と空(くう)のあわい、小さないきもの、そして こどもの まなびまで。</p>
   </header>
 
   <div class="cards">
@@ -223,10 +229,22 @@
         <div class="go"><span>つくる</span><span class="arrow">→</span></div>
       </div>
     </a>
+
+    <a class="card doubutsu" href="doubutsu.html">
+      <div class="art"><canvas id="art-doubutsu"></canvas></div>
+      <div class="body">
+        <span class="tag">KIDS · まなび</span>
+        <h2>どうぶつがっこう</h2>
+        <div class="en">さんすう・こくご × どうぶつ</div>
+        <div class="desc">さんすうとこくごのもんだいに こたえると、どうぶつと なかよくなって、たべものや とくちょうが 図鑑に ふえていく。ぜんぶ ひらがな、大きなボタン、こわい不正解なしの こども向け知育アプリ。</div>
+        <div class="feat"><span>🔢 さんすう</span><span>🈁 こくご</span><span>🐾 どうぶつ図鑑</span></div>
+        <div class="go"><span>あそぶ</span><span class="arrow">→</span></div>
+      </div>
+    </a>
   </div>
 
   <footer>
-    Canvas &amp; Web Audio でつくった、依存ライブラリなしの5作品。<br>
+    Canvas &amp; Web Audio でつくった、依存ライブラリなしの6作品。<br>
     <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a>
     <div class="hint">カードをクリックで起動 ・ どれもフルスクリーン推奨</div>
   </footer>
@@ -281,6 +299,12 @@
 
   // ku preview: a small 縁起 network — nodes joined by 縁 that sever and re-form
   const K = setup("art-ku");
+  // doubutsu preview: animals bobbing with a little sum + stars
+  const D = setup("art-doubutsu");
+  const dAnimals = ["🐰", "🐘", "🐧", "🦊", "🐼"];
+  const dStars = [];
+  for (let i = 0; i < 7; i++) dStars.push({ x: Math.random(), y: Math.random() * 0.5, ph: rand(0, TAU), sp: rand(0.6, 1.4) });
+
   // mebae preview: little pastel creatures bobbing on a grassy strip
   const M = setup("art-mebae");
   const mCrit = [
@@ -488,7 +512,33 @@
         c.strokeStyle = shade; c.lineWidth = 2; c.beginPath(); c.arc(x, y + u*0.16, u*0.16, Math.PI*0.15, Math.PI*0.85); c.stroke();
       }
     }
+
+    // ---- doubutsu card: animals + a little sum + twinkling stars ----
+    {
+      const { c, w, h } = D;
+      const bg = c.createLinearGradient(0, 0, 0, h);
+      bg.addColorStop(0, "#fff3d6"); bg.addColorStop(1, "#ffe6b8");
+      c.fillStyle = bg; c.fillRect(0, 0, w, h);
+      // twinkling stars
+      c.textAlign = "center"; c.textBaseline = "middle";
+      for (const s of dStars) { const tw = 0.5 + 0.5 * Math.sin(t * 2 * s.sp + s.ph); c.globalAlpha = 0.3 + tw * 0.6; c.font = `${10 + tw * 6}px serif`; c.fillText("⭐", s.x * w, s.y * h); }
+      c.globalAlpha = 1;
+      // three animals bobbing along a line
+      const ay = h * 0.62, es = Math.min(w * 0.15, 52);
+      c.font = `${es}px serif`;
+      for (let i = 0; i < 3; i++) { const ax = w * (0.26 + i * 0.24); const bob = Math.sin(t * 1.8 + i * 1.6) * 6; c.fillText(dAnimals[(Math.floor(t * 0.4) + i) % dAnimals.length], ax, ay + bob); }
+      // sum speech bubble
+      const bx = w * 0.5, by = h * 0.24, bw = 96, bh = 40;
+      c.fillStyle = "#fffdf7"; c.strokeStyle = "rgba(150,120,70,0.25)"; c.lineWidth = 2;
+      roundRectP(c, bx - bw / 2, by - bh / 2, bw, bh, 14); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(bx - 6, by + bh / 2); c.lineTo(bx + 6, by + bh / 2); c.lineTo(bx, by + bh / 2 + 8); c.closePath(); c.fill();
+      c.fillStyle = "#e08a2a"; c.font = "800 22px sans-serif";
+      const sums = ["1+2", "3+1", "あ・い", "5−2", "ね・こ"];
+      c.fillText(sums[Math.floor(t * 0.6) % sums.length], bx, by + 1);
+      c.textAlign = "left"; c.textBaseline = "alphabetic";
+    }
   }
+  function roundRectP(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   requestAnimationFrame(frame);
 })();
 </script>
