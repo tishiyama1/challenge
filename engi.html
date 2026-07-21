@@ -25,7 +25,9 @@
   .glass { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
     backdrop-filter: blur(11px); -webkit-backdrop-filter: blur(11px); }
 
-  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; transition: opacity .35s ease; }
+  #hud.off { opacity: 0; pointer-events: none; }
+  #hud.off * { pointer-events: none; }
 
   /* top: turn + round */
   #topbar {
@@ -717,6 +719,7 @@
     busy = false; parts.length = 0;
     $("start").classList.add("gone");
     $("result").classList.remove("show");
+    $("hud").classList.remove("off");   // HUD visible only during play
     if (soloStage >= 0) { $("you-side").innerHTML = `試練 <b>${STAGES[soloStage].key}</b> ・ ${STAGES[soloStage].name}`; $("you-side").style.color = "var(--gold)"; }
     else { $("you-side").textContent = side === "watch" ? "観戦" : side === "color" ? "色（形を紡ぐ）" : "空（縁を断つ）"; $("you-side").style.color = side === "watch" ? "var(--ink)" : colorRaw(side); }
     updateHUD();
@@ -727,6 +730,7 @@
 
   function endGame() {
     busy = true;
+    $("hud").classList.add("off");   // hand the screen over to the result overlay
     const win = G.winner;
     const res = $("result");
     const big = $("result-big"), sub = $("result-sub");
@@ -768,7 +772,7 @@
     }
     setTimeout(() => res.classList.add("show"), 900);
   }
-  function backToMenu() { $("result").classList.remove("show"); $("start").classList.remove("gone"); G = null; buildStages(); }
+  function backToMenu() { $("result").classList.remove("show"); $("start").classList.remove("gone"); $("hud").classList.add("off"); G = null; buildStages(); }
 
   // ============================================================
   //  MAIN LOOP
@@ -796,6 +800,7 @@
   }
   window.addEventListener("resize", resize);
   resize();
+  $("hud").classList.add("off");   // start screen is up first — no game HUD yet
 
   // build the solo stage-select buttons (reflect unlocked / cleared state)
   function buildStages() {
