@@ -515,7 +515,8 @@
     detectSR(piv, bars, A);
 
     // rank: confidence desc, then recency
-    patterns.sort((a, b) => b.confidence - a.confidence || b.endIdx - a.endIdx);
+    // newest first (by where the pattern ends); confidence breaks ties
+    patterns.sort((a, b) => b.endIdx - a.endIdx || b.confidence - a.confidence);
   }
 
   function pctDiff(a, b) { return Math.abs(a - b) / ((a + b) / 2); }
@@ -844,7 +845,7 @@
       box.innerHTML = `<div class="status"><div class="big">🔍</div><h3>明確なパターンは見つかりませんでした</h3><p>感度スライダーを上げると検出しやすくなります。だまし回避のため既定はやや厳しめです。サポート/レジスタンスはチャート上に表示されています。</p></div>`;
       return;
     }
-    const head = `<div class="res-head"><h2>検出パターン</h2><span class="count">${vis.length} 件（信頼度順）</span></div>`;
+    const head = `<div class="res-head"><h2>検出パターン</h2><span class="count">${vis.length} 件（新しい順）</span></div>`;
     const cards = patterns.map((pt, idx) => {
       if (!show[pt.kind]) return "";
       const col = KIND_COL[pt.kind] || "var(--dim)";
