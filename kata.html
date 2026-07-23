@@ -135,7 +135,16 @@
   .field .hint { font-size: 11px; color: var(--dim); line-height: 1.7; margin-top: 6px; }
   .field input[type=text], .field select { width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--line-str); border-radius: 9px; padding: 10px 12px; color: var(--tx); font-size: 12.5px; font-family: inherit; outline: none; }
   .field input[type=text]:focus, .field select:focus { border-color: var(--accent); }
+  .field input[type=password] { width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--line-str); border-radius: 9px; padding: 10px 12px; color: var(--tx); font-size: 12.5px; font-family: inherit; outline: none; letter-spacing: 0.06em; }
+  .field input[type=password]:focus { border-color: var(--accent); }
   .field select { cursor: pointer; }
+  .key-row { display: flex; gap: 6px; align-items: stretch; }
+  .key-row input { flex: 1; }
+  #revealKey { flex: none; border: 1px solid var(--line-str); background: rgba(255,255,255,0.03); border-radius: 9px; color: var(--dim); cursor: pointer; padding: 0 12px; font-size: 15px; transition: .18s; }
+  #revealKey:hover { border-color: var(--accent); color: var(--tx); }
+  #revealKey.on { border-color: var(--accent); color: var(--accent); }
+  .check-row { display: flex; align-items: center; gap: 9px; margin-top: 10px; cursor: pointer; font-size: 12.5px; font-weight: 600; }
+  .check-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
   .field a { color: var(--dbl); }
   .save-btn { width: 100%; margin-top: 6px; padding: 12px; border-radius: 10px; border: none; cursor: pointer; background: linear-gradient(120deg, #ffbf4d, #ff8f5a); color: #12141a; font-weight: 800; letter-spacing: 0.08em; font-family: inherit; font-size: 13px; }
 
@@ -230,7 +239,13 @@
   </div>
   <div class="field">
     <label>APIキー</label>
-    <input id="apiKey" type="text" placeholder="ここに貼り付け" spellcheck="false">
+    <div class="key-row">
+      <input id="apiKey" type="password" placeholder="ここに貼り付け" spellcheck="false" autocomplete="off" autocapitalize="off">
+      <button type="button" id="revealKey" title="表示 / 非表示">👁</button>
+    </div>
+    <label class="check-row"><input type="checkbox" id="persistKey" checked><span>このキーを端末に保存する</span></label>
+    <div class="hint">キーは<b>あなたのブラウザ内だけ</b>に保存され、送信先は選んだデータ提供元のみです（私や第三者のサーバーは経由しません）。取得時は可能なら<b>URLに載せずAuthorizationヘッダ</b>で送ります。<br>
+      チェックを外すと、キーは<b>このタブを閉じるまでの一時保存</b>になり端末に残りません（共有PC向け）。不安なときは提供元でキーを再発行できます。</div>
   </div>
   <div class="field">
     <label>足の種類(ライブ)</label>
@@ -259,8 +274,11 @@
 
   // ------------------------------------------------------------- state
   const LS = "kata.settings.v1";
-  const defaults = { provider: "twelvedata", apiKey: "", interval: "1day" };
+  const SS = "kata.apikey.v1"; // session-only key storage (this tab only)
+  const defaults = { provider: "twelvedata", apiKey: "", interval: "1day", persistKey: true };
   let settings = load(LS, defaults);
+  // if the key was stored session-only (persistKey off), restore it for this tab
+  try { const ss = sessionStorage.getItem(SS); if (ss != null) { settings.apiKey = ss; settings.persistKey = false; } } catch {}
   let bars = [];                 // {t:Date,o,h,l,c,v}
   let patterns = [];             // detected
   let srLevels = [];             // support/resistance
@@ -272,7 +290,33 @@
   let symLabel = "DEMO", metaLabel = "";
   let scanning = 0;
   function load(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ? Object.assign({}, d, v) : Object.assign({}, d); } catch { return Object.assign({}, d); } }
-  function saveSettings() { try { localStorage.setItem(LS, JSON.stringify(settings)); } catch {} }
+  function saveSettings() {
+    try {
+      const store = Object.assign({}, settings);
+      if (settings.persistKey === false) {
+        store.apiKey = ""; // never persist the key to disk
+        try { sessionStorage.setItem(SS, settings.apiKey || ""); } catch {}
+      } else {
+        try { sessionStorage.removeItem(SS); } catch {}
+      }
+      localStorage.setItem(LS, JSON.stringify(store));
+    } catch {}
+  }
+  // Send the API key via the Authorization header (kept out of the URL, history and
+  // server logs). If the browser blocks it via CORS preflight, transparently fall
+  // back to the query-param form so live fetch never breaks.
+  async function authFetch(baseUrl, { headerStyle, queryParam, key, signal }) {
+    if (headerStyle) {
+      try {
+        return await fetch(baseUrl, { signal, headers: { Authorization: `${headerStyle} ${key}` } });
+      } catch (e) {
+        if (e.name === "AbortError") throw e; // real timeout — don't retry
+        // CORS/preflight or network failure → fall through to query-param form
+      }
+    }
+    const sep = baseUrl.includes("?") ? "&" : "?";
+    return fetch(baseUrl + sep + queryParam + "=" + encodeURIComponent(key), { signal });
+  }
 
   // ============================================================= DATA: demo generator
   // Build a synthetic OHLC series from control points (piecewise linear + noise).
@@ -377,9 +421,10 @@
     if (!settings.apiKey) throw new Error("APIキーが未設定です。設定 ⚙ から無料キーを登録してください。");
     const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 15000);
     try {
+      const key = settings.apiKey, signal = ctrl.signal;
       if (settings.provider === "twelvedata") {
-        const u = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${settings.interval}&outputsize=400&format=JSON&apikey=${encodeURIComponent(settings.apiKey)}`;
-        const d = await (await fetch(u, { signal: ctrl.signal })).json();
+        const base = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${settings.interval}&outputsize=400&format=JSON`;
+        const d = await (await authFetch(base, { headerStyle: "apikey", queryParam: "apikey", key, signal })).json();
         if (d.status === "error" || !d.values) throw new Error(d.message || "取得に失敗しました。銘柄・キー・無料枠の制限をご確認ください。");
         metaLabel = (d.meta && d.meta.exchange ? d.meta.exchange + " · " : "") + settings.interval;
         return d.values.map(v => ({ t: new Date(v.datetime), o: +v.open, h: +v.high, l: +v.low, c: +v.close, v: +v.volume || 0 })).reverse();
@@ -390,8 +435,8 @@
         const now = Date.now();
         const toD = new Date(now).toISOString().slice(0, 10);
         const fromD = new Date(now - backDays * 86400000).toISOString().slice(0, 10);
-        const u = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/range/${mult}/${span}/${fromD}/${toD}?adjusted=true&sort=asc&limit=50000&apiKey=${encodeURIComponent(settings.apiKey)}`;
-        const res = await fetch(u, { signal: ctrl.signal });
+        const base = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/range/${mult}/${span}/${fromD}/${toD}?adjusted=true&sort=asc&limit=50000`;
+        const res = await authFetch(base, { headerStyle: "Bearer", queryParam: "apiKey", key, signal });
         const d = await res.json().catch(() => ({}));
         if (res.status === 401 || res.status === 403 || d.status === "NOT_AUTHORIZED") throw new Error(d.message || d.error || "APIキーが無効か、この銘柄/期間が無料プランの権限外です。");
         if (res.status === 429) throw new Error("Polygonの利用制限に達しました（無料枠は5リクエスト/分）。少し待って再試行してください。");
@@ -401,9 +446,10 @@
         return d.results.map(r => ({ t: new Date(r.t), o: r.o, h: r.h, l: r.l, c: r.c, v: r.v || 0 }));
       } else {
         const fn = /^\d/.test(settings.interval) && settings.interval.includes("h") ? "TIME_SERIES_INTRADAY" : settings.interval === "1week" ? "TIME_SERIES_WEEKLY" : "TIME_SERIES_DAILY";
-        let u = `https://www.alphavantage.co/query?function=${fn}&symbol=${encodeURIComponent(sym)}&outputsize=compact&apikey=${encodeURIComponent(settings.apiKey)}`;
-        if (fn === "TIME_SERIES_INTRADAY") u += `&interval=${settings.interval === "4h" ? "60min" : "60min"}`;
-        const d = await (await fetch(u, { signal: ctrl.signal })).json();
+        let base = `https://www.alphavantage.co/query?function=${fn}&symbol=${encodeURIComponent(sym)}&outputsize=compact`;
+        if (fn === "TIME_SERIES_INTRADAY") base += `&interval=60min`;
+        // Alpha Vantage only accepts the key as a query param (no header auth)
+        const d = await (await authFetch(base, { headerStyle: null, queryParam: "apikey", key, signal })).json();
         if (d.Note || d.Information) throw new Error("APIの利用制限に達したか、キーが無効です（無料枠は1分/1日あたりの回数制限があります）。");
         const key = Object.keys(d).find(k => /Time Series/.test(k));
         if (!key || d["Error Message"]) throw new Error(d["Error Message"] || "銘柄が見つかりませんでした。");
@@ -891,7 +937,7 @@
 
   // settings drawer
   const overlay = $("#overlay"), drawer = $("#drawer");
-  function openDrawer() { $("#provider").value = settings.provider; $("#apiKey").value = settings.apiKey; $("#interval").value = settings.interval; syncProviderLink(); overlay.classList.add("on"); drawer.classList.add("on"); }
+  function openDrawer() { $("#provider").value = settings.provider; $("#apiKey").value = settings.apiKey; $("#interval").value = settings.interval; $("#persistKey").checked = settings.persistKey !== false; syncProviderLink(); overlay.classList.add("on"); drawer.classList.add("on"); }
   function closeDrawer() { overlay.classList.remove("on"); drawer.classList.remove("on"); }
   function syncProviderLink() {
     const a = $("#providerLink");
@@ -906,7 +952,8 @@
   $("#provider").addEventListener("change", syncProviderLink);
   $("#settingsBtn").onclick = openDrawer;
   overlay.onclick = closeDrawer;
-  $("#saveBtn").onclick = () => { settings.provider = $("#provider").value; settings.apiKey = $("#apiKey").value.trim(); settings.interval = $("#interval").value; saveSettings(); closeDrawer(); };
+  $("#revealKey").onclick = () => { const el = $("#apiKey"); const show = el.type === "password"; el.type = show ? "text" : "password"; $("#revealKey").classList.toggle("on", show); };
+  $("#saveBtn").onclick = () => { settings.provider = $("#provider").value; settings.apiKey = $("#apiKey").value.trim(); settings.interval = $("#interval").value; settings.persistKey = $("#persistKey").checked; saveSettings(); closeDrawer(); };
 
   addEventListener("resize", () => { if (bars.length) resizeChart(); });
 
