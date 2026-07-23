@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KATA — チャート形状スキャナ</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #070b12;
+    --panel: rgba(14, 22, 34, 0.66);
+    --panel-solid: #0d1521;
+    --line: rgba(120, 170, 200, 0.14);
+    --line-str: rgba(120, 170, 200, 0.30);
+    --tx: #e2edf2;
+    --dim: #8ba1b0;
+    --dimmer: #566d7c;
+    --accent: #ffbf4d;
+    --up: #2fce8f;
+    --down: #ff6a7a;
+    --hs: #ff8f5a;
+    --dbl: #63b4ff;
+    --tri: #b58cff;
+    --sr: #ffd76b;
+  }
+  html, body { width: 100%; min-height: 100%; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+    color: var(--tx); background: var(--bg);
+    -webkit-font-smoothing: antialiased; overflow-x: hidden; min-height: 100vh; position: relative;
+  }
+  #bg { position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(1100px 600px at 84% -10%, rgba(255,191,77,0.06), transparent 60%),
+      radial-gradient(900px 560px at 6% 2%, rgba(90,140,255,0.07), transparent 60%),
+      linear-gradient(180deg, #0a1019 0%, #070c13 55%, #05080e 100%);
+  }
+  a { color: inherit; }
+  ::selection { background: rgba(255,191,77,0.28); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 22px 16px 90px; }
+
+  /* header */
+  .top { display: flex; align-items: center; gap: 13px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+  .logo { width: 40px; height: 40px; flex: none; }
+  .brand h1 { font-size: 22px; font-weight: 800; letter-spacing: 0.28em;
+    background: linear-gradient(100deg, #ffd98a, #ff9a6b); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .brand .sub { font-size: 10px; letter-spacing: 0.3em; color: var(--dim); margin-top: 3px; }
+  .home-link { font-size: 11px; letter-spacing: 0.14em; color: var(--dim); text-decoration: none; padding: 7px 12px; border: 1px solid var(--line); border-radius: 9px; transition: .2s; }
+  .home-link:hover { color: var(--accent); border-color: var(--line-str); }
+  .icon-btn { width: 38px; height: 38px; flex: none; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--dim); font-size: 16px; cursor: pointer; transition: .2s; }
+  .icon-btn:hover { color: var(--accent); border-color: var(--line-str); }
+
+  /* control bar */
+  .controls { display: flex; gap: 9px; align-items: stretch; margin: 18px 0 10px; flex-wrap: wrap; }
+  .seg { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
+  .seg button { border: none; background: none; color: var(--dim); font-family: inherit; font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; padding: 0 14px; cursor: pointer; transition: .15s; }
+  .seg button.on { background: var(--accent); color: #10141c; }
+  .seg button:not(.on):hover { color: var(--tx); }
+  .ticker-input { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line-str); border-radius: 11px; padding: 0 13px; min-width: 150px; }
+  .ticker-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,191,77,0.13); }
+  .ticker-input input { flex: 1; width: 100%; background: none; border: none; outline: none; color: var(--tx); font-size: 17px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 11px 0; font-family: inherit; }
+  .ticker-input input::placeholder { color: var(--dimmer); font-weight: 600; letter-spacing: 0.04em; }
+  .scan-btn { padding: 0 22px; border: none; border-radius: 11px; cursor: pointer; background: linear-gradient(120deg, #ffbf4d, #ff8f5a); color: #12141a; font-size: 14px; font-weight: 800; letter-spacing: 0.1em; font-family: inherit; transition: transform .15s, filter .2s; white-space: nowrap; }
+  .scan-btn:hover { filter: brightness(1.06); }
+  .scan-btn:active { transform: scale(0.97); }
+  .scan-btn:disabled { opacity: 0.5; cursor: default; }
+  .demo-seg { }
+  .file-btn { display: inline-flex; align-items: center; gap: 7px; padding: 0 15px; border-radius: 11px; border: 1px dashed var(--line-str); background: var(--panel); color: var(--dim); font-size: 12.5px; font-weight: 700; cursor: pointer; transition: .2s; }
+  .file-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .hintline { font-size: 11.5px; color: var(--dimmer); margin: 2px 0 6px; letter-spacing: 0.02em; }
+
+  /* chart */
+  .chart-wrap { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 15px; padding: 8px; margin-top: 8px; }
+  #chart { width: 100%; display: block; border-radius: 10px; cursor: crosshair; }
+  .chart-title { position: absolute; top: 16px; left: 18px; z-index: 2; pointer-events: none; }
+  .chart-title .s { font-size: 19px; font-weight: 800; letter-spacing: 0.06em; }
+  .chart-title .m { font-size: 11px; color: var(--dim); margin-top: 2px; letter-spacing: 0.03em; }
+  .readout { position: absolute; top: 16px; right: 18px; z-index: 2; pointer-events: none; text-align: right; font-size: 11.5px; color: var(--dim); line-height: 1.7; font-variant-numeric: tabular-nums; }
+  .readout b { color: var(--tx); font-weight: 700; }
+
+  /* pattern legend toggles */
+  .legend { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 4px; align-items: center; }
+  .legend .lbl { font-size: 10px; letter-spacing: 0.16em; color: var(--dimmer); }
+  .ptog { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; cursor: pointer; border: 1px solid var(--line); background: rgba(255,255,255,0.02); color: var(--dim); transition: .15s; user-select: none; }
+  .ptog .sw { width: 9px; height: 9px; border-radius: 2px; }
+  .ptog.off { opacity: 0.4; }
+  .ptog:hover { border-color: var(--line-str); }
+  .senseline { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .senseline label { font-size: 11px; color: var(--dim); letter-spacing: 0.06em; }
+  .senseline input[type=range] { width: 130px; accent-color: var(--accent); }
+
+  /* results */
+  .results { margin-top: 18px; }
+  .res-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .res-head h2 { font-size: 15px; letter-spacing: 0.1em; }
+  .res-head .count { font-size: 12px; color: var(--dim); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+  .pcard { background: var(--panel); border: 1px solid var(--line); border-left-width: 3px; border-radius: 12px; padding: 14px 15px; cursor: pointer; transition: .18s; animation: rise .4s ease both; }
+  .pcard:hover { border-color: var(--line-str); transform: translateY(-2px); }
+  .pcard.sel { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(255,191,77,0.3); }
+  .pcard .ptop { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+  .pcard .pname { font-size: 14.5px; font-weight: 800; letter-spacing: 0.02em; }
+  .pcard .dir { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; letter-spacing: 0.06em; }
+  .dir.bull { color: var(--up); background: rgba(47,206,143,0.13); }
+  .dir.bear { color: var(--down); background: rgba(255,106,122,0.13); }
+  .dir.neutral { color: var(--dim); background: rgba(255,255,255,0.06); }
+  .conf { margin-left: auto; text-align: right; }
+  .conf b { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .conf small { font-size: 9px; letter-spacing: 0.12em; color: var(--dimmer); display: block; }
+  .pcard .pdesc { font-size: 12px; line-height: 1.65; color: var(--dim); }
+  .pcard .pmeta { margin-top: 9px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 10.5px; color: var(--dimmer); font-variant-numeric: tabular-nums; }
+  .pcard .pmeta b { color: var(--dim); }
+  .confbar { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.08); margin-top: 10px; overflow: hidden; }
+  .confbar i { display: block; height: 100%; border-radius: 2px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .status { text-align: center; padding: 40px 20px; color: var(--dim); }
+  .status .big { font-size: 40px; margin-bottom: 12px; opacity: 0.7; }
+  .status h3 { font-size: 15px; font-weight: 700; margin-bottom: 7px; color: var(--tx); }
+  .status p { font-size: 12.5px; line-height: 1.9; color: var(--dim); max-width: 520px; margin: 0 auto; }
+  .err-card { background: rgba(255,106,122,0.06); border: 1px solid rgba(255,106,122,0.24); border-radius: 12px; padding: 13px 15px; font-size: 12.5px; line-height: 1.7; color: #f2b8c0; margin-top: 14px; }
+  .err-card b { color: #ff9aa6; }
+
+  /* drawer */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(3px); z-index: 40; opacity: 0; pointer-events: none; transition: .25s; }
+  .overlay.on { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(430px, 92vw); z-index: 41; background: var(--panel-solid); border-left: 1px solid var(--line-str); transform: translateX(100%); transition: transform .3s cubic-bezier(.2,.9,.25,1); padding: 24px 22px; overflow-y: auto; }
+  .drawer.on { transform: translateX(0); }
+  .drawer h2 { font-size: 15px; letter-spacing: 0.14em; margin-bottom: 4px; }
+  .drawer .dsub { font-size: 11px; color: var(--dim); line-height: 1.8; margin-bottom: 18px; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 7px; }
+  .field .hint { font-size: 11px; color: var(--dim); line-height: 1.7; margin-top: 6px; }
+  .field input[type=text], .field select { width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--line-str); border-radius: 9px; padding: 10px 12px; color: var(--tx); font-size: 12.5px; font-family: inherit; outline: none; }
+  .field input[type=text]:focus, .field select:focus { border-color: var(--accent); }
+  .field select { cursor: pointer; }
+  .field a { color: var(--dbl); }
+  .save-btn { width: 100%; margin-top: 6px; padding: 12px; border-radius: 10px; border: none; cursor: pointer; background: linear-gradient(120deg, #ffbf4d, #ff8f5a); color: #12141a; font-weight: 800; letter-spacing: 0.08em; font-family: inherit; font-size: 13px; }
+
+  footer { text-align: center; margin-top: 40px; font-size: 11px; color: var(--dimmer); line-height: 2; }
+  footer a { color: var(--dim); text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+  .disclaimer { margin-top: 16px; font-size: 10.5px; color: var(--dimmer); text-align: center; line-height: 1.8; max-width: 680px; margin: 16px auto 0; }
+
+  @media (max-width: 620px) { .senseline { margin-left: 0; width: 100%; } }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <canvas class="logo" id="logo" width="80" height="80"></canvas>
+      <div><h1>KATA</h1><div class="sub">CHART PATTERN SCANNER</div></div>
+    </div>
+    <a class="home-link" href="index.html">← 作品一覧</a>
+    <button class="icon-btn" id="settingsBtn" title="設定 / APIキー">⚙</button>
+  </div>
+
+  <div class="controls">
+    <div class="seg" id="srcSeg">
+      <button data-src="demo" class="on">デモ</button>
+      <button data-src="csv">CSV</button>
+      <button data-src="live">ライブ</button>
+    </div>
+
+    <!-- demo picker -->
+    <div class="seg demo-seg" id="demoSeg">
+      <button data-demo="hs" class="on">三尊天井</button>
+      <button data-demo="ihs">逆三尊</button>
+      <button data-demo="double">ダブル</button>
+      <button data-demo="triangle">三角</button>
+      <button data-demo="random">ランダム</button>
+    </div>
+
+    <!-- ticker (live) -->
+    <label class="ticker-input" id="tickerWrap" style="display:none">
+      <span style="color:var(--dimmer);font-weight:700">$</span>
+      <input id="tickerInput" type="text" placeholder="例: AAPL" autocomplete="off" spellcheck="false" maxlength="12">
+    </label>
+
+    <!-- csv -->
+    <label class="file-btn" id="csvBtn" style="display:none">📂 CSVを選択<input id="csvFile" type="file" accept=".csv,.txt,text/csv" style="display:none"></label>
+
+    <button class="scan-btn" id="scanBtn">スキャン ▸</button>
+  </div>
+  <div class="hintline" id="hintline">デモデータで三尊天井の検出を試せます。CSV / ライブ に切り替えると実データを解析できます。</div>
+
+  <div class="chart-wrap">
+    <div class="chart-title"><div class="s" id="cSym">—</div><div class="m" id="cMeta"></div></div>
+    <div class="readout" id="readout"></div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="legend">
+    <span class="lbl">表示</span>
+    <span class="ptog" data-p="hs"><span class="sw" style="background:var(--hs)"></span>三尊/逆三尊</span>
+    <span class="ptog" data-p="double"><span class="sw" style="background:var(--dbl)"></span>ダブル/トリプル</span>
+    <span class="ptog" data-p="triangle"><span class="sw" style="background:var(--tri)"></span>三角保ち合い</span>
+    <span class="ptog" data-p="sr"><span class="sw" style="background:var(--sr)"></span>サポート/レジスタンス</span>
+    <span class="senseline"><label>感度</label><input type="range" id="sense" min="1" max="5" step="1" value="3"><span id="senseVal" style="font-size:11px;color:var(--dim);width:56px">標準</span></span>
+  </div>
+
+  <div class="results" id="results">
+    <div class="status"><div class="big">📈</div><h3>スキャンを押すと、チャート形状を探し始めます</h3><p>三尊天井・逆三尊・ダブルトップ/ボトム・三角保ち合い・サポート/レジスタンスを、ジグザグの高値/安値(スイングポイント)から自動検出し、チャート上に重ねて描きます。</p></div>
+  </div>
+
+  <p class="disclaimer">⚠ 本アプリはチャート形状を機械的に検出して可視化する学習・研究用ツールであり、投資助言ではありません。検出結果は目安で、だましや主観の余地があります。投資判断はご自身の責任で行ってください。</p>
+
+  <footer>KATA ―― 依存ライブラリなし・1HTML完結。検出処理はすべてブラウザ内で実行されます。<br>
+    <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a></footer>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer">
+  <h2>⚙ 設定</h2>
+  <p class="dsub">ライブ取得用のAPIキーと、CSVの読み方を設定します。設定はこの端末のブラウザに保存されます。</p>
+  <div class="field">
+    <label>データプロバイダ(ライブ)</label>
+    <select id="provider">
+      <option value="twelvedata">Twelve Data（無料枠・CORS対応）</option>
+      <option value="alphavantage">Alpha Vantage（無料枠・CORS対応）</option>
+    </select>
+    <div class="hint">ブラウザから直接取得できる（CORS対応の）無料APIです。前回のニュース系と違い、キーさえ入れれば安定して取得できます。<br>
+      無料キー取得: <a id="providerLink" href="https://twelvedata.com/pricing" target="_blank" rel="noopener">プロバイダのサイト</a></div>
+  </div>
+  <div class="field">
+    <label>APIキー</label>
+    <input id="apiKey" type="text" placeholder="ここに貼り付け" spellcheck="false">
+  </div>
+  <div class="field">
+    <label>足の種類(ライブ)</label>
+    <select id="interval">
+      <option value="1day">日足</option>
+      <option value="1week">週足</option>
+      <option value="1h">1時間足</option>
+      <option value="4h">4時間足</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>CSVの列順(ヘッダなしの場合)</label>
+    <div class="hint">ヘッダ行(date, open, high, low, close…)があれば自動判別します。無い場合は <b>日付, 始値, 高値, 安値, 終値, 出来高</b> の順とみなします。区切りは カンマ / セミコロン / タブ を自動判別。</div>
+  </div>
+  <button class="save-btn" id="saveBtn">保存して閉じる</button>
+</aside>
+
+<script>
+"use strict";
+(() => {
+  const TAU = Math.PI * 2;
+  const $ = s => document.querySelector(s);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const avg = a => a.reduce((s, x) => s + x, 0) / (a.length || 1);
+  const fmt = (n, d = 2) => (n == null || isNaN(n)) ? "–" : Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  // ------------------------------------------------------------- state
+  const LS = "kata.settings.v1";
+  const defaults = { provider: "twelvedata", apiKey: "", interval: "1day" };
+  let settings = load(LS, defaults);
+  let bars = [];                 // {t:Date,o,h,l,c,v}
+  let patterns = [];             // detected
+  let srLevels = [];             // support/resistance
+  let pivotsCache = [];
+  let selected = -1;
+  let source = "demo", demoType = "hs";
+  let show = { hs: true, double: true, triangle: true, sr: true };
+  let sense = 3;
+  let symLabel = "DEMO", metaLabel = "";
+  let scanning = 0;
+  function load(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ? Object.assign({}, d, v) : Object.assign({}, d); } catch { return Object.assign({}, d); } }
+  function saveSettings() { try { localStorage.setItem(LS, JSON.stringify(settings)); } catch {} }
+
+  // ============================================================= DATA: demo generator
+  // Build a synthetic OHLC series from control points (piecewise linear + noise).
+  function synth(points, n, vol) {
+    // points: [{x:0..1, y:price}] anchors; n bars; vol: noise fraction
+    const closes = [];
+    for (let i = 0; i < n; i++) {
+      const x = i / (n - 1);
+      // find segment
+      let a = points[0], b = points[points.length - 1];
+      for (let k = 0; k < points.length - 1; k++) { if (x >= points[k].x && x <= points[k + 1].x) { a = points[k]; b = points[k + 1]; break; } }
+      const tt = b.x === a.x ? 0 : (x - a.x) / (b.x - a.x);
+      const base = a.y + (b.y - a.y) * (0.5 - 0.5 * Math.cos(tt * Math.PI)); // smoothstep
+      closes.push(base);
+    }
+    // add correlated noise
+    let drift = 0;
+    for (let i = 0; i < n; i++) { drift = drift * 0.6 + (Math.random() - 0.5) * closes[i] * vol; closes[i] = Math.max(0.01, closes[i] + drift); }
+    return buildBars(closes);
+  }
+  function buildBars(closes) {
+    const out = []; const now = Date.now(); const day = 86400000;
+    let prev = closes[0];
+    for (let i = 0; i < closes.length; i++) {
+      const c = closes[i], o = i === 0 ? c * (1 + (Math.random() - 0.5) * 0.01) : prev;
+      const body = Math.abs(c - o); const wick = (body + c * 0.006) * (0.4 + Math.random());
+      const h = Math.max(o, c) + wick * Math.random();
+      const l = Math.min(o, c) - wick * Math.random();
+      out.push({ t: new Date(now - (closes.length - 1 - i) * day), o, h, l, c, v: Math.round(1e6 * (0.5 + Math.random())) });
+      prev = c;
+    }
+    return out;
+  }
+  function genDemo(type) {
+    const n = 160, P = 100;
+    if (type === "hs") { symLabel = "DEMO · 三尊天井"; return synth([
+      { x: 0, y: P * 0.8 }, { x: 0.14, y: P * 0.86 }, { x: 0.24, y: P }, { x: 0.33, y: P * 0.9 },
+      { x: 0.46, y: P * 1.12 }, { x: 0.58, y: P * 0.9 }, { x: 0.7, y: P * 1.01 }, { x: 0.8, y: P * 0.9 }, { x: 1, y: P * 0.74 },
+    ], n, 0.012); }
+    if (type === "ihs") { symLabel = "DEMO · 逆三尊"; return synth([
+      { x: 0, y: P * 1.2 }, { x: 0.14, y: P * 1.14 }, { x: 0.24, y: P }, { x: 0.33, y: P * 1.1 },
+      { x: 0.46, y: P * 0.88 }, { x: 0.58, y: P * 1.1 }, { x: 0.7, y: P * 0.99 }, { x: 0.8, y: P * 1.1 }, { x: 1, y: P * 1.26 },
+    ], n, 0.012); }
+    if (type === "double") { symLabel = "DEMO · ダブルトップ"; return synth([
+      { x: 0, y: P * 0.8 }, { x: 0.14, y: P * 0.85 }, { x: 0.29, y: P * 1.1 }, { x: 0.45, y: P * 0.93 }, { x: 0.61, y: P * 1.1 }, { x: 0.77, y: P * 0.9 }, { x: 1, y: P * 0.79 },
+    ], n, 0.006); }
+    if (type === "triangle") { symLabel = "DEMO · 対称三角"; return synth([
+      { x: 0, y: P * 0.9 }, { x: 0.1, y: P * 1.18 }, { x: 0.26, y: P * 0.94 }, { x: 0.42, y: P * 1.12 },
+      { x: 0.58, y: P * 0.98 }, { x: 0.74, y: P * 1.06 }, { x: 0.9, y: P * 1.01 }, { x: 1, y: P * 1.05 },
+    ], n, 0.008); }
+    // random walk
+    symLabel = "DEMO · ランダムウォーク";
+    const closes = [P]; for (let i = 1; i < n; i++) closes.push(Math.max(1, closes[i - 1] * (1 + (Math.random() - 0.5) * 0.03)));
+    return buildBars(closes);
+  }
+
+  // ============================================================= DATA: CSV
+  function parseCSV(text) {
+    text = text.replace(/^﻿/, "").trim();
+    const rows = text.split(/\r?\n/).filter(r => r.trim());
+    if (!rows.length) throw new Error("空のファイルです。");
+    const delim = (rows[0].match(/\t/) ? "\t" : rows[0].match(/;/) && !rows[0].match(/,/) ? ";" : ",");
+    const split = r => r.split(delim).map(c => c.trim().replace(/^"|"$/g, ""));
+    let header = split(rows[0]).map(h => h.toLowerCase());
+    let idx = { t: -1, o: -1, h: -1, l: -1, c: -1, v: -1 };
+    const has = header.some(h => /date|time|日付|時|open|始値|close|終値/.test(h));
+    let start = 0;
+    if (has) {
+      start = 1;
+      header.forEach((h, i) => {
+        if (/date|time|日付|時/.test(h) && idx.t < 0) idx.t = i;
+        else if (/open|始値/.test(h)) idx.o = i;
+        else if (/high|高値/.test(h)) idx.h = i;
+        else if (/low|安値/.test(h)) idx.l = i;
+        else if (/(adj.*)?close|終値|price/.test(h) && idx.c < 0) idx.c = i;
+        else if (/volume|出来高|vol/.test(h)) idx.v = i;
+      });
+    }
+    if (idx.o < 0 || idx.h < 0 || idx.l < 0 || idx.c < 0) { idx = { t: 0, o: 1, h: 2, l: 3, c: 4, v: 5 }; } // positional fallback
+    const out = [];
+    for (let r = start; r < rows.length; r++) {
+      const cells = split(rows[r]); if (cells.length < 4) continue;
+      const o = +cells[idx.o], h = +cells[idx.h], l = +cells[idx.l], c = +cells[idx.c];
+      if ([o, h, l, c].some(x => isNaN(x))) continue;
+      let t = parseDate(cells[idx.t]);
+      out.push({ t, o, h, l, c, v: idx.v >= 0 ? +cells[idx.v] || 0 : 0 });
+    }
+    if (out.length < 20) throw new Error(`有効な行が ${out.length} 件しかありません（最低20件必要）。列の並びや区切り文字をご確認ください。`);
+    // sort ascending by time when timestamps are valid
+    if (out.every(b => b.t instanceof Date && !isNaN(b.t))) out.sort((a, b) => a.t - b.t);
+    return out;
+  }
+  function parseDate(s) {
+    if (s == null) return new Date();
+    s = String(s).trim();
+    if (/^\d{9,13}$/.test(s)) { const n = +s; return new Date(n < 1e12 ? n * 1000 : n); }
+    const d = new Date(s); return isNaN(d) ? new Date() : d;
+  }
+
+  // ============================================================= DATA: live fetch
+  async function fetchLive(sym) {
+    if (!settings.apiKey) throw new Error("APIキーが未設定です。設定 ⚙ から無料キーを登録してください。");
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      if (settings.provider === "twelvedata") {
+        const u = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${settings.interval}&outputsize=400&format=JSON&apikey=${encodeURIComponent(settings.apiKey)}`;
+        const d = await (await fetch(u, { signal: ctrl.signal })).json();
+        if (d.status === "error" || !d.values) throw new Error(d.message || "取得に失敗しました。銘柄・キー・無料枠の制限をご確認ください。");
+        metaLabel = (d.meta && d.meta.exchange ? d.meta.exchange + " · " : "") + settings.interval;
+        return d.values.map(v => ({ t: new Date(v.datetime), o: +v.open, h: +v.high, l: +v.low, c: +v.close, v: +v.volume || 0 })).reverse();
+      } else {
+        const fn = /^\d/.test(settings.interval) && settings.interval.includes("h") ? "TIME_SERIES_INTRADAY" : settings.interval === "1week" ? "TIME_SERIES_WEEKLY" : "TIME_SERIES_DAILY";
+        let u = `https://www.alphavantage.co/query?function=${fn}&symbol=${encodeURIComponent(sym)}&outputsize=compact&apikey=${encodeURIComponent(settings.apiKey)}`;
+        if (fn === "TIME_SERIES_INTRADAY") u += `&interval=${settings.interval === "4h" ? "60min" : "60min"}`;
+        const d = await (await fetch(u, { signal: ctrl.signal })).json();
+        if (d.Note || d.Information) throw new Error("APIの利用制限に達したか、キーが無効です（無料枠は1分/1日あたりの回数制限があります）。");
+        const key = Object.keys(d).find(k => /Time Series/.test(k));
+        if (!key || d["Error Message"]) throw new Error(d["Error Message"] || "銘柄が見つかりませんでした。");
+        const ts = d[key]; metaLabel = settings.interval;
+        return Object.keys(ts).sort().map(dt => ({ t: new Date(dt), o: +ts[dt]["1. open"], h: +ts[dt]["2. high"], l: +ts[dt]["3. low"], c: +ts[dt]["4. close"], v: +ts[dt]["5. volume"] || 0 }));
+      }
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("タイムアウトしました。時間をおいて再試行してください。");
+      if (e instanceof TypeError) throw new Error("ネットワーク/CORSエラーで取得できませんでした。キーやプロバイダ設定をご確認ください。");
+      throw e;
+    } finally { clearTimeout(to); }
+  }
+
+  // ============================================================= ANALYSIS
+  // ATR for scale-aware tolerances
+  function atr(bars, p = 14) {
+    let sum = 0, cnt = 0;
+    for (let i = 1; i < bars.length; i++) { const tr = Math.max(bars[i].h - bars[i].l, Math.abs(bars[i].h - bars[i - 1].c), Math.abs(bars[i].l - bars[i - 1].c)); sum += tr; cnt++; }
+    return cnt ? sum / cnt : 0;
+  }
+
+  // ZigZag pivots: fractal highs/lows with window w, then enforce alternation.
+  function findPivots(bars, w) {
+    const raw = [];
+    for (let i = 0; i < bars.length; i++) {
+      let isH = true, isL = true;
+      for (let j = Math.max(0, i - w); j <= Math.min(bars.length - 1, i + w); j++) {
+        if (j === i) continue;
+        if (bars[j].h >= bars[i].h) isH = false;
+        if (bars[j].l <= bars[i].l) isL = false;
+      }
+      if (isH) raw.push({ i, price: bars[i].h, type: "H" });
+      if (isL) raw.push({ i, price: bars[i].l, type: "L" });
+    }
+    raw.sort((a, b) => a.i - b.i || (a.type === "H" ? -1 : 1));
+    // enforce alternation: collapse consecutive same-type, keeping the extreme
+    const piv = [];
+    for (const p of raw) {
+      const last = piv[piv.length - 1];
+      if (!last) { piv.push(p); continue; }
+      if (last.type === p.type) {
+        if ((p.type === "H" && p.price > last.price) || (p.type === "L" && p.price < last.price)) piv[piv.length - 1] = p;
+      } else piv.push(p);
+    }
+    return piv;
+  }
+
+  function analyze() {
+    patterns = []; srLevels = [];
+    if (bars.length < 20) return;
+    const w = [0, 6, 4, 3, 2, 2][sense];        // sensitivity → pivot window
+    const relTolBase = [0, 0.02, 0.03, 0.04, 0.055, 0.07][sense]; // shoulder/peak tolerance
+    const A = atr(bars);
+    const piv = findPivots(bars, w);
+    pivotsCache = piv;
+    const price = bars[bars.length - 1].c;
+    const tol = Math.max(relTolBase, (A / price) * 1.2); // scale-aware
+
+    detectHS(piv, bars, tol, false); // head & shoulders top
+    detectHS(piv, bars, tol, true);  // inverse
+    detectDouble(piv, bars, tol);
+    detectTriangle(piv, bars);
+    detectSR(piv, bars, A);
+
+    // rank: confidence desc, then recency
+    patterns.sort((a, b) => b.confidence - a.confidence || b.endIdx - a.endIdx);
+  }
+
+  function pctDiff(a, b) { return Math.abs(a - b) / ((a + b) / 2); }
+
+  // Head & Shoulders (top: peaks) / Inverse (bottoms)
+  function detectHS(piv, bars, tol, inv) {
+    // pattern of 5 pivots: shoulder, trough, head, trough, shoulder
+    const outer = inv ? "L" : "H"; // shoulders+head are these
+    const inner = inv ? "H" : "L"; // the two necklines between
+    for (let k = 0; k + 4 < piv.length; k++) {
+      const p = piv.slice(k, k + 5);
+      if (!(p[0].type === outer && p[1].type === inner && p[2].type === outer && p[3].type === inner && p[4].type === outer)) continue;
+      const ls = p[0].price, t1 = p[1].price, head = p[2].price, t2 = p[3].price, rs = p[4].price;
+      // head must be the extreme
+      if (!inv && !(head > ls && head > rs)) continue;
+      if (inv && !(head < ls && head < rs)) continue;
+      // shoulders roughly equal
+      const shDiff = pctDiff(ls, rs); if (shDiff > tol * 1.6) continue;
+      // head prominence beyond shoulders
+      const prom = inv ? (Math.max(ls, rs) - head) / head : (head - Math.max(ls, rs)) / head;
+      if (prom < tol * 0.7) continue;
+      // neckline roughly level
+      const nkDiff = pctDiff(t1, t2); if (nkDiff > tol * 2.2) continue;
+      // shoulders should sit on the correct side of neckline
+      const neck = (t1 + t2) / 2;
+      if (!inv && !(ls > neck && rs > neck)) continue;
+      if (inv && !(ls < neck && rs < neck)) continue;
+      // confirmation: did price break the neckline after the right shoulder?
+      let broke = false, breakIdx = -1;
+      for (let i = p[4].i; i < bars.length; i++) { if ((!inv && bars[i].c < neck) || (inv && bars[i].c > neck)) { broke = true; breakIdx = i; break; } }
+      // symmetry of time
+      const symT = 1 - clamp(Math.abs((p[2].i - p[0].i) - (p[4].i - p[2].i)) / Math.max(1, p[4].i - p[0].i), 0, 1);
+      const conf = Math.round(clamp(
+        100 - shDiff / tol * 22 - nkDiff / (tol * 2) * 16 + (broke ? 12 : 0) + symT * 10 + clamp(prom / tol, 0, 2) * 6 - 8, 25, 99));
+      patterns.push({
+        kind: "hs", name: inv ? "逆三尊(逆ヘッド&ショルダー)" : "三尊天井(ヘッド&ショルダー)",
+        dir: inv ? "bull" : "bear", confidence: conf,
+        startIdx: p[0].i, endIdx: broke ? breakIdx : p[4].i,
+        pivots: p.map(x => ({ i: x.i, price: x.price })),
+        neckline: { t1: p[1], t2: p[3], y: neck },
+        broke, breakIdx,
+        desc: inv
+          ? `安値が3つ並び中央が最安。ネックライン ${fmt(neck)} を上抜けすると上昇転換のサイン。` + (broke ? " すでに上抜け済み。" : " まだ未達（要確認）。")
+          : `高値が3つ並び中央が最高。ネックライン ${fmt(neck)} を下抜けすると下落転換のサイン。` + (broke ? " すでに下抜け済み。" : " まだ未達（要確認）。"),
+        meta: [{ k: "ネック", v: fmt(neck) }, { k: "左肩/右肩差", v: (shDiff * 100).toFixed(1) + "%" }],
+        target: inv ? neck + (neck - head) : neck - (head - neck),
+      });
+      k += 1;
+    }
+  }
+
+  // Double / Triple top & bottom
+  function detectDouble(piv, bars, tol) {
+    for (let k = 0; k + 2 < piv.length; k++) {
+      const a = piv[k], m = piv[k + 1], b = piv[k + 2];
+      if (!(a.type === b.type && m.type !== a.type)) continue;
+      const top = a.type === "H";
+      if (pctDiff(a.price, b.price) > tol * 1.3) continue;             // two peaks ~ equal
+      const depth = Math.abs(((a.price + b.price) / 2) - m.price) / ((a.price + b.price) / 2);
+      if (depth < tol * 1.6) continue;                                 // meaningful valley/peak between
+      // triple?
+      let triple = false, third = null;
+      if (k + 4 < piv.length) {
+        const m2 = piv[k + 3], c = piv[k + 4];
+        if (c.type === a.type && m2.type === m.type && pctDiff(b.price, c.price) < tol * 1.3 && Math.abs(((b.price + c.price) / 2) - m2.price) / b.price > tol * 1.4) { triple = true; third = c; }
+      }
+      const neck = m.price;
+      let broke = false, breakIdx = -1; const last = triple ? third : b;
+      for (let i = last.i; i < bars.length; i++) { if ((top && bars[i].c < neck) || (!top && bars[i].c > neck)) { broke = true; breakIdx = i; break; } }
+      const conf = Math.round(clamp(88 - pctDiff(a.price, b.price) / tol * 26 + (broke ? 12 : 0) + (triple ? 6 : 0) + clamp(depth / tol, 0, 2) * 5 - 6, 25, 98));
+      const nm = triple ? (top ? "トリプルトップ" : "トリプルボトム") : (top ? "ダブルトップ" : "ダブルボトム");
+      patterns.push({
+        kind: "double", name: nm, dir: top ? "bear" : "bull", confidence: conf,
+        startIdx: a.i, endIdx: broke ? breakIdx : last.i,
+        pivots: (triple ? [a, m, b, piv[k + 3], third] : [a, m, b]).map(x => ({ i: x.i, price: x.price })),
+        neckline: { y: neck }, broke, breakIdx,
+        desc: top
+          ? `ほぼ同値の高値が${triple ? "3" : "2"}つ。ネック ${fmt(neck)} を下抜けで下落転換。` + (broke ? " 下抜け済み。" : " 未達。")
+          : `ほぼ同値の安値が${triple ? "3" : "2"}つ。ネック ${fmt(neck)} を上抜けで上昇転換。` + (broke ? " 上抜け済み。" : " 未達。"),
+        meta: [{ k: "山/谷の差", v: (pctDiff(a.price, b.price) * 100).toFixed(1) + "%" }, { k: "ネック", v: fmt(neck) }],
+        target: top ? neck - (((a.price + b.price) / 2) - neck) : neck + (neck - ((a.price + b.price) / 2)),
+      });
+      if (triple) k += 2; else k += 1;
+    }
+  }
+
+  function linfit(pts) { // pts:[{x,y}] -> {m,b,r2}
+    const n = pts.length; if (n < 2) return null;
+    let sx = 0, sy = 0, sxy = 0, sxx = 0, syy = 0;
+    for (const p of pts) { sx += p.x; sy += p.y; sxy += p.x * p.y; sxx += p.x * p.x; syy += p.y * p.y; }
+    const d = n * sxx - sx * sx; if (d === 0) return null;
+    const m = (n * sxy - sx * sy) / d, b = (sy - m * sx) / n;
+    const ym = sy / n; let ssr = 0, sst = 0;
+    for (const p of pts) { const f = m * p.x + b; ssr += (p.y - f) ** 2; sst += (p.y - ym) ** 2; }
+    return { m, b, r2: sst === 0 ? 0 : 1 - ssr / sst };
+  }
+
+  // Triangles / wedges — try several look-back windows, keep the best fit
+  function detectTriangle(piv, bars) {
+    if (piv.length < 4) return;
+    const span = bars.length;
+    const price = bars[span - 1].c;
+    const flat = 0.03;
+    let best = null;
+    for (const frac of [0.12, 0.28, 0.44, 0.58]) {
+      let recent = piv.filter(p => p.i >= span * frac);
+      if (recent.length < 4) continue;
+      const highs = recent.filter(p => p.type === "H").map(p => ({ x: p.i, y: p.price, i: p.i }));
+      const lows = recent.filter(p => p.type === "L").map(p => ({ x: p.i, y: p.price, i: p.i }));
+      if (highs.length < 2 || lows.length < 2) continue;
+      const fh = linfit(highs), fl = linfit(lows);
+      if (!fh || !fl) continue;
+      const x0 = recent[0].i, x1 = span - 1;
+      const relH = fh.m * (x1 - x0) / price, relL = fl.m * (x1 - x0) / price; // slope across window, fraction of price
+      const gap0 = (fh.m * x0 + fh.b) - (fl.m * x0 + fl.b);
+      const gap1 = (fh.m * x1 + fh.b) - (fl.m * x1 + fl.b);
+      if (gap0 <= 0 || gap1 <= 0) continue;
+      if (gap1 >= gap0 * 0.9) continue; // must be converging
+      let name = null, dir = "neutral";
+      if (relH < -flat && relL > flat) { name = "対称三角保ち合い"; dir = "neutral"; }
+      else if (Math.abs(relH) <= flat && relL > flat) { name = "上昇三角保ち合い"; dir = "bull"; }
+      else if (relH < -flat && Math.abs(relL) <= flat) { name = "下降三角保ち合い"; dir = "bear"; }
+      else if (relH < -flat && relL < -flat && relL < relH * 1.3) { name = "下降ウェッジ"; dir = "bull"; }
+      else if (relH > flat && relL > flat && relH < relL * 1.3) { name = "上昇ウェッジ"; dir = "bear"; }
+      if (!name) continue;
+      const quality = clamp((fh.r2 + fl.r2) / 2, 0, 1);
+      const touches = highs.length + lows.length;
+      const conf = Math.round(clamp(50 + quality * 36 + clamp(touches - 4, 0, 4) * 3.5 + (1 - gap1 / gap0) * 12, 25, 97));
+      const cand = {
+        kind: "triangle", name, dir, confidence: conf, _q: quality * touches,
+        startIdx: x0, endIdx: x1, tri: { fh, fl, x0, x1 },
+        pivots: recent.map(p => ({ i: p.i, price: p.price })),
+        desc: `直近の高値・安値がそれぞれ直線的に${name.includes("対称") ? "収れん" : "推移"}。${dir === "bull" ? "上放れで上昇" : dir === "bear" ? "下放れで下落" : "放れた方向へ"}しやすい保ち合い。`,
+        meta: [{ k: "上辺傾き", v: (relH * 100).toFixed(1) + "%" }, { k: "下辺傾き", v: (relL * 100).toFixed(1) + "%" }, { k: "当たり", v: touches + "点" }],
+      };
+      if (!best || cand._q > best._q) best = cand;
+    }
+    if (best) { delete best._q; patterns.push(best); }
+  }
+
+  // Support / Resistance via pivot clustering
+  function detectSR(piv, bars, A) {
+    const price = bars[bars.length - 1].c;
+    const tolAbs = Math.max(A * 0.9, price * 0.012);
+    const pts = piv.map(p => ({ price: p.price, i: p.i, type: p.type }));
+    const used = new Array(pts.length).fill(false);
+    for (let i = 0; i < pts.length; i++) {
+      if (used[i]) continue;
+      const cluster = [pts[i]]; used[i] = true;
+      for (let j = i + 1; j < pts.length; j++) { if (!used[j] && Math.abs(pts[j].price - pts[i].price) <= tolAbs) { cluster.push(pts[j]); used[j] = true; } }
+      if (cluster.length < 2) continue;
+      const level = avg(cluster.map(c => c.price));
+      const lastTouch = Math.max(...cluster.map(c => c.i));
+      srLevels.push({ y: level, touches: cluster.length, lastTouch, isRes: level >= price, firstIdx: Math.min(...cluster.map(c => c.i)) });
+    }
+    srLevels.sort((a, b) => b.touches - a.touches);
+    srLevels = srLevels.slice(0, 6);
+  }
+
+  // ============================================================= CHART RENDERING
+  const canvas = $("#chart"), ctx = canvas.getContext("2d");
+  let CW = 0, CH = 0, DPR = 1;
+  const pad = { l: 12, r: 62, t: 46, b: 26 };
+  let view = null; // {i0,i1,pMin,pMax, x(i), y(p)}
+  let hover = -1;
+
+  function resizeChart() {
+    DPR = Math.min(devicePixelRatio || 1, 2);
+    const rect = canvas.getBoundingClientRect();
+    CW = rect.width; CH = clamp(rect.width * 0.5, 300, 460);
+    canvas.style.height = CH + "px";
+    canvas.width = CW * DPR; canvas.height = CH * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawChart();
+  }
+
+  function computeView() {
+    if (!bars.length) { view = null; return; }
+    const i0 = 0, i1 = bars.length - 1;
+    let pMin = Infinity, pMax = -Infinity;
+    for (let i = i0; i <= i1; i++) { pMin = Math.min(pMin, bars[i].l); pMax = Math.max(pMax, bars[i].h); }
+    // include SR/pattern targets softly
+    const span = (pMax - pMin) || 1; pMin -= span * 0.06; pMax += span * 0.06;
+    const plotW = CW - pad.l - pad.r, plotH = CH - pad.t - pad.b;
+    const x = i => pad.l + (i1 === i0 ? plotW / 2 : (i - i0) / (i1 - i0) * plotW);
+    const y = p => pad.t + (pMax - p) / (pMax - pMin) * plotH;
+    view = { i0, i1, pMin, pMax, x, y, plotW, plotH, bw: plotW / (i1 - i0 + 1) };
+  }
+
+  function drawChart() {
+    ctx.clearRect(0, 0, CW, CH);
+    if (!bars.length) return;
+    computeView();
+    const { i0, i1, pMin, pMax, x, y } = view;
+    // grid + price axis
+    ctx.font = "10px ui-monospace, monospace"; ctx.textBaseline = "middle";
+    const ticks = 5;
+    for (let k = 0; k <= ticks; k++) {
+      const p = pMin + (pMax - pMin) * k / ticks; const yy = y(p);
+      ctx.strokeStyle = "rgba(255,255,255,0.045)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(CW - pad.r, yy); ctx.stroke();
+      ctx.fillStyle = "rgba(150,175,190,0.6)"; ctx.textAlign = "left";
+      ctx.fillText(fmt(p, p > 500 ? 0 : 2), CW - pad.r + 6, yy);
+    }
+    // date axis (a few)
+    ctx.textAlign = "center"; ctx.fillStyle = "rgba(150,175,190,0.5)";
+    const dticks = Math.min(6, i1 - i0);
+    for (let k = 0; k <= dticks; k++) {
+      const i = Math.round(i0 + (i1 - i0) * k / dticks); const b = bars[i]; if (!b) continue;
+      const lbl = b.t instanceof Date && !isNaN(b.t) ? (b.t.getMonth() + 1) + "/" + b.t.getDate() : String(i);
+      ctx.fillText(lbl, x(i), CH - pad.b + 12);
+    }
+    // candles
+    const bw = Math.max(1.2, view.bw * 0.64);
+    for (let i = i0; i <= i1; i++) {
+      const b = bars[i]; const up = b.c >= b.o; const col = up ? getVar("--up") : getVar("--down");
+      const cx = x(i);
+      ctx.strokeStyle = col; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx, y(b.h)); ctx.lineTo(cx, y(b.l)); ctx.stroke();
+      const yo = y(b.o), yc = y(b.c); const top = Math.min(yo, yc), hgt = Math.max(1, Math.abs(yc - yo));
+      ctx.fillStyle = col; ctx.fillRect(cx - bw / 2, top, bw, hgt);
+    }
+    drawOverlays();
+    // crosshair + hover readout
+    if (hover >= i0 && hover <= i1) {
+      const b = bars[hover]; const cx = x(hover);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(cx, pad.t); ctx.lineTo(cx, CH - pad.b); ctx.stroke(); ctx.setLineDash([]);
+      updateReadout(b);
+    }
+    // scanning sweep
+    if (scanning) {
+      const sx = pad.l + ((performance.now() / 700) % 1) * (CW - pad.l - pad.r);
+      const g = ctx.createLinearGradient(sx - 40, 0, sx + 8, 0);
+      g.addColorStop(0, "rgba(255,191,77,0)"); g.addColorStop(1, "rgba(255,191,77,0.25)");
+      ctx.fillStyle = g; ctx.fillRect(sx - 40, pad.t, 48, CH - pad.t - pad.b);
+    }
+  }
+
+  function drawOverlays() {
+    const { x, y } = view;
+    // support / resistance
+    if (show.sr) for (const s of srLevels) {
+      const yy = y(s.y);
+      ctx.strokeStyle = s.isRes ? "rgba(255,215,107,0.5)" : "rgba(255,215,107,0.5)";
+      ctx.lineWidth = clamp(s.touches, 1, 3); ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(x(s.firstIdx), yy); ctx.lineTo(CW - pad.r, yy); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(255,215,107,0.85)"; ctx.font = "9px ui-monospace,monospace"; ctx.textAlign = "left";
+      ctx.fillText((s.isRes ? "R " : "S ") + "×" + s.touches, x(s.firstIdx) + 3, yy - 5);
+    }
+    // patterns
+    patterns.forEach((pt, idx) => {
+      if (!show[pt.kind] && !(pt.kind === "hs" && show.hs)) return;
+      if (pt.kind === "hs" && !show.hs) return;
+      if (pt.kind === "double" && !show.double) return;
+      if (pt.kind === "triangle" && !show.triangle) return;
+      const isSel = idx === selected;
+      const dim = selected >= 0 && !isSel;
+      const alpha = dim ? 0.18 : 1;
+      ctx.globalAlpha = alpha;
+      const col = pt.kind === "hs" ? getVar("--hs") : pt.kind === "double" ? getVar("--dbl") : getVar("--tri");
+      if (pt.kind === "triangle") {
+        const { fh, fl, x0, x1 } = pt.tri;
+        ctx.strokeStyle = col; ctx.lineWidth = isSel ? 2.4 : 1.6;
+        ctx.beginPath(); ctx.moveTo(x(x0), y(fh.m * x0 + fh.b)); ctx.lineTo(x(x1), y(fh.m * x1 + fh.b)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x(x0), y(fl.m * x0 + fl.b)); ctx.lineTo(x(x1), y(fl.m * x1 + fl.b)); ctx.stroke();
+      } else {
+        // connect pivots
+        ctx.strokeStyle = col; ctx.lineWidth = isSel ? 2.6 : 1.7; ctx.lineJoin = "round";
+        ctx.beginPath();
+        pt.pivots.forEach((p, i) => { const xx = x(p.i), yy = y(p.price); i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); });
+        ctx.stroke();
+        // pivot dots
+        pt.pivots.forEach(p => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x(p.i), y(p.price), isSel ? 4 : 3, 0, TAU); ctx.fill(); });
+        // neckline
+        if (pt.neckline) {
+          const ny = y(pt.neckline.y);
+          ctx.strokeStyle = col; ctx.lineWidth = isSel ? 1.8 : 1.1; ctx.setLineDash([5, 4]);
+          const nx0 = x(pt.pivots[0].i), nx1 = x(pt.endIdx);
+          ctx.beginPath(); ctx.moveTo(nx0, ny); ctx.lineTo(Math.max(nx1, x(pt.pivots[pt.pivots.length - 1].i)), ny); ctx.stroke(); ctx.setLineDash([]);
+        }
+        // break marker
+        if (pt.broke && pt.breakIdx >= 0) {
+          ctx.fillStyle = col; ctx.globalAlpha = alpha;
+          const bx = x(pt.breakIdx), by = y(bars[pt.breakIdx].c);
+          ctx.beginPath(); ctx.arc(bx, by, isSel ? 5 : 3.5, 0, TAU); ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.stroke();
+        }
+        // label for selected
+        if (isSel) {
+          const lx = x(pt.pivots[Math.floor(pt.pivots.length / 2)].i);
+          const ly = y(Math.max(...pt.pivots.map(p => p.price)));
+          ctx.fillStyle = col; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
+          ctx.fillText(pt.name.split("(")[0], lx, ly - 10 + (pt.dir === "bull" ? 34 : 0));
+        }
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function getVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+  function updateReadout(b) {
+    const up = b.c >= b.o;
+    $("#readout").innerHTML =
+      `${b.t instanceof Date && !isNaN(b.t) ? b.t.toLocaleDateString("ja-JP") : ""}<br>` +
+      `O <b>${fmt(b.o)}</b>　H <b>${fmt(b.h)}</b><br>L <b>${fmt(b.l)}</b>　C <b style="color:${up ? "var(--up)" : "var(--down)"}">${fmt(b.c)}</b>`;
+  }
+
+  canvas.addEventListener("mousemove", e => {
+    if (!view) return;
+    const rect = canvas.getBoundingClientRect(); const mx = e.clientX - rect.left;
+    const { i0, i1, plotW } = view; const rel = (mx - pad.l) / plotW;
+    hover = clamp(Math.round(i0 + rel * (i1 - i0)), i0, i1);
+    drawChart();
+  });
+  canvas.addEventListener("mouseleave", () => { hover = -1; $("#readout").innerHTML = ""; drawChart(); });
+
+  // ============================================================= RESULTS UI
+  const KIND_COL = { hs: "var(--hs)", double: "var(--dbl)", triangle: "var(--tri)" };
+  function renderResults() {
+    const box = $("#results");
+    const vis = patterns.filter(p => show[p.kind]);
+    if (!bars.length) return;
+    if (!patterns.length) {
+      box.innerHTML = `<div class="status"><div class="big">🔍</div><h3>明確なパターンは見つかりませんでした</h3><p>感度スライダーを上げると検出しやすくなります。だまし回避のため既定はやや厳しめです。サポート/レジスタンスはチャート上に表示されています。</p></div>`;
+      return;
+    }
+    const head = `<div class="res-head"><h2>検出パターン</h2><span class="count">${vis.length} 件（信頼度順）</span></div>`;
+    const cards = patterns.map((pt, idx) => {
+      if (!show[pt.kind]) return "";
+      const col = KIND_COL[pt.kind] || "var(--dim)";
+      const dirCls = pt.dir === "bull" ? "bull" : pt.dir === "bear" ? "bear" : "neutral";
+      const dirTxt = pt.dir === "bull" ? "強気転換" : pt.dir === "bear" ? "弱気転換" : "中立";
+      const range = bars[pt.startIdx] && bars[pt.endIdx] && bars[pt.startIdx].t instanceof Date && !isNaN(bars[pt.startIdx].t)
+        ? `${bars[pt.startIdx].t.toLocaleDateString("ja-JP", { month: "short", day: "numeric" })} → ${bars[pt.endIdx].t.toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}` : `bar ${pt.startIdx}–${pt.endIdx}`;
+      const cc = pt.confidence >= 75 ? "var(--up)" : pt.confidence >= 55 ? "var(--accent)" : "var(--dim)";
+      const meta = (pt.meta || []).map(m => `<span><b>${m.k}</b> ${m.v}</span>`).join("");
+      const tgt = pt.target != null ? `<span><b>目標(概算)</b> ${fmt(pt.target)}</span>` : "";
+      return `<div class="pcard ${idx === selected ? "sel" : ""}" data-idx="${idx}" style="border-left-color:${col}">
+        <div class="ptop"><span class="pname">${pt.name.split("(")[0]}</span>
+          <span class="dir ${dirCls}">${dirTxt}</span>
+          <span class="conf"><b style="color:${cc}">${pt.confidence}</b><small>CONF</small></span></div>
+        <div class="pdesc">${pt.desc}</div>
+        <div class="pmeta"><span><b>期間</b> ${range}</span>${meta}${tgt}</div>
+        <div class="confbar"><i style="width:${pt.confidence}%;background:${cc}"></i></div>
+      </div>`;
+    }).join("");
+    box.innerHTML = head + `<div class="cards">${cards}</div>`;
+    box.querySelectorAll(".pcard").forEach(c => c.onclick = () => {
+      const i = +c.dataset.idx; selected = selected === i ? -1 : i; renderResults(); drawChart();
+    });
+  }
+
+  // ============================================================= RUN
+  async function run() {
+    selected = -1;
+    try {
+      $("#scanBtn").disabled = true;
+      if (source === "demo") { metaLabel = bars.length ? metaLabel : ""; bars = genDemo(demoType); metaLabel = bars.length + " 本 · 日足(合成)"; }
+      else if (source === "live") {
+        const sym = $("#tickerInput").value.trim().toUpperCase();
+        if (!sym) { showErr("ティッカーを入力してください。"); $("#scanBtn").disabled = false; return; }
+        symLabel = sym; setScanning(true);
+        bars = await fetchLive(sym);
+        symLabel = sym;
+      } else if (source === "csv") {
+        if (!bars.length) { showErr("先に「CSVを選択」でファイルを読み込んでください。"); $("#scanBtn").disabled = false; return; }
+      }
+      setScanning(true);
+      // brief scan animation, then analyze (keeps UI honest that work happens client-side)
+      await new Promise(r => setTimeout(r, 420));
+      analyze();
+      setScanning(false);
+      $("#cSym").textContent = symLabel;
+      $("#cMeta").textContent = metaLabel + (bars.length ? ` · ${bars.length}本` : "");
+      resizeChart();
+      renderResults();
+    } catch (e) {
+      setScanning(false);
+      showErr(e.message || "エラーが発生しました。");
+    } finally { $("#scanBtn").disabled = false; }
+  }
+  function setScanning(on) { scanning = on ? 1 : 0; if (on) scanLoop(); }
+  function scanLoop() { if (!scanning) return; drawChart(); requestAnimationFrame(scanLoop); }
+  function showErr(msg) { $("#results").innerHTML = `<div class="err-card"><b>取得/解析に失敗しました</b><br>${msg}</div>`; }
+
+  // ============================================================= UI WIRING
+  $("#srcSeg").querySelectorAll("button").forEach(b => b.onclick = () => {
+    source = b.dataset.src;
+    $("#srcSeg").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    $("#demoSeg").style.display = source === "demo" ? "" : "none";
+    $("#tickerWrap").style.display = source === "live" ? "" : "none";
+    $("#csvBtn").style.display = source === "csv" ? "" : "none";
+    $("#hintline").textContent = source === "demo"
+      ? "デモデータで検出を試せます。CSV / ライブ に切り替えると実データを解析できます。"
+      : source === "csv" ? "証券会社やTradingViewからの OHLC CSV（日付,始値,高値,安値,終値,…）を読み込めます。ネット接続は不要です。"
+      : "ティッカーを入力してスキャン。設定 ⚙ で無料APIキーを登録してください（Twelve Data / Alpha Vantage）。";
+  });
+  $("#demoSeg").querySelectorAll("button").forEach(b => b.onclick = () => {
+    demoType = b.dataset.demo; $("#demoSeg").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); run();
+  });
+  $("#scanBtn").onclick = run;
+  $("#tickerInput").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+  $("#csvFile").addEventListener("change", e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { try { bars = parseCSV(rd.result); symLabel = f.name.replace(/\.(csv|txt)$/i, ""); metaLabel = "CSV"; run(); } catch (err) { showErr(err.message); } };
+    rd.onerror = () => showErr("ファイルの読み込みに失敗しました。");
+    rd.readAsText(f);
+  });
+
+  document.querySelectorAll(".ptog").forEach(t => t.onclick = () => {
+    const p = t.dataset.p; show[p] = !show[p]; t.classList.toggle("off", !show[p]); drawChart(); renderResults();
+  });
+  const senseLbls = { 1: "とても厳しい", 2: "厳しい", 3: "標準", 4: "ゆるい", 5: "とてもゆるい" };
+  $("#sense").addEventListener("input", e => { sense = +e.target.value; $("#senseVal").textContent = senseLbls[sense]; });
+  $("#sense").addEventListener("change", () => { if (bars.length) { analyze(); drawChart(); renderResults(); } });
+
+  // settings drawer
+  const overlay = $("#overlay"), drawer = $("#drawer");
+  function openDrawer() { $("#provider").value = settings.provider; $("#apiKey").value = settings.apiKey; $("#interval").value = settings.interval; syncProviderLink(); overlay.classList.add("on"); drawer.classList.add("on"); }
+  function closeDrawer() { overlay.classList.remove("on"); drawer.classList.remove("on"); }
+  function syncProviderLink() { const a = $("#providerLink"); const tw = $("#provider").value === "twelvedata"; a.href = tw ? "https://twelvedata.com/pricing" : "https://www.alphavantage.co/support/#api-key"; a.textContent = tw ? "twelvedata.com（無料キー）" : "alphavantage.co（無料キー）"; }
+  $("#provider").addEventListener("change", syncProviderLink);
+  $("#settingsBtn").onclick = openDrawer;
+  overlay.onclick = closeDrawer;
+  $("#saveBtn").onclick = () => { settings.provider = $("#provider").value; settings.apiKey = $("#apiKey").value.trim(); settings.interval = $("#interval").value; saveSettings(); closeDrawer(); };
+
+  addEventListener("resize", () => { if (bars.length) resizeChart(); });
+
+  // logo: candlesticks forming a small head & shoulders
+  const lg = $("#logo"), lc = lg.getContext("2d");
+  const lseq = [40, 52, 46, 66, 44, 58, 40]; // rough H&S heights
+  function drawLogo() {
+    lc.clearRect(0, 0, 80, 80);
+    const base = 66, w = 7;
+    lseq.forEach((hh, i) => {
+      const x = 10 + i * 10; const up = i % 2 === 0;
+      lc.strokeStyle = up ? "#2fce8f" : "#ff6a7a"; lc.fillStyle = lc.strokeStyle; lc.lineWidth = 1.4;
+      lc.beginPath(); lc.moveTo(x, base - hh - 5); lc.lineTo(x, base - hh + 14); lc.stroke();
+      lc.fillRect(x - w / 2, base - hh, w, 9);
+    });
+    // neckline
+    lc.strokeStyle = "rgba(255,191,77,0.8)"; lc.setLineDash([3, 3]); lc.lineWidth = 1.2;
+    lc.beginPath(); lc.moveTo(8, base - 44 + 6); lc.lineTo(72, base - 44 + 6); lc.stroke(); lc.setLineDash([]);
+  }
+  drawLogo();
+
+  // boot
+  resizeChart();
+  run();
+})();
+</script>
+</body>
+</html>
