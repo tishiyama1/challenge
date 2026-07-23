@@ -221,6 +221,7 @@
   <div class="field">
     <label>データプロバイダ(ライブ)</label>
     <select id="provider">
+      <option value="polygon">Polygon.io（無料枠・CORS対応）</option>
       <option value="twelvedata">Twelve Data（無料枠・CORS対応）</option>
       <option value="alphavantage">Alpha Vantage（無料枠・CORS対応）</option>
     </select>
@@ -382,6 +383,22 @@
         if (d.status === "error" || !d.values) throw new Error(d.message || "取得に失敗しました。銘柄・キー・無料枠の制限をご確認ください。");
         metaLabel = (d.meta && d.meta.exchange ? d.meta.exchange + " · " : "") + settings.interval;
         return d.values.map(v => ({ t: new Date(v.datetime), o: +v.open, h: +v.high, l: +v.low, c: +v.close, v: +v.volume || 0 })).reverse();
+      } else if (settings.provider === "polygon") {
+        // Polygon.io aggregates (CORS-enabled). Free tier: ~2y history, 5 req/min, EOD.
+        const intMap = { "1day": [1, "day", 730], "1week": [1, "week", 1825], "1h": [1, "hour", 120], "4h": [4, "hour", 240] };
+        const [mult, span, backDays] = intMap[settings.interval] || [1, "day", 730];
+        const now = Date.now();
+        const toD = new Date(now).toISOString().slice(0, 10);
+        const fromD = new Date(now - backDays * 86400000).toISOString().slice(0, 10);
+        const u = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/range/${mult}/${span}/${fromD}/${toD}?adjusted=true&sort=asc&limit=50000&apiKey=${encodeURIComponent(settings.apiKey)}`;
+        const res = await fetch(u, { signal: ctrl.signal });
+        const d = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403 || d.status === "NOT_AUTHORIZED") throw new Error(d.message || d.error || "APIキーが無効か、この銘柄/期間が無料プランの権限外です。");
+        if (res.status === 429) throw new Error("Polygonの利用制限に達しました（無料枠は5リクエスト/分）。少し待って再試行してください。");
+        if (d.status === "ERROR" || d.error) throw new Error(d.error || d.message || "取得に失敗しました。");
+        if (!d.results || !d.results.length) throw new Error(d.message || `「${sym}」のデータがありません。ティッカーや期間、無料枠の対象銘柄かをご確認ください。`);
+        metaLabel = "Polygon · " + settings.interval + (d.status === "DELAYED" ? "（遅延）" : "");
+        return d.results.map(r => ({ t: new Date(r.t), o: r.o, h: r.h, l: r.l, c: r.c, v: r.v || 0 }));
       } else {
         const fn = /^\d/.test(settings.interval) && settings.interval.includes("h") ? "TIME_SERIES_INTRADAY" : settings.interval === "1week" ? "TIME_SERIES_WEEKLY" : "TIME_SERIES_DAILY";
         let u = `https://www.alphavantage.co/query?function=${fn}&symbol=${encodeURIComponent(sym)}&outputsize=compact&apikey=${encodeURIComponent(settings.apiKey)}`;
@@ -876,7 +893,16 @@
   const overlay = $("#overlay"), drawer = $("#drawer");
   function openDrawer() { $("#provider").value = settings.provider; $("#apiKey").value = settings.apiKey; $("#interval").value = settings.interval; syncProviderLink(); overlay.classList.add("on"); drawer.classList.add("on"); }
   function closeDrawer() { overlay.classList.remove("on"); drawer.classList.remove("on"); }
-  function syncProviderLink() { const a = $("#providerLink"); const tw = $("#provider").value === "twelvedata"; a.href = tw ? "https://twelvedata.com/pricing" : "https://www.alphavantage.co/support/#api-key"; a.textContent = tw ? "twelvedata.com（無料キー）" : "alphavantage.co（無料キー）"; }
+  function syncProviderLink() {
+    const a = $("#providerLink");
+    const links = {
+      polygon: ["https://polygon.io/dashboard/api-keys", "polygon.io（APIキー確認）"],
+      twelvedata: ["https://twelvedata.com/pricing", "twelvedata.com（無料キー）"],
+      alphavantage: ["https://www.alphavantage.co/support/#api-key", "alphavantage.co（無料キー）"],
+    };
+    const [href, label] = links[$("#provider").value] || links.twelvedata;
+    a.href = href; a.textContent = label;
+  }
   $("#provider").addEventListener("change", syncProviderLink);
   $("#settingsBtn").onclick = openDrawer;
   overlay.onclick = closeDrawer;
