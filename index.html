@@ -148,6 +148,12 @@
   .card.doubutsu:hover { box-shadow: 0 26px 60px rgba(120, 80, 20, 0.5); }
   .card.doubutsu h2 { color: #fff2df; }
   .card.doubutsu .en, .card.doubutsu .go { color: #ffb84a; }
+  /* hyoryu (漂流) theming */
+  .card.hyo .tag { background: rgba(226,201,138,0.14); color: #e8d6a4; border: 1px solid rgba(226,201,138,0.30); }
+  .card.hyo:hover { box-shadow: 0 26px 60px rgba(120, 70, 30, 0.45); }
+  .card.hyo h2 { color: #f4ead6; letter-spacing: 0.3em; }
+  .card.hyo .en, .card.hyo .go { color: #e2c98a; }
+
   /* kata (KATA) theming */
   .card.kata .tag { background: rgba(255, 191, 77, 0.15); color: #ffd98a; border: 1px solid rgba(255,191,77,0.30); }
   .card.kata:hover { box-shadow: 0 26px 60px rgba(110, 80, 20, 0.5); }
@@ -277,6 +283,18 @@
         <div class="go"><span>庭に入る</span><span class="arrow">→</span></div>
       </div>
     </a>
+
+    <a class="card hyo" href="hyoryu.html">
+      <div class="art"><canvas id="art-hyo"></canvas></div>
+      <div class="body">
+        <span class="tag">ROGUELIKE · 無人島</span>
+        <h2>漂流</h2>
+        <div class="en">HYORYU ― 無人島ローグライク</div>
+        <div class="desc">名も知らぬ島に流れ着いた。四十日後に嵐が来るまでに、海へ出るか、ここで暮らすかを決める。島も、木の実の毒も毎回ちがう。ゲージは一切なく、浜に組み上がっていくいかだと小屋が、そのまま進み具合になる。</div>
+        <div class="feat"><span>🌴 横スクロール</span><span>🎲 毎回ちがう島</span><span>📖 18の結末</span></div>
+        <div class="go"><span>漂着する</span><span class="arrow">→</span></div>
+      </div>
+    </a>
   </div>
 
   <footer>
@@ -316,6 +334,11 @@
     ro(); addEventListener("resize", ro);
     return { cv, c, get w() { return cv.width / devicePixelRatio; }, get h() { return cv.height / devicePixelRatio; } };
   }
+
+  // hyoryu preview: a side-scrolling shore at sunset, raft and campfire
+  const HY = setup("art-hyo");
+  const hyPalms = [];
+  for (let i = 0; i < 5; i++) hyPalms.push({ x: 0.56 + Math.random() * 0.42, s: rand(0.7, 1.15), ph: rand(0, TAU) });
 
   // galaxy preview: spiral of orbiting stars around a dark core
   const G = setup("art-galaxy");
@@ -662,6 +685,73 @@
         c.beginPath(); c.ellipse(0, 0, 2.6 * lf.s, 1.2 * lf.s, 0, 0, TAU); c.fill();
         c.restore();
       }
+    }
+
+    // ---- hyoryu card: sunset shore, raft under construction, campfire ----
+    {
+      const { c, w, h } = HY;
+      c.clearRect(0, 0, w, h);
+      const sky = c.createLinearGradient(0, 0, 0, h * 0.66);
+      sky.addColorStop(0, "#141c3e"); sky.addColorStop(0.42, "#4b3169");
+      sky.addColorStop(0.78, "#c8553e"); sky.addColorStop(1, "#f2a75e");
+      c.fillStyle = sky; c.fillRect(0, 0, w, h);
+      const hz = h * 0.66;
+      const sunX = w * 0.24, sunY = hz - Math.abs(Math.sin(t * 0.13)) * h * 0.1 - 4;
+      const gl = c.createRadialGradient(sunX, sunY, 1, sunX, sunY, h * 0.3);
+      gl.addColorStop(0, "rgba(255,170,90,0.36)"); gl.addColorStop(1, "rgba(255,170,90,0)");
+      c.fillStyle = gl; c.beginPath(); c.arc(sunX, sunY, h * 0.3, 0, TAU); c.fill();
+      c.fillStyle = "#ffb15e"; c.beginPath(); c.arc(sunX, sunY, h * 0.055, 0, TAU); c.fill();
+      const sea = c.createLinearGradient(0, hz - h * 0.14, 0, hz + h * 0.06);
+      sea.addColorStop(0, "#2b3762"); sea.addColorStop(0.5, "#69506e"); sea.addColorStop(1, "#bb7159");
+      c.fillStyle = sea; c.fillRect(0, hz - h * 0.14, w, h * 0.2);
+      for (let i = 0; i < 26; i++) {
+        const x = (i * 61 + t * 6) % w, y = hz - h * 0.13 + ((i * 29) % (h * 0.17));
+        c.fillStyle = `rgba(255,255,255,${0.05 + 0.1 * Math.abs(Math.sin(t + i))})`;
+        c.fillRect(x, y, 4 + (i % 7), 0.9);
+      }
+      const gy = hz + h * 0.05;
+      const gd = c.createLinearGradient(0, gy - 6, 0, h);
+      gd.addColorStop(0, "#c8ad83"); gd.addColorStop(1, "#4b402f");
+      c.fillStyle = gd; c.fillRect(0, gy, w, h - gy);
+      c.fillStyle = "rgba(255,255,255,0.6)"; c.fillRect(0, gy - 1, w, 1.6);
+      for (const pm of hyPalms) {                                  // 椰子
+        const px = pm.x * w, ph = h * 0.3 * pm.s;
+        c.strokeStyle = "#2a2016"; c.lineWidth = 2 * pm.s; c.lineCap = "round";
+        c.beginPath(); c.moveTo(px, gy); c.quadraticCurveTo(px + 4 * pm.s, gy - ph * 0.6, px + 9 * pm.s, gy - ph); c.stroke();
+        c.fillStyle = "#22331f";
+        for (let i = 0; i < 6; i++) {
+          const a = Math.PI + (i / 5) * Math.PI + Math.sin(t * 0.6 + pm.ph) * 0.06;
+          c.beginPath(); c.moveTo(px + 9 * pm.s, gy - ph);
+          c.quadraticCurveTo(px + 9 * pm.s + Math.cos(a) * 11 * pm.s, gy - ph + Math.sin(a) * 8 * pm.s - 4,
+                             px + 9 * pm.s + Math.cos(a) * 19 * pm.s, gy - ph + Math.sin(a) * 14 * pm.s + 3);
+          c.quadraticCurveTo(px + 9 * pm.s + Math.cos(a) * 9 * pm.s, gy - ph + Math.sin(a) * 6 * pm.s + 2, px + 9 * pm.s, gy - ph);
+          c.fill();
+        }
+      }
+      const rx = w * 0.15;                                          // 組みかけのいかだ
+      c.fillStyle = "#5f4a2e";
+      for (let i = 0; i < 5; i++) c.fillRect(rx - 17 + i * 8, gy - 8, 4, 8);
+      c.fillRect(rx - 19, gy - 11, 44, 3);
+      c.fillStyle = "#8c6d43"; c.fillRect(rx - 20, gy - 15, 46, 4);
+      const fx = w * 0.42, ff = 1 + Math.sin(t * 5) * 0.16;         // 焚き火
+      const fg = c.createRadialGradient(fx, gy - 8, 1, fx, gy - 8, 34 * ff);
+      fg.addColorStop(0, "rgba(255,168,80,0.45)"); fg.addColorStop(1, "rgba(255,140,60,0)");
+      c.fillStyle = fg; c.beginPath(); c.arc(fx, gy - 8, 34 * ff, 0, TAU); c.fill();
+      const tongue = (sc2, col) => {
+        const hh = 17 * sc2 * ff, ww = 4.6 * sc2;
+        c.fillStyle = col; c.beginPath(); c.moveTo(fx - ww, gy - 2);
+        c.quadraticCurveTo(fx - ww, gy - hh * 0.55, fx + Math.sin(t * 6) * 1.2, gy - hh);
+        c.quadraticCurveTo(fx + ww, gy - hh * 0.5, fx + ww, gy - 2);
+        c.quadraticCurveTo(fx, gy - hh * 0.12, fx - ww, gy - 2); c.fill();
+      };
+      tongue(1, "#e8571f"); tongue(0.7, "#ff9e3d"); tongue(0.36, "#ffeaa8");
+      const mx = w * 0.3;                                           // 人影
+      c.fillStyle = "#1b1610";
+      c.beginPath(); c.ellipse(mx, gy - 20, 3.2, 3.8, 0, 0, TAU); c.fill();
+      c.fillRect(mx - 3, gy - 16, 6, 9); c.fillRect(mx - 3, gy - 7, 2.4, 7); c.fillRect(mx + 0.6, gy - 7, 2.4, 7);
+      const vg = c.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, h * 0.95);
+      vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(6,4,10,0.5)");
+      c.fillStyle = vg; c.fillRect(0, 0, w, h);
     }
 
     // ---- kata card: candlesticks tracing a head & shoulders, drawn progressively ----
