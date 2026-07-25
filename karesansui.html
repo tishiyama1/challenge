@@ -1,0 +1,1908 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>枯山水 — 光で描く石庭</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --ink: #f0e9dc;
+    --dim: #a2988a;
+    --dimmer: #6f675d;
+    --gold: #d8b26a;
+    --moss: #8fae6b;
+    --panel: rgba(18, 16, 14, 0.72);
+    --line: rgba(216, 178, 106, 0.20);
+    --line-str: rgba(216, 178, 106, 0.42);
+  }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #0b0a09; color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-user-select: none; user-select: none; touch-action: none;
+  }
+  #view { position: fixed; inset: 0; display: block; width: 100%; height: 100%; cursor: crosshair; }
+  #view.cam { cursor: grab; }
+  #view.cam:active { cursor: grabbing; }
+
+  .glass {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    backdrop-filter: blur(14px) saturate(1.1); -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    box-shadow: 0 18px 44px rgba(0,0,0,0.45);
+  }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; transition: opacity .35s ease; }
+  #hud.off { opacity: 0; }
+  #hud.off * { pointer-events: none !important; }
+  #hud > * { pointer-events: auto; }
+
+  /* top bar */
+  #top {
+    position: absolute; top: 12px; left: 14px; display: flex; align-items: center; gap: 12px;
+    padding: 9px 15px 9px 13px;
+  }
+  #top h1 {
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    font-size: 19px; font-weight: 600; letter-spacing: 0.30em; color: var(--ink);
+  }
+  #top .sub { font-size: 9.5px; letter-spacing: 0.26em; color: var(--dimmer); margin-top: 3px; }
+  #top a.home { font-size: 11px; letter-spacing: 0.12em; color: var(--dim); text-decoration: none;
+    padding: 6px 11px; border: 1px solid var(--line); border-radius: 9px; transition: .2s; }
+  #top a.home:hover { color: var(--gold); border-color: var(--line-str); }
+
+  /* status (top-right) */
+  #stat {
+    position: absolute; top: 12px; right: 14px; padding: 9px 14px; min-width: 174px;
+    font-size: 11px; letter-spacing: 0.08em; color: var(--dim); text-align: right;
+  }
+  #stat b { color: var(--gold); font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+  #stat .bar { height: 2px; background: rgba(255,255,255,0.09); border-radius: 2px; margin-top: 7px; overflow: hidden; }
+  #stat .bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--moss), var(--gold)); transition: width .3s; }
+  #stat .mode { font-size: 9.5px; color: var(--dimmer); letter-spacing: 0.2em; margin-top: 5px; }
+
+  /* left panel */
+  #panel {
+    position: absolute; left: 14px; top: 74px; width: 246px;
+    max-height: calc(100vh - 100px); overflow-y: auto; overscroll-behavior: contain;
+    padding: 14px 14px 16px;
+  }
+  #panel::-webkit-scrollbar { width: 6px; }
+  #panel::-webkit-scrollbar-thumb { background: rgba(216,178,106,0.22); border-radius: 3px; }
+  .sec { margin-bottom: 15px; }
+  .sec:last-child { margin-bottom: 2px; }
+  .sec > h3 {
+    font-size: 9.5px; letter-spacing: 0.26em; color: var(--dimmer); font-weight: 700;
+    margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tools button {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 9px 2px 7px; border-radius: 10px; cursor: pointer; transition: .16s;
+    border: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.03);
+    color: var(--dim); font-family: inherit; font-size: 9.5px; letter-spacing: 0.06em;
+  }
+  .tools button .ic { font-size: 16px; line-height: 1; }
+  .tools button:hover { color: var(--ink); border-color: var(--line); }
+  .tools button.on { background: rgba(216,178,106,0.14); border-color: var(--line-str); color: var(--gold); }
+
+  .row { display: flex; align-items: center; gap: 9px; margin-top: 9px; font-size: 11px; color: var(--dim); }
+  .row label { flex: none; width: 52px; letter-spacing: 0.06em; }
+  .row .val { flex: none; width: 40px; text-align: right; color: var(--ink); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; flex: 1; height: 3px; border-radius: 3px;
+    background: rgba(255,255,255,0.13); outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--gold); cursor: pointer; box-shadow: 0 0 0 3px rgba(216,178,106,0.16);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 13px; height: 13px; border: none; border-radius: 50%;
+    background: var(--gold); cursor: pointer; box-shadow: 0 0 0 3px rgba(216,178,106,0.16);
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chips button {
+    padding: 6px 10px; border-radius: 8px; cursor: pointer; transition: .16s;
+    border: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.03);
+    color: var(--dim); font-family: inherit; font-size: 10.5px; letter-spacing: 0.08em;
+  }
+  .chips button:hover { color: var(--ink); border-color: var(--line); }
+  .chips button.on { background: rgba(216,178,106,0.14); border-color: var(--line-str); color: var(--gold); }
+  .chips.wide button { flex: 1; text-align: center; }
+
+  .toggle { display: flex; align-items: center; justify-content: space-between; margin-top: 8px;
+    font-size: 11px; color: var(--dim); letter-spacing: 0.06em; cursor: pointer; }
+  .sw { width: 32px; height: 17px; border-radius: 999px; background: rgba(255,255,255,0.10);
+    position: relative; transition: .2s; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+    border-radius: 50%; background: #7d7468; transition: .2s; }
+  .toggle.on .sw { background: rgba(216,178,106,0.35); }
+  .toggle.on .sw::after { left: 17px; background: var(--gold); }
+
+  #stonepanel { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+  #stonepanel.show { display: block; }
+
+  .hint { font-size: 10px; color: var(--dimmer); line-height: 1.75; margin-top: 9px; letter-spacing: 0.04em; }
+
+  /* bottom hint */
+  #foot {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    padding: 7px 16px; font-size: 10.5px; letter-spacing: 0.1em; color: var(--dimmer);
+    white-space: nowrap; text-align: center;
+  }
+  #foot b { color: var(--dim); font-weight: 600; }
+
+  /* ---------- intro ---------- */
+  #intro {
+    position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 26px; text-align: center; padding: 24px;
+    background: radial-gradient(1000px 700px at 50% 42%, #1b1712 0%, #0b0a09 62%, #070605 100%);
+    transition: opacity .8s ease;
+  }
+  #intro.gone { opacity: 0; pointer-events: none; }
+  #intro .kanji {
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    font-size: clamp(46px, 11vw, 96px); font-weight: 500; letter-spacing: 0.34em; text-indent: 0.34em;
+    color: #efe6d3; text-shadow: 0 6px 46px rgba(216,178,106,0.24);
+    animation: fadein 1.6s ease both;
+  }
+  #intro .en { font-size: 10.5px; letter-spacing: 0.5em; text-indent: 0.5em; color: var(--dimmer);
+    animation: fadein 1.6s ease .3s both; }
+  #intro p { max-width: 560px; font-size: 13px; line-height: 2.15; color: var(--dim);
+    letter-spacing: 0.05em; animation: fadein 1.6s ease .6s both; }
+  #intro p .g { color: var(--gold); }
+  #enter {
+    margin-top: 4px; padding: 13px 40px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line-str); background: rgba(216,178,106,0.10); color: var(--gold);
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; font-size: 15px; letter-spacing: 0.34em; text-indent: 0.34em;
+    transition: .25s; animation: fadein 1.6s ease .9s both;
+  }
+  #enter:hover { background: rgba(216,178,106,0.2); box-shadow: 0 0 34px rgba(216,178,106,0.18); }
+  #intro .tech { font-size: 9.5px; letter-spacing: 0.16em; color: #4b453d; line-height: 1.9;
+    animation: fadein 1.6s ease 1.2s both; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  #err { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center;
+    padding: 30px; text-align: center; background: #0b0a09; font-size: 13px; line-height: 2; color: var(--dim); }
+
+  /* toast */
+  #toast {
+    position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%) translateY(10px);
+    padding: 9px 20px; font-size: 12px; letter-spacing: 0.1em; color: var(--ink);
+    background: rgba(24,21,18,0.9); border: 1px solid var(--line); border-radius: 999px;
+    opacity: 0; transition: .3s; pointer-events: none; z-index: 30;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* panel toggle — only needed once the screen is too narrow to spare the space */
+  #pantog {
+    display: none; width: 36px; height: 36px; flex: none; border-radius: 10px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
+    color: var(--gold); font-size: 15px; cursor: pointer; font-family: inherit;
+  }
+  #pantog:hover { border-color: var(--line-str); }
+
+  @media (max-width: 820px) {
+    #pantog { display: block; }
+    #panel {
+      width: min(280px, 78vw); top: 62px; max-height: calc(100vh - 82px);
+      transition: opacity .2s, transform .2s;
+    }
+    #panel.hide { opacity: 0; transform: translateX(-14px); pointer-events: none; }
+    #top { top: 10px; left: 10px; padding: 7px 11px; gap: 9px; }
+    #top h1 { font-size: 15px; letter-spacing: 0.18em; }
+    #top .sub { display: none; }
+    #stat {
+      top: auto; bottom: 12px; right: 10px; min-width: 0; padding: 6px 11px;
+      font-size: 10px; text-align: right;
+    }
+    #stat b { font-size: 12px; }
+    #stat .mode { font-size: 8.5px; letter-spacing: 0.12em; }
+    #foot { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud">
+  <div id="top" class="glass">
+    <div>
+      <h1>枯山水</h1>
+      <div class="sub">KARESANSUI · PATH TRACED</div>
+    </div>
+    <button id="pantog" title="道具を開閉">☰</button>
+    <a class="home" href="index.html">← 一覧</a>
+  </div>
+
+  <div id="stat" class="glass">
+    <div><b id="spp">0</b> <span style="font-size:10px">サンプル / 画素</span></div>
+    <div class="bar"><i id="sppbar"></i></div>
+    <div class="mode" id="modelbl">PREVIEW</div>
+  </div>
+
+  <div id="panel" class="glass">
+    <div class="sec">
+      <h3>道具</h3>
+      <div class="tools" id="tools">
+        <button data-tool="rake" class="on"><span class="ic">🧹</span>熊手</button>
+        <button data-tool="stone"><span class="ic">🪨</span>石</button>
+        <button data-tool="ring"><span class="ic">◎</span>波紋</button>
+        <button data-tool="moss"><span class="ic">🌿</span>苔</button>
+        <button data-tool="flat"><span class="ic">▱</span>ならす</button>
+        <button data-tool="cam"><span class="ic">✋</span>視点</button>
+      </div>
+      <div class="row"><label id="l1">砂紋幅</label><input type="range" id="rkW" min="0.2" max="1.6" step="0.05" value="0.85"><span class="val" id="v1">0.85</span></div>
+      <div class="row"><label id="l2">目の間</label><input type="range" id="rkS" min="0.04" max="0.22" step="0.005" value="0.08"><span class="val" id="v2">8.5</span></div>
+      <div class="row"><label id="l3">深さ</label><input type="range" id="rkD" min="0.004" max="0.03" step="0.001" value="0.016"><span class="val" id="v3">1.4</span></div>
+
+      <div id="stonepanel">
+        <div class="row"><label>大きさ</label><input type="range" id="stS" min="0.16" max="1.0" step="0.01" value="0.4"><span class="val" id="vs1">0.40</span></div>
+        <div class="row"><label>高さ</label><input type="range" id="stH" min="0.4" max="2.2" step="0.05" value="1"><span class="val" id="vs2">1.0</span></div>
+        <div class="row"><label>向き</label><input type="range" id="stR" min="0" max="6.28" step="0.05" value="0"><span class="val" id="vs3">0</span></div>
+        <div class="chips" style="margin-top:9px">
+          <button id="stShape">形を変える</button><button id="stDel">この石を消す</button>
+        </div>
+      </div>
+      <div class="hint" id="toolhint">左ドラッグで砂を掻く。右ドラッグ／ホイールで視点。</div>
+    </div>
+
+    <div class="sec">
+      <h3>光 と 季</h3>
+      <div class="chips wide" id="seasons">
+        <button data-s="0">春</button><button data-s="1">夏</button>
+        <button data-s="2" class="on">秋</button><button data-s="3">冬</button>
+      </div>
+      <div class="row"><label>時刻</label><input type="range" id="hour" min="4" max="21" step="0.05" value="16.5"><span class="val" id="vhour">16:24</span></div>
+      <div class="chips" style="margin-top:7px" id="tpre">
+        <button data-h="7.3">朝</button><button data-h="12">昼</button>
+        <button data-h="16.55">夕</button><button data-h="20.4">夜</button>
+      </div>
+      <div class="hint" id="sunlbl">太陽高度 —</div>
+    </div>
+
+    <div class="sec">
+      <h3>庭を組む</h3>
+      <div class="chips">
+        <button id="pRyoanji">龍安寺</button><button id="pSanzon">三尊石</button>
+        <button id="pIsland">蓬莱島</button><button id="pEmpty">まっさら</button>
+      </div>
+      <div class="chips" style="margin-top:6px">
+        <button id="bAllRake">全面に砂紋</button><button id="bClear">砂をならす</button>
+      </div>
+      <div class="toggle on" id="tRipple"><span>石のまわりに波紋</span><span class="sw"></span></div>
+      <div class="toggle on" id="tBasin"><span>手水鉢を置く</span><span class="sw"></span></div>
+    </div>
+
+    <div class="sec">
+      <h3>描画</h3>
+      <div class="chips wide" id="quality">
+        <button data-q="2">簡素</button><button data-q="3" class="on">標準</button><button data-q="5">精緻</button>
+      </div>
+      <div class="row"><label>被写界</label><input type="range" id="dof" min="0" max="1" step="0.02" value="0.25"><span class="val" id="vdof">0.25</span></div>
+      <div class="row"><label>露出</label><input type="range" id="expo" min="-1.4" max="1.4" step="0.05" value="0"><span class="val" id="vexpo">0.0</span></div>
+      <div class="toggle" id="tOrbit"><span>ゆっくり巡る</span><span class="sw"></span></div>
+      <div class="toggle on" id="tSound"><span>音</span><span class="sw"></span></div>
+    </div>
+
+    <div class="sec">
+      <h3>記録</h3>
+      <div class="chips">
+        <button id="bSave">庭を保存</button><button id="bLoad">読み込む</button><button id="bPng">画像に</button>
+      </div>
+      <div class="chips" style="margin-top:6px">
+        <button id="bBell">🔔 鐘を撞く</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="foot" class="glass">
+    <b>左ドラッグ</b> 道具 ・ <b>右ドラッグ</b> 視点 ・ <b>ホイール</b> 寄る ・ <b>H</b> UI ・ 手を止めると<b>収束</b>してゆきます
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="intro">
+  <div>
+    <div class="kanji">枯山水</div>
+    <div class="en">KARESANSUI</div>
+  </div>
+  <p>
+    水のない庭に、水を観る。<br>
+    白砂に<span class="g">熊手</span>で砂紋を掻き、石を据え、時刻と季節を選ぶ。<br>
+    手を止めると、この庭は<span class="g">一枚の光の絵</span>へと静かに収束していきます。
+  </p>
+  <button id="enter">庭 に 入 る</button>
+  <div class="tech">
+    リアルタイム パストレーシング ・ 太陽位置は北緯35°の実計算<br>
+    外部ライブラリ ゼロ ・ HTML 1ファイル
+  </div>
+</div>
+
+<div id="err">
+  <div>
+    <div style="font-size:20px;letter-spacing:.3em;margin-bottom:14px">枯山水</div>
+    この庭は <b style="color:#d8b26a">WebGL2</b> で描かれています。<br>
+    お使いのブラウザでは対応が見つかりませんでした。<br>
+    <span style="font-size:11px;color:#6f675d">Chrome / Edge / Safari 15+ / Firefox の最新版でお試しください。</span>
+  </div>
+</div>
+
+<script>
+"use strict";
+(() => {
+/* ============================================================================
+   枯山水 KARESANSUI
+   A progressive path tracer for a dry landscape garden, written from scratch.
+   - sand  : a 1536x1024 height field the user rakes; ray-marched as real geometry
+   - stones: signed distance fields with noise displacement
+   - light : sun position from a real solar-position formula (lat 35N, Kyoto)
+   - render: unidirectional path tracing + next event estimation, accumulated
+             into a float buffer while the user is idle
+   ========================================================================== */
+
+// ---------------------------------------------------------------- constants
+const GX = 4.5, GZ = 3.0;      // garden half-extents (metres)
+const HMAX = 0.06;             // height field range (+-)
+const GY = -0.09;              // ground level outside the sand bed
+const TW = 1536, TH = 1024;    // height field resolution
+const PXM = TW / (2 * GX);     // texels per metre (x)
+const PZM = TH / (2 * GZ);
+const MAXSTONE = 16;
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+
+// ---------------------------------------------------------------- gl setup
+const cv = document.getElementById("view");
+const gl = cv.getContext("webgl2", { antialias: false, alpha: false, depth: false,
+                                     preserveDrawingBuffer: false, powerPreference: "high-performance" });
+if (!gl) { document.getElementById("err").style.display = "flex";
+           document.getElementById("intro").style.display = "none"; return; }
+const extCBF = gl.getExtension("EXT_color_buffer_float");
+const extLIN = gl.getExtension("OES_texture_float_linear");
+
+// ---------------------------------------------------------------- shaders
+const VS = `#version 300 es
+void main(){
+  vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+const TRACE_FS = (BOUNCES) => `#version 300 es
+precision highp float;
+precision highp int;
+out vec4 outCol;
+
+uniform vec2  uRes;
+uniform vec3  uEye, uFwd, uRight, uUpv;
+uniform float uTan, uAspect;
+uniform float uSample;
+uniform int   uMode;          // 0 = fast preview, 1 = path trace
+uniform sampler2D uSand;
+uniform sampler2D uPrev;
+
+uniform vec3  uSunDir, uSunE;
+uniform float uSunAng;
+uniform vec3  uZen, uHor, uHaze, uMount;
+uniform float uNight;
+uniform vec3  uSandCol, uMossCol, uWallCol, uGroundCol, uLeafCol;
+uniform float uLeaf, uSnow, uMossAmt;
+uniform vec4  uStone[${MAXSTONE}];
+uniform vec4  uStoneS[${MAXSTONE}];
+uniform int   uNStone;
+uniform float uFocus, uApert, uBasin;
+
+const float GX = ${GX.toFixed(3)}, GZ = ${GZ.toFixed(3)};
+const float HMAX = ${HMAX.toFixed(4)};
+const float GY = ${GY.toFixed(4)};
+const float PI = 3.14159265359;
+const int BOUNCES = ${BOUNCES};
+
+const int M_SAND = 0, M_STONE = 1, M_GROUND = 2, M_EDGE = 3, M_WALL = 4, M_ROOF = 5, M_WATER = 6;
+
+// ------------------------------------------------------------------ random
+uint rngState;
+float rnd(){
+  rngState = rngState * 747796405u + 2891336453u;
+  uint w = ((rngState >> ((rngState >> 28) + 4u)) ^ rngState) * 277803737u;
+  return float((w >> 22) ^ w) * (1.0 / 4294967296.0);
+}
+// ------------------------------------------------------------------- noise
+float hash13(vec3 p){
+  p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419));
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float hash12(vec2 p){
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec3 x){
+  vec3 i = floor(x), f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash13(i), hash13(i + vec3(1,0,0)), f.x),
+                 mix(hash13(i + vec3(0,1,0)), hash13(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(hash13(i + vec3(0,0,1)), hash13(i + vec3(1,0,1)), f.x),
+                 mix(hash13(i + vec3(0,1,1)), hash13(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+float fbm3(vec3 p){
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 3; i++){ s += a * vnoise(p); p *= 2.07; a *= 0.5; }
+  return s;
+}
+
+// ------------------------------------------------------------- height field
+vec2 sandUV(vec2 xz){ return xz / vec2(2.0 * GX, 2.0 * GZ) + 0.5; }
+float sandH(vec2 xz){ return (texture(uSand, sandUV(xz)).z - 0.5) * (2.0 * HMAX); }
+
+// dedicated height field marcher (far more robust than folding it into an SDF)
+bool traceSand(vec3 ro, vec3 rd, float tmax, out float th){
+  vec3 bmin = vec3(-GX, -HMAX - 0.002, -GZ), bmax = vec3(GX, HMAX + 0.002, GZ);
+  vec3 iv = 1.0 / rd;
+  vec3 ta = (bmin - ro) * iv, tb = (bmax - ro) * iv;
+  vec3 t0 = min(ta, tb), t1 = max(ta, tb);
+  float tn = max(max(t0.x, t0.y), t0.z), tf = min(min(t1.x, t1.y), t1.z);
+  tf = min(tf, tmax);
+  if (tf <= max(tn, 0.0)) return false;
+  float t = max(tn, 0.0) + 0.0008;
+  // gap closing rate: ray descent + worst case terrain rise
+  float rate = -rd.y + 0.78 * length(rd.xz);
+  for (int i = 0; i < 150; i++){
+    vec3 p = ro + rd * t;
+    float d = p.y - sandH(p.xz);
+    if (d < 0.0007) { th = t; return true; }
+    t += max(d / max(rate, 0.02), 0.0011);
+    if (t > tf) break;
+  }
+  return false;
+}
+
+// ------------------------------------------------------------- sdf objects
+float sdBox2(vec2 p, vec2 b){ vec2 q = abs(p) - b; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0); }
+
+vec2 mapRest(vec3 p){
+  vec2 res = vec2(1e9, -1.0);
+
+  // stone edging around the sand bed (also seals the bed from grazing rays)
+  {
+    float ring = max(sdBox2(p.xz, vec2(GX + 0.14, GZ + 0.14)), -sdBox2(p.xz, vec2(GX, GZ)));
+    float d = max(ring, max(p.y - 0.028, GY - 0.05 - p.y));
+    if (d < res.x) res = vec2(d, float(M_EDGE));
+  }
+  // earthen wall + tiled roof
+  {
+    vec2 wo = vec2(GX + 1.14, GZ + 1.14), wi = vec2(GX + 0.90, GZ + 0.90);
+    float ring = max(sdBox2(p.xz, wo), -sdBox2(p.xz, wi));
+    float d = max(ring, max(p.y - 1.10, GY - 0.4 - p.y));
+    if (d < res.x) res = vec2(d, float(M_WALL));
+    float rr = max(sdBox2(p.xz, wo + 0.15), -sdBox2(p.xz, wi - 0.15));
+    float dr = max(rr, max(p.y - 1.24, 1.08 - p.y));
+    if (dr < res.x) res = vec2(dr, float(M_ROOF));
+  }
+  // 手水鉢 : stone basin with still water
+  if (uBasin > 0.5) {
+    vec3 q = p - vec3(-3.05, 0.0, -(GZ + 0.44));
+    float body = max(length(q.xz) - 0.34, max(q.y - 0.44, GY - 0.02 - q.y));
+    body = max(body, -(max(length(q.xz) - 0.24, q.y - 0.46)));   // hollow it out
+    if (body < res.x) res = vec2(body, float(M_STONE));
+    float water = max(length(q.xz) - 0.235, max(q.y - 0.395, 0.30 - q.y));
+    if (water < res.x) res = vec2(water, float(M_WATER));
+  }
+  // stones
+  for (int i = 0; i < ${MAXSTONE}; i++){
+    if (i >= uNStone) break;
+    vec4 S = uStone[i]; vec4 Q = uStoneS[i];
+    vec3 rp = p - S.xyz;
+    float bd = length(rp) - S.w;
+    if (bd < 0.22) {
+      float ca = cos(Q.w), sa = sin(Q.w);
+      vec3 q = vec3(ca * rp.x - sa * rp.z, rp.y, sa * rp.x + ca * rp.z) / Q.xyz;
+      float k = min(min(Q.x, Q.y), Q.z);
+      float d = (length(q) - 1.0) * k;
+      d -= (fbm3(q * (1.8 + 1.6 * fract(Q.w * 0.7)) + Q.w * 11.0) - 0.5) * 0.40 * k;
+      d *= 0.55;
+      if (d < res.x) res = vec2(d, float(M_STONE));
+    } else if (bd < res.x) res = vec2(bd, float(M_STONE));
+  }
+  return res;
+}
+
+bool traceRest(vec3 ro, vec3 rd, float tmax, out float th, out int mat){
+  float t = 0.004;
+  for (int i = 0; i < 110; i++){
+    vec3 p = ro + rd * t;
+    vec2 r = mapRest(p);
+    if (r.x < 0.0008 * (1.0 + t * 0.5)) { th = t; mat = int(r.y + 0.5); return true; }
+    t += r.x;
+    if (t > tmax) break;
+  }
+  return false;
+}
+
+vec3 normRest(vec3 p){
+  vec2 e = vec2(0.0016, 0.0);
+  return normalize(vec3(mapRest(p + e.xyy).x - mapRest(p - e.xyy).x,
+                        mapRest(p + e.yxy).x - mapRest(p - e.yxy).x,
+                        mapRest(p + e.yyx).x - mapRest(p - e.yyx).x));
+}
+
+struct Hit { float t; vec3 p; vec3 n; int mat; };
+
+bool intersect(vec3 ro, vec3 rd, float tmax, out Hit h){
+  float best = tmax; int m = -1;
+  if (rd.y < 0.0) {                                    // ground plane
+    float t = (GY - ro.y) / rd.y;
+    if (t > 0.002 && t < best) {
+      vec2 g = (ro + rd * t).xz;
+      if (abs(g.x) < 26.0 && abs(g.y) < 26.0) { best = t; m = M_GROUND; }
+    }
+  }
+  float ts;
+  if (traceSand(ro, rd, best, ts) && ts < best) { best = ts; m = M_SAND; }
+  float tr; int mr;
+  if (traceRest(ro, rd, best, tr, mr) && tr < best) { best = tr; m = mr; }
+  if (m < 0) return false;
+  h.t = best; h.p = ro + rd * best; h.mat = m;
+  if (m == M_SAND) {
+    vec4 s = texture(uSand, sandUV(h.p.xz));
+    vec2 g = (s.xy - 0.5) * 2.0;
+    vec3 n = normalize(vec3(g.x, 1.0, g.y));
+    // fine grain so the sand reads as sand, not plastic
+    float ga = 0.14 * exp(-best * 0.10);          // grain fades with distance
+    float gr = vnoise(vec3(h.p.xz * 95.0, 0.0)) - 0.5;
+    float gr2 = vnoise(vec3(h.p.zx * 61.0, 3.7)) - 0.5;
+    n = normalize(n + vec3(gr, 0.0, gr2) * ga);
+    h.n = n;
+  } else if (m == M_GROUND) {
+    float g1 = fbm3(vec3(h.p.xz * 9.0, 0.0)) - 0.5;
+    float g2 = fbm3(vec3(h.p.zx * 13.0, 5.0)) - 0.5;
+    h.n = normalize(vec3(g1 * 0.5, 1.0, g2 * 0.5));
+  } else if (m == M_WATER) {
+    h.n = vec3(0.0, 1.0, 0.0);
+  } else {
+    h.n = normRest(h.p);
+  }
+  return true;
+}
+
+bool occluded(vec3 ro, vec3 rd, float tmax){
+  if (rd.y < 0.0) {
+    float t = (GY - ro.y) / rd.y;
+    if (t > 0.002 && t < tmax) return true;
+  }
+  float ts;
+  if (traceSand(ro, rd, tmax, ts)) return true;
+  float tr; int mr;
+  if (traceRest(ro, rd, tmax, tr, mr)) return true;
+  return false;
+}
+
+// --------------------------------------------------------------------- sky
+vec3 skyCol(vec3 rd, bool withSun){
+  float y = rd.y;
+  vec3 col = mix(uHor, uZen, pow(clamp(y * 1.9 + 0.02, 0.0, 1.0), 0.62));
+  if (y < 0.0) col = mix(uHor, uHor * 0.34 + uGroundCol * 0.30, clamp(-y * 9.0, 0.0, 1.0));
+  float mu = max(dot(rd, uSunDir), 0.0);
+  col += uHaze * (pow(mu, 5.0) * 0.30 + pow(mu, 90.0) * 1.1);
+  // stars
+  if (uNight > 0.01 && y > 0.0) {
+    vec2 sp = rd.xz / max(abs(y) + 0.35, 0.05);
+    vec2 ci = floor(sp * 42.0);
+    float r = hash12(ci);
+    if (r > 0.982) {
+      vec2 cf = fract(sp * 42.0) - vec2(hash12(ci + 3.1), hash12(ci + 7.7));
+      float d = length(cf);
+      float tw = 0.6 + 0.4 * sin(hash12(ci + 1.3) * 40.0 + uSample * 0.02);
+      col += vec3(0.85, 0.9, 1.0) * uNight * smoothstep(0.16, 0.0, d) * 1.6 * tw * (r - 0.982) * 55.0;
+    }
+  }
+  // 借景 — borrowed scenery: distant ridgelines with atmospheric perspective
+  if (y > -0.02 && y < 0.20) {
+    float az = atan(rd.x, rd.z);
+    float r2 = 0.072 + 0.028 * sin(az * 2.3 + 0.7) + 0.016 * sin(az * 5.1 + 2.2) + 0.007 * sin(az * 11.3);
+    float r1 = 0.042 + 0.020 * sin(az * 3.7 + 2.9) + 0.011 * sin(az * 8.9 + 0.4) + 0.005 * sin(az * 17.1 + 1.1);
+    float m2 = smoothstep(r2 + 0.003, r2 - 0.003, y);
+    float m1 = smoothstep(r1 + 0.002, r1 - 0.002, y);
+    // haze pools at the foot of a ridge, so each one pales toward its base
+    col = mix(col, mix(uMount, uHor, 0.52 + 0.34 * (1.0 - clamp(y / max(r2, 1e-3), 0.0, 1.0))), m2);
+    col = mix(col, mix(uMount, uHor, 0.22 + 0.42 * (1.0 - clamp(y / max(r1, 1e-3), 0.0, 1.0))), m1);
+  }
+  if (withSun) {
+    float ca = cos(uSunAng);
+    if (dot(rd, uSunDir) > ca)
+      col += uSunE / max(TAU_ONE_MINUS_COS, 1e-6);
+  }
+  return col;
+}
+
+// -------------------------------------------------------------- materials
+vec3 albedoOf(Hit h){
+  if (h.mat == M_SAND) {
+    vec4 s = texture(uSand, sandUV(h.p.xz));
+    vec3 c = uSandCol * (0.90 + 0.20 * vnoise(vec3(h.p.xz * 55.0, 0.0)));
+    c = mix(c, uMossCol, s.w * 0.9);
+    if (uLeaf > 0.001) {
+      vec2 cp = h.p.xz * 6.5;
+      vec2 ci = floor(cp), cf = fract(cp);
+      float r = hash12(ci);
+      if (r < uLeaf) {
+        vec2 ctr = vec2(hash12(ci + 5.3), hash12(ci + 11.9));
+        float a = r * 40.0;
+        vec2 dv = cf - ctr;
+        dv = vec2(dv.x * cos(a) - dv.y * sin(a), dv.x * sin(a) + dv.y * cos(a));
+        if (length(dv * vec2(1.0, 2.3)) < 0.26)
+          c = uLeafCol * (0.62 + 0.7 * hash12(ci + 2.2));
+      }
+    }
+    return c;
+  }
+  if (h.mat == M_GROUND) {
+    vec3 c = mix(uGroundCol, uMossCol, smoothstep(0.30, 0.72, fbm3(vec3(h.p.xz * 2.2, 0.0))));
+    c *= 0.66 + 0.36 * fbm3(vec3(h.p.xz * 5.5, 1.3));
+    if (uLeaf > 0.001) {
+      vec2 ci = floor(h.p.xz * 6.5);
+      if (hash12(ci + 0.5) < uLeaf * 0.35 && hash12(h.p.xz * 6.5) > 0.70)
+        c = mix(c, uLeafCol * 0.55, 0.6);
+    }
+    return c;
+  }
+  if (h.mat == M_EDGE)  return vec3(0.20, 0.19, 0.175) * (0.75 + 0.55 * fbm3(h.p * 7.0));
+  if (h.mat == M_WALL) {
+    vec3 c = uWallCol * (0.84 + 0.30 * fbm3(h.p * vec3(2.2, 5.0, 2.2)));
+    c *= 1.0 - 0.30 * smoothstep(0.55, -0.05, h.p.y) * (0.4 + 0.6 * fbm3(h.p * 3.0)); // weathering
+    return c;
+  }
+  if (h.mat == M_ROOF)  return vec3(0.085, 0.090, 0.100) * (0.8 + 0.5 * fbm3(h.p * 9.0));
+  // stone
+  vec3 c = vec3(0.255, 0.250, 0.245) * (0.68 + 0.62 * fbm3(h.p * 2.6));
+  c *= 0.86 + 0.30 * vnoise(h.p * vec3(7.0, 11.0, 7.0));
+  c = mix(c, c * vec3(1.06, 0.99, 0.90), 0.5);
+  float mo = smoothstep(0.15, 0.8, h.n.y) * smoothstep(0.55, 0.02, h.p.y) * smoothstep(0.35, 0.7, fbm3(h.p * 3.4));
+  c = mix(c, uMossCol * 0.85, clamp(mo * uMossAmt, 0.0, 0.9));
+  if (uSnow > 0.01) c = mix(c, vec3(0.86, 0.89, 0.94), clamp(smoothstep(0.45, 0.95, h.n.y) * uSnow, 0.0, 1.0));
+  return c;
+}
+
+// ---------------------------------------------------------------- sampling
+vec3 cosineDir(vec3 n){
+  float u = rnd(), v = rnd();
+  float r = sqrt(u), phi = TAU_C * v;
+  vec3 t = abs(n.y) < 0.9 ? normalize(cross(n, vec3(0,1,0))) : vec3(1,0,0);
+  vec3 b = cross(n, t);
+  return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u)));
+}
+vec3 sunSample(){
+  float u = rnd(), v = rnd();
+  float r = uSunAng * sqrt(u), phi = TAU_C * v;
+  vec3 t = abs(uSunDir.y) < 0.9 ? normalize(cross(uSunDir, vec3(0,1,0))) : vec3(1,0,0);
+  vec3 b = cross(uSunDir, t);
+  return normalize(uSunDir + t * (r * cos(phi)) + b * (r * sin(phi)));
+}
+
+// ------------------------------------------------------------- path tracer
+vec3 pathTrace(vec3 ro, vec3 rd){
+  vec3 thr = vec3(1.0), rad = vec3(0.0);
+  vec3 rd0 = rd; float t0 = -1.0;
+  for (int b = 0; b < BOUNCES; b++){
+    Hit h;
+    if (!intersect(ro, rd, 90.0, h)) { rad += thr * skyCol(rd, b == 0); break; }
+    if (b == 0) t0 = h.t;
+    vec3 alb = albedoOf(h);
+    vec3 n = h.n;
+    if (dot(n, rd) > 0.0 && h.mat != M_WATER) n = -n;
+
+    if (h.mat == M_WATER) {
+      float F = 0.02 + 0.98 * pow(1.0 - max(dot(-rd, n), 0.0), 5.0);
+      if (rnd() < F) {                       // specular reflection
+        ro = h.p + n * 0.0012;
+        rd = reflect(rd, n);
+        continue;
+      }
+      alb = vec3(0.035, 0.052, 0.048);       // dark wet stone under the water
+    }
+
+    // next event estimation toward the sun (or the moon at night)
+    vec3 ld = sunSample();
+    float ndl = dot(n, ld);
+    if (ndl > 0.0 && !occluded(h.p + n * 0.0022 + ld * 0.0022, ld, 30.0))
+      rad += thr * alb * (ndl / PI) * uSunE;
+
+    ro = h.p + n * 0.0018;
+    rd = cosineDir(n);
+    thr *= alb;
+    if (b >= 1) {                            // russian roulette
+      float q = clamp(max(thr.x, max(thr.y, thr.z)), 0.03, 1.0);
+      if (rnd() > q) break;
+      thr /= q;
+    }
+  }
+  if (t0 > 0.0) rad = mix(rad, mix(uHor, uZen, 0.12), 1.0 - exp(-t0 * 0.0105));
+  return rad;
+}
+
+// --------------------------------------------------------- cheap live view
+float aoSand(vec3 p){
+  float occ = 0.0;
+  for (int i = 0; i < 6; i++){
+    float a = float(i) * 1.0472;
+    vec2 dir = vec2(cos(a), sin(a));
+    for (int j = 1; j <= 2; j++){
+      float r = 0.022 * float(j * j);
+      occ += clamp((sandH(p.xz + dir * r) - p.y) / r, 0.0, 1.0);
+    }
+  }
+  return clamp(1.0 - occ / 12.0 * 1.25, 0.0, 1.0);
+}
+float aoSdf(vec3 p, vec3 n){
+  float occ = 0.0, sca = 1.0;
+  for (int i = 1; i <= 5; i++){
+    float d = 0.012 * float(i * i);
+    occ += (d - mapRest(p + n * d).x) * sca;
+    sca *= 0.72;
+  }
+  return clamp(1.0 - 2.4 * occ, 0.0, 1.0);
+}
+vec3 preview(vec3 ro, vec3 rd){
+  Hit h;
+  if (!intersect(ro, rd, 90.0, h)) return skyCol(rd, true);
+  vec3 alb = albedoOf(h);
+  vec3 n = h.n;
+  float ndl = max(dot(n, uSunDir), 0.0);
+  float sh = 0.0;
+  if (ndl > 0.0) sh = occluded(h.p + n * 0.0025, uSunDir, 22.0) ? 0.0 : 1.0;
+  float ao = (h.mat == M_SAND) ? aoSand(h.p) : (h.mat == M_GROUND ? 1.0 : aoSdf(h.p, n));
+  vec3 c = alb * (ndl * sh / PI) * uSunE;
+  vec3 amb = mix(uHor, uZen, 0.55);
+  c += alb * amb * (0.55 + 0.45 * n.y) * ao * 1.15;
+  if (h.mat == M_WATER) {
+    vec3 r = reflect(rd, n);
+    float F = 0.04 + 0.96 * pow(1.0 - max(dot(-rd, n), 0.0), 5.0);
+    c = mix(c * 0.25, skyCol(r, true), F);
+  }
+  return mix(c, mix(uHor, uZen, 0.12), 1.0 - exp(-h.t * 0.0105));
+}
+
+// -------------------------------------------------------------------- main
+void main(){
+  rngState = (uint(gl_FragCoord.x) * 1973u + uint(gl_FragCoord.y) * 9277u
+              + uint(uSample) * 26699u) | 1u;
+  vec2 jit = (uMode == 1) ? vec2(rnd(), rnd()) : vec2(0.5);
+  vec2 uv = ((gl_FragCoord.xy + jit) / uRes) * 2.0 - 1.0;
+  vec3 ro = uEye;
+  vec3 rd = normalize(uFwd + uRight * (uv.x * uTan * uAspect) + uUpv * (uv.y * uTan));
+
+  vec3 col;
+  if (uMode == 1) {
+    if (uApert > 0.0001) {
+      vec3 fp = ro + rd * (uFocus / max(dot(rd, uFwd), 0.05));
+      float a = TAU_C * rnd(), r = uApert * sqrt(rnd());
+      ro += uRight * (cos(a) * r) + uUpv * (sin(a) * r);
+      rd = normalize(fp - ro);
+    }
+    col = pathTrace(ro, rd);
+    col = min(col, vec3(24.0));
+    if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+    if (uSample > 0.5) col += texture(uPrev, gl_FragCoord.xy / uRes).rgb;
+  } else {
+    col = preview(ro, rd);
+    if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+  }
+  outCol = vec4(col, 1.0);
+}`;
+
+const PRESENT_FS = `#version 300 es
+precision highp float;
+out vec4 outCol;
+uniform sampler2D uAcc;
+uniform vec2 uRes;
+uniform float uN, uExpo;
+vec3 aces(vec3 x){
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec3 c = texture(uAcc, uv).rgb / max(uN, 1.0);
+  c = aces(c * uExpo);
+  c = pow(c, vec3(1.0 / 2.2));
+  vec2 d = uv - 0.5;
+  c *= 1.0 - 0.26 * pow(clamp(length(d) * 1.42, 0.0, 1.0), 2.6);
+  outCol = vec4(c, 1.0);
+}`;
+
+// TAU constants are injected as macros so the GLSL stays readable
+function preprocess(src){
+  return src.replace(/TAU_ONE_MINUS_COS/g, "(6.2831853 * (1.0 - cos(uSunAng)))")
+            .replace(/TAU_C/g, "6.2831853");
+}
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s), src.split("\n").map((l, i) => (i + 1) + " " + l).join("\n"));
+    throw new Error("shader");
+  }
+  return s;
+}
+function program(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(p)); throw new Error("link"); }
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++){
+    const info = gl.getActiveUniform(p, i);
+    const nm = info.name.replace(/\[0\]$/, "");
+    u[nm] = gl.getUniformLocation(p, info.name);
+  }
+  return { p, u };
+}
+
+let progTrace = null, progPresent = null;
+function buildTrace(bounces){
+  if (progTrace) gl.deleteProgram(progTrace.p);
+  progTrace = program(VS, preprocess(TRACE_FS(bounces)));
+}
+buildTrace(3);
+progPresent = program(VS, PRESENT_FS);
+
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+
+// ---------------------------------------------------------------- textures
+const sandTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, sandTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, TW, TH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+let accTex = [null, null], accFbo = [null, null], RW = 1, RH = 1;
+function allocTargets(w, h){
+  RW = Math.max(2, w | 0); RH = Math.max(2, h | 0);
+  for (let i = 0; i < 2; i++){
+    if (accTex[i]) { gl.deleteTexture(accTex[i]); gl.deleteFramebuffer(accFbo[i]); }
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, RW, RH, 0, gl.RGBA, gl.FLOAT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const f = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    accTex[i] = t; accFbo[i] = f;
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+// ============================================================== height field
+const field = new Float32Array(TW * TH);
+const mossF = new Float32Array(TW * TH);
+const pix   = new Uint8Array(TW * TH * 4);
+let dirty0 = 0, dirty1 = TH;   // dirty row range
+
+const wx2i = x => (x + GX) * PXM;
+const wz2j = z => (z + GZ) * PZM;
+const i2wx = i => i / PXM - GX;
+const j2wz = j => j / PZM - GZ;
+
+function markDirty(j0, j1){
+  dirty0 = Math.min(dirty0, Math.max(0, j0 | 0));
+  dirty1 = Math.max(dirty1, Math.min(TH, (j1 | 0) + 1));
+}
+function resetDirty(){ dirty0 = TH; dirty1 = 0; }
+resetDirty();
+
+// rake a band: ripples run across the drag direction, exactly like a rake's teeth
+function stampSeg(ax, az, bx, bz, w, sp, dep){
+  let dx = bx - ax, dz = bz - az;
+  let L = Math.hypot(dx, dz);
+  if (L < 1e-5) { dx = 1; dz = 0; L = 1e-5; } else { dx /= L; dz /= L; }
+  const nx = -dz, nz = dx;                     // band normal (rake axis)
+  const hw = w * 0.5, taper = Math.min(0.10, hw * 0.35);
+  // bound by the swept rectangle (not the segment box grown by hw) so that a
+  // very wide band — e.g. raking the whole garden in one stroke — stays cheap
+  const mg = Math.min(hw, 0.35);
+  const cxs = [ax + nx * hw, ax - nx * hw, bx + nx * hw, bx - nx * hw];
+  const czs = [az + nz * hw, az - nz * hw, bz + nz * hw, bz - nz * hw];
+  const i0 = Math.max(0, Math.floor(wx2i(Math.min(...cxs) - mg)));
+  const i1 = Math.min(TW - 1, Math.ceil(wx2i(Math.max(...cxs) + mg)));
+  const j0 = Math.max(0, Math.floor(wz2j(Math.min(...czs) - mg)));
+  const j1 = Math.min(TH - 1, Math.ceil(wz2j(Math.max(...czs) + mg)));
+  if (i1 < i0 || j1 < j0) return;
+  const k = TAU / sp;
+  for (let j = j0; j <= j1; j++){
+    const pz = j2wz(j + 0.5), row = j * TW;
+    for (let i = i0; i <= i1; i++){
+      const px = i2wx(i + 0.5);
+      const rx = px - ax, rz = pz - az;
+      const t = clamp(rx * dx + rz * dz, 0, L);
+      const cxp = rx - dx * t, czp = rz - dz * t;
+      const d = Math.hypot(cxp, czp);
+      if (d > hw) continue;
+      const m = smoothstep(hw, hw - taper, d);
+      if (m <= 0.001) continue;
+      const s = rx * nx + rz * nz;             // signed offset across the band
+      const rip = -dep * 0.5 * (1 - Math.cos(k * s));
+      const idx = row + i;
+      field[idx] = field[idx] * (1 - m) + rip * m;
+    }
+  }
+  markDirty(j0, j1);
+}
+
+// concentric ripples: water breaking around an island
+function stampRing(cx, cz, r0, r1, sp, dep, bed, rFrom){
+  const rf = rFrom || 0;
+  const i0 = Math.max(0, Math.floor(wx2i(cx - r1)));
+  const i1 = Math.min(TW - 1, Math.ceil(wx2i(cx + r1)));
+  const j0 = Math.max(0, Math.floor(wz2j(cz - r1)));
+  const j1 = Math.min(TH - 1, Math.ceil(wz2j(cz + r1)));
+  if (i1 < i0 || j1 < j0) return;
+  const k = TAU / sp;
+  for (let j = j0; j <= j1; j++){
+    const pz = j2wz(j + 0.5), row = j * TW;
+    for (let i = i0; i <= i1; i++){
+      const d = Math.hypot(i2wx(i + 0.5) - cx, pz - cz);
+      if (d > r1 || d < rf) continue;
+      const idx = row + i;
+      if (d < r0) {                              // shallow bed the stone sits in
+        if (bed) {
+          const m = smoothstep(r0, r0 - 0.10, d);
+          field[idx] = field[idx] * (1 - m) + (-dep * 0.45) * m;
+        }
+        continue;
+      }
+      const m = smoothstep(r0, r0 + 0.05, d) * smoothstep(r1, r1 - 0.30, d);
+      if (m <= 0.001) continue;
+      const rip = -dep * 0.5 * (1 - Math.cos(k * (d - r0)));
+      field[idx] = field[idx] * (1 - m) + rip * m;
+    }
+  }
+  markDirty(j0, j1);
+}
+
+function stampFlat(cx, cz, r, strength){
+  const i0 = Math.max(0, Math.floor(wx2i(cx - r))), i1 = Math.min(TW - 1, Math.ceil(wx2i(cx + r)));
+  const j0 = Math.max(0, Math.floor(wz2j(cz - r))), j1 = Math.min(TH - 1, Math.ceil(wz2j(cz + r)));
+  for (let j = j0; j <= j1; j++){
+    const pz = j2wz(j + 0.5), row = j * TW;
+    for (let i = i0; i <= i1; i++){
+      const d = Math.hypot(i2wx(i + 0.5) - cx, pz - cz);
+      if (d > r) continue;
+      const m = smoothstep(r, r * 0.35, d) * strength;
+      field[row + i] *= (1 - m);
+    }
+  }
+  markDirty(j0, j1);
+}
+
+function stampMoss(cx, cz, r, amt){
+  const i0 = Math.max(0, Math.floor(wx2i(cx - r))), i1 = Math.min(TW - 1, Math.ceil(wx2i(cx + r)));
+  const j0 = Math.max(0, Math.floor(wz2j(cz - r))), j1 = Math.min(TH - 1, Math.ceil(wz2j(cz + r)));
+  for (let j = j0; j <= j1; j++){
+    const pz = j2wz(j + 0.5), row = j * TW;
+    for (let i = i0; i <= i1; i++){
+      const d = Math.hypot(i2wx(i + 0.5) - cx, pz - cz);
+      if (d > r) continue;
+      const m = smoothstep(r, r * 0.2, d) * amt;
+      const idx = row + i;
+      mossF[idx] = Math.max(mossF[idx], m);
+    }
+  }
+  markDirty(j0, j1);
+}
+
+// pack height + normal + moss into RGBA8 (normals baked on the CPU: the tracer
+// then needs a single texture fetch per shading point instead of four)
+const DX = 1 / PXM, DZ = 1 / PZM;
+function bake(j0, j1){
+  for (let j = j0; j < j1; j++){
+    const row = j * TW;
+    const rowU = (j < TH - 1 ? j + 1 : j) * TW;
+    const rowD = (j > 0 ? j - 1 : j) * TW;
+    for (let i = 0; i < TW; i++){
+      const hl = field[row + (i > 0 ? i - 1 : i)];
+      const hr = field[row + (i < TW - 1 ? i + 1 : i)];
+      const hd = field[rowD + i], hu = field[rowU + i];
+      const gx = clamp(-(hr - hl) / (2 * DX), -1, 1);
+      const gz = clamp(-(hu - hd) / (2 * DZ), -1, 1);
+      const k = (row + i) * 4;
+      pix[k]     = (gx * 0.5 + 0.5) * 255;
+      pix[k + 1] = (gz * 0.5 + 0.5) * 255;
+      pix[k + 2] = (clamp(field[row + i] / HMAX, -1, 1) * 0.5 + 0.5) * 255;
+      pix[k + 3] = clamp(mossF[row + i], 0, 1) * 255;
+    }
+  }
+}
+function upload(){
+  if (dirty1 <= dirty0) return;
+  const j0 = Math.max(0, dirty0 - 1), j1 = Math.min(TH, dirty1 + 1);
+  bake(j0, j1);
+  gl.bindTexture(gl.TEXTURE_2D, sandTex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, j0, TW, j1 - j0, gl.RGBA, gl.UNSIGNED_BYTE,
+                   new Uint8Array(pix.buffer, j0 * TW * 4, (j1 - j0) * TW * 4));
+  resetDirty();
+}
+
+// ==================================================================== scene
+const S = {
+  stones: [],
+  ops: [],
+  season: 2,            // 0 spring 1 summer 2 autumn 3 winter
+  hour: 16.5,
+  autoRipple: true,
+  basin: true,
+  quality: 3,
+  dof: 0.25,
+  expo: 0,
+  orbit: false,
+  sound: true,
+  rakeW: 0.85, rakeS: 0.080, rakeD: 0.016,
+};
+const cam = { yaw: 0.40, pitch: 0.245, dist: 7.2, tx: 0, ty: 0.05, tz: 0.15 };
+
+function newStone(x, z, s, sy, rot, seed){
+  return { x, z, s: s ?? (0.24 + Math.random() * 0.30), sy: sy ?? (0.7 + Math.random() * 0.8),
+           rot: rot ?? Math.random() * TAU, seed: seed ?? Math.random() * 9 };
+}
+function stoneGeom(st){
+  // an ellipsoid, wider than tall, partly buried in the sand
+  const sx = st.s * (0.85 + 0.4 * ((st.seed * 3.1) % 1));
+  const sz = st.s * (0.85 + 0.4 * ((st.seed * 7.7) % 1));
+  const sy = st.s * st.sy;
+  const cy = -sy * 0.34;
+  const br = Math.max(sx, Math.max(sy, sz)) * 1.30;
+  return { sx, sy, sz, cy, br };
+}
+
+function rebuildField(){
+  field.fill(0); mossF.fill(0);
+  for (const op of S.ops) applyOp(op);
+  if (S.autoRipple) {
+    for (const st of S.stones) {
+      const g = stoneGeom(st);
+      const r0 = Math.max(g.sx, g.sz) * 1.05 + 0.06;
+      stampRing(st.x, st.z, r0, r0 + 0.62 + st.s * 0.5, S.rakeS * 1.05, S.rakeD * 1.15, true);
+    }
+  }
+  markDirty(0, TH - 1);
+  upload();
+}
+function applyOp(op){
+  if (op.k === "r") {
+    for (let i = 1; i < op.p.length; i++)
+      stampSeg(op.p[i - 1][0], op.p[i - 1][1], op.p[i][0], op.p[i][1], op.w, op.s, op.d);
+  } else if (op.k === "o") {
+    stampRing(op.x, op.z, op.r0, op.r1, op.s, op.d, false);
+  } else if (op.k === "f") {
+    stampFlat(op.x, op.z, op.r, op.a);
+  } else if (op.k === "m") {
+    stampMoss(op.x, op.z, op.r, op.a);
+  }
+}
+
+// full-garden rake: the classic parallel 砂紋 running the long way
+function rakeAll(){
+  // the stroke runs north-south so the ripple lines stand across the low sun:
+  // grooves parallel to the light would cast no shadow at all
+  S.ops = S.ops.filter(o => o.k !== "r");
+  S.ops.unshift({ k: "r", p: [[0, -GZ - 0.6], [0, GZ + 0.6]], w: 2 * GX + 1.0, s: S.rakeS, d: S.rakeD });
+  rebuildField();
+}
+
+// ------------------------------------------------------------------ presets
+function presetRyoanji(){
+  // 五・二・三・二・三 — the fifteen stones of 龍安寺, transposed to this garden
+  const G = [
+    [-3.55, -0.75, 0.42, 1.5], [-3.05, -0.20, 0.26, 1.1], [-3.35, 0.55, 0.22, 0.9],
+    [-2.75, 0.95, 0.20, 0.8], [-3.85, 0.10, 0.18, 0.7],
+    [-1.55, 1.05, 0.34, 1.3], [-1.05, 0.62, 0.20, 0.9],
+    [ 0.05, -0.95, 0.36, 1.4], [ 0.55, -0.55, 0.22, 1.0], [-0.35, -0.45, 0.19, 0.8],
+    [ 1.75, 0.85, 0.30, 1.2], [ 2.25, 1.15, 0.19, 0.8],
+    [ 3.25, -0.55, 0.38, 1.35], [ 3.75, -0.10, 0.22, 0.95], [ 2.85, -0.05, 0.20, 0.85],
+  ];
+  S.stones = G.map((g, i) => newStone(g[0], g[1], g[2], g[3], i * 1.37, (i * 2.7) % 9));
+  S.ops = [];
+  rakeAll();
+}
+function presetSanzon(){
+  S.stones = [
+    newStone(-0.35, -0.20, 0.52, 1.85, 0.4, 1.2),
+    newStone( 0.60, 0.15, 0.34, 1.25, 2.1, 4.5),
+    newStone(-1.15, 0.45, 0.28, 1.05, 3.7, 7.1),
+    newStone( 2.70, 0.90, 0.22, 0.80, 1.1, 2.2),
+  ];
+  S.ops = [];
+  rakeAll();
+}
+function presetIsland(){
+  S.stones = [
+    newStone(-1.9, 0.30, 0.46, 1.55, 0.9, 3.3),
+    newStone(-1.35, 0.65, 0.24, 0.95, 2.4, 6.6),
+    newStone( 1.85, -0.55, 0.40, 1.35, 4.2, 1.9),
+    newStone( 2.35, -0.15, 0.20, 0.85, 5.1, 8.2),
+  ];
+  S.ops = [];
+  // long ocean swells running the length of the garden
+  const pts = [];
+  for (let z = -GZ - 0.6; z <= GZ + 0.6; z += 1.3) pts.push([Math.sin(z * 0.75) * 0.75, z]);
+  S.ops.push({ k: "r", p: pts, w: 2 * GX + 1.6, s: S.rakeS * 1.35, d: S.rakeD * 1.2 });
+  rebuildField();
+}
+function presetEmpty(){ S.stones = []; S.ops = []; rebuildField(); }
+
+// =================================================================== the sun
+// Solar position for latitude 35N (Kyoto). Declination from the season, hour
+// angle from the clock. +X east, -Z north, so the garden faces south.
+function sunVector(hour, season){
+  const decl = [0, 23.44, 0, -23.44][season] * Math.PI / 180;
+  const lat = 34.99 * Math.PI / 180;
+  const H = (hour - 12) * 15 * Math.PI / 180;
+  const sinAlt = Math.sin(lat) * Math.sin(decl) + Math.cos(lat) * Math.cos(decl) * Math.cos(H);
+  const alt = Math.asin(clamp(sinAlt, -1, 1));
+  let cosAz = (Math.sin(decl) - Math.sin(lat) * sinAlt) / Math.max(1e-4, Math.cos(lat) * Math.cos(alt));
+  cosAz = clamp(cosAz, -1, 1);
+  let az = Math.acos(cosAz);                  // from north
+  if (H > 0) az = TAU - az;                   // afternoon -> west
+  return { alt, az, dir: [Math.sin(az) * Math.cos(alt), Math.sin(alt), -Math.cos(az) * Math.cos(alt)] };
+}
+
+// art-directed sky palettes keyed to the real solar elevation
+function skyPalette(altDeg, season){
+  // radiances are tuned so that the sky's irradiance stays roughly a fifth of
+  // the sun's — get that ratio wrong and the whole garden goes flat and chalky
+  const K = [
+    { e: -18, zen: [0.0020, 0.0032, 0.0100], hor: [0.005, 0.008, 0.019], haze: [0.016, 0.020, 0.036], mnt: [0.0032, 0.0045, 0.0105] },
+    { e:  -6, zen: [0.0100, 0.0155, 0.0375], hor: [0.049, 0.042, 0.062], haze: [0.098, 0.065, 0.085], mnt: [0.0098, 0.0124, 0.0230] },
+    { e:  -1, zen: [0.0245, 0.0342, 0.0750], hor: [0.183, 0.098, 0.077], haze: [0.330, 0.150, 0.085], mnt: [0.0180, 0.0196, 0.0326] },
+    { e:   6, zen: [0.0400, 0.0620, 0.1480], hor: [0.300, 0.190, 0.120], haze: [0.540, 0.290, 0.160], mnt: [0.0280, 0.0330, 0.0500] },
+    { e:  16, zen: [0.0420, 0.0750, 0.1950], hor: [0.223, 0.242, 0.272], haze: [0.360, 0.310, 0.270], mnt: [0.0350, 0.0450, 0.0620] },
+    { e:  55, zen: [0.0380, 0.0780, 0.2200], hor: [0.190, 0.228, 0.278], haze: [0.270, 0.295, 0.320], mnt: [0.0400, 0.0530, 0.0720] },
+  ];
+  let a = K[0], b = K[K.length - 1], t = 0;
+  for (let i = 0; i < K.length - 1; i++){
+    if (altDeg >= K[i].e && altDeg <= K[i + 1].e) {
+      a = K[i]; b = K[i + 1]; t = (altDeg - a.e) / (b.e - a.e); break;
+    }
+  }
+  if (altDeg < K[0].e) { a = b = K[0]; t = 0; }
+  if (altDeg > K[K.length - 1].e) { a = b = K[K.length - 1]; t = 0; }
+  const mix3 = (p, q) => [lerp(p[0], q[0], t), lerp(p[1], q[1], t), lerp(p[2], q[2], t)];
+  const P = { zen: mix3(a.zen, b.zen), hor: mix3(a.hor, b.hor), haze: mix3(a.haze, b.haze), mnt: mix3(a.mnt, b.mnt) };
+
+  // sun (or moon) irradiance
+  const night = smoothstep(2, -8, altDeg);
+  let E;
+  if (altDeg > -1.5) {
+    const w = smoothstep(32, 3, altDeg);                 // warmth near the horizon
+    const dim = smoothstep(-1.5, 7, altDeg);
+    E = [lerp(3.6, 5.0, 1 - w) * dim, lerp(1.75, 4.5, 1 - w) * dim, lerp(0.62, 3.9, 1 - w) * dim];
+  } else {
+    E = [0.030, 0.038, 0.062];                            // moonlight
+  }
+  const seasonTint = [[1.03, 1.00, 0.98], [1.0, 1.0, 1.0], [1.05, 0.99, 0.92], [0.97, 0.99, 1.06]][season];
+  E = E.map((v, i) => v * seasonTint[i]);
+  const hazeBoost = season === 0 ? 1.25 : 1.0;            // spring haze
+  P.haze = P.haze.map(v => v * hazeBoost);
+  return { P, E, night, altDeg };
+}
+
+const SEASON = [
+  { sand: [0.815, 0.790, 0.735], moss: [0.072, 0.150, 0.052], ground: [0.075, 0.082, 0.052],
+    wall: [0.560, 0.485, 0.380], leaf: 0.030, leafCol: [0.95, 0.62, 0.72], snow: 0, mossAmt: 0.55 },
+  { sand: [0.830, 0.805, 0.745], moss: [0.052, 0.152, 0.038], ground: [0.056, 0.086, 0.040],
+    wall: [0.580, 0.500, 0.390], leaf: 0.006, leafCol: [0.40, 0.62, 0.24], snow: 0, mossAmt: 0.75 },
+  { sand: [0.800, 0.765, 0.700], moss: [0.092, 0.134, 0.050], ground: [0.088, 0.076, 0.046],
+    wall: [0.545, 0.460, 0.355], leaf: 0.055, leafCol: [0.78, 0.28, 0.13], snow: 0, mossAmt: 0.50 },
+  { sand: [0.845, 0.855, 0.870], moss: [0.098, 0.124, 0.098], ground: [0.130, 0.140, 0.155],
+    wall: [0.510, 0.455, 0.390], leaf: 0.0, leafCol: [0.8, 0.8, 0.85], snow: 0.85, mossAmt: 0.30 },
+];
+
+// ================================================================== renderer
+let dpr = Math.min(devicePixelRatio || 1, 1.6);
+let CW = 1, CH = 1;
+let scaleIdle = 0.62, scaleLive = 0.42;
+let mode = 0, samples = 0, curScale = 0;
+let needReset = true, lastAct = 0, frameAcc = 0, frameN = 0, adaptDone = 0;
+const MAXSPP = 1500;   // fully converged well before this; stop burning the GPU
+
+function resize(){
+  CW = Math.max(2, Math.round(innerWidth * dpr));
+  CH = Math.max(2, Math.round(innerHeight * dpr));
+  cv.width = CW; cv.height = CH;
+  cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
+  curScale = 0; needReset = true;
+}
+addEventListener("resize", resize);
+
+// The viewer orbits the *enclosure*, not a circle: the horizontal radius is
+// clamped to the wall's rounded rectangle, so the camera never backs out of the
+// garden and the framing stays honest at every angle. Zooming out then lifts
+// the eye instead of retreating — you rise over the garden rather than leave it.
+function camBasis(){
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const A = GX + 1.02, B = GZ + 1.02;
+  const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+  const rad = cam.dist * cp;
+  const eye = [cam.tx + rad * sy, cam.ty + cam.dist * sp, cam.tz + rad * cy];
+  const k = Math.max(Math.abs(eye[0]) / A, Math.abs(eye[2]) / B, 1);
+  eye[0] /= k; eye[2] /= k;              // pulled back inside the wall
+  if (eye[1] < 1.34) eye[1] = 1.34;
+  let f = [cam.tx - eye[0], cam.ty - eye[1], cam.tz - eye[2]];
+  const fl = Math.hypot(f[0], f[1], f[2]); f = f.map(v => v / fl);
+  let r = [-f[2], 0, f[0]];                          // cross(f, worldUp)
+  const rl = Math.hypot(r[0], r[1], r[2]) || 1; r = r.map(v => v / rl);
+  const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+  return { eye, f, r, u, focus: fl };
+}
+
+const FOV = 52 * Math.PI / 180;
+// On a portrait screen a fixed vertical FOV squeezes the garden out of frame,
+// so widen it until the horizontal field is at least ~46 degrees. Picking and
+// the shader must agree on this, hence one shared helper.
+function tanHalfFov(aspect){
+  let t = Math.tan(FOV * 0.5);
+  const minTanH = Math.tan(23 * Math.PI / 180);
+  if (t * aspect < minTanH) t = Math.min(minTanH / aspect, Math.tan(43 * Math.PI / 180));
+  return t;
+}
+function setTraceUniforms(){
+  const u = progTrace.u;
+  const B = camBasis();
+  gl.uniform2f(u.uRes, RW, RH);
+  gl.uniform3fv(u.uEye, B.eye); gl.uniform3fv(u.uFwd, B.f);
+  gl.uniform3fv(u.uRight, B.r); gl.uniform3fv(u.uUpv, B.u);
+  const aspect = RW / RH;
+  gl.uniform1f(u.uTan, tanHalfFov(aspect));
+  gl.uniform1f(u.uAspect, aspect);
+  gl.uniform1f(u.uFocus, B.focus);
+  gl.uniform1f(u.uApert, mode === 1 ? S.dof * 0.052 : 0);
+
+  const sv = sunVector(S.hour, S.season);
+  const altDeg = sv.alt * 180 / Math.PI;
+  const sky = skyPalette(altDeg, S.season);
+  let dir = sv.dir;
+  if (altDeg < -1.5) {                                  // the moon takes over
+    const m = sunVector((S.hour + 12) % 24, S.season);
+    const mAlt = Math.max(m.alt, 0.42);
+    dir = [Math.sin(m.az) * Math.cos(mAlt), Math.sin(mAlt), -Math.cos(m.az) * Math.cos(mAlt)];
+    const l = Math.hypot(...dir); dir = dir.map(v => v / l);
+  }
+  gl.uniform3fv(u.uSunDir, dir);
+  gl.uniform3fv(u.uSunE, sky.E);
+  gl.uniform1f(u.uSunAng, altDeg < -1.5 ? 0.010 : 0.021);
+  gl.uniform3fv(u.uZen, sky.P.zen); gl.uniform3fv(u.uHor, sky.P.hor);
+  gl.uniform3fv(u.uHaze, sky.P.haze); gl.uniform3fv(u.uMount, sky.P.mnt);
+  gl.uniform1f(u.uNight, sky.night);
+  autoExpo = lerp(1.0, 15.0, sky.night);      // the eye adapting to the dark
+
+  const sc = SEASON[S.season];
+  gl.uniform3fv(u.uSandCol, sc.sand); gl.uniform3fv(u.uMossCol, sc.moss);
+  gl.uniform3fv(u.uWallCol, sc.wall); gl.uniform3fv(u.uGroundCol, sc.ground);
+  gl.uniform3fv(u.uLeafCol, sc.leafCol);
+  gl.uniform1f(u.uLeaf, sc.leaf); gl.uniform1f(u.uSnow, sc.snow);
+  gl.uniform1f(u.uMossAmt, sc.mossAmt);
+  gl.uniform1f(u.uBasin, S.basin ? 1 : 0);
+
+  const sp = new Float32Array(MAXSTONE * 4), ss = new Float32Array(MAXSTONE * 4);
+  const n = Math.min(S.stones.length, MAXSTONE);
+  for (let i = 0; i < n; i++){
+    const st = S.stones[i], g = stoneGeom(st);
+    sp.set([st.x, g.cy, st.z, g.br], i * 4);
+    ss.set([g.sx, g.sy, g.sz, st.rot], i * 4);
+  }
+  gl.uniform4fv(u.uStone, sp); gl.uniform4fv(u.uStoneS, ss);
+  gl.uniform1i(u.uNStone, n);
+  gl.uniform1i(u.uSand, 0);
+  gl.uniform1i(u.uPrev, 1);
+  sunLabel(altDeg);
+}
+
+let sunLabelEl = null, sunLabelTxt = "";
+function sunLabel(a){
+  if (!sunLabelEl) sunLabelEl = document.getElementById("sunlbl");
+  const t = a > 0 ? `太陽高度 ${a.toFixed(1)}°` : `太陽高度 ${a.toFixed(1)}°（日没後・月あかり）`;
+  if (t !== sunLabelTxt) { sunLabelTxt = t; sunLabelEl.textContent = t; }
+}
+
+let pngWanted = false, autoExpo = 1;
+function render(now){
+  const idle = (now - lastAct) > 260 && !S.orbit;
+  const wantMode = idle ? 1 : 0;
+  const wantScale = idle ? scaleIdle : scaleLive;
+
+  if (wantMode !== mode || wantScale !== curScale) {
+    mode = wantMode; curScale = wantScale;
+    allocTargets(Math.round(CW * curScale), Math.round(CH * curScale));
+    needReset = true;
+  }
+  if (needReset) { samples = 0; needReset = false; frameAcc = 0; frameN = 0; }
+
+  const doAccum = (mode === 1 && samples < MAXSPP);
+  if (mode === 0 || doAccum) {
+    gl.useProgram(progTrace.p);
+    gl.bindVertexArray(vao);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sandTex);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, accTex[0]);
+    setTraceUniforms();
+    gl.uniform1i(progTrace.u.uMode, mode);
+    gl.uniform1f(progTrace.u.uSample, mode === 1 ? samples : 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, accFbo[1]);
+    gl.viewport(0, 0, RW, RH);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    accTex.reverse(); accFbo.reverse();
+    if (mode === 1) samples++; else samples = 1;
+  }
+
+  // present
+  gl.useProgram(progPresent.p);
+  gl.bindVertexArray(vao);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, accTex[0]);
+  gl.uniform1i(progPresent.u.uAcc, 0);
+  gl.uniform2f(progPresent.u.uRes, CW, CH);
+  gl.uniform1f(progPresent.u.uN, Math.max(1, samples));
+  gl.uniform1f(progPresent.u.uExpo, Math.pow(2, S.expo) * autoExpo);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, CW, CH);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  if (pngWanted) { pngWanted = false; savePng(); }
+}
+
+// Adapt the internal resolution to whatever GPU is actually present. Once we
+// have had to step down we never step back up, so this settles instead of
+// oscillating between two costs.
+let adaptDir = 0;
+function adapt(dt){
+  if (mode !== 1 || samples < 1) return;
+  if (dt > 420 && scaleIdle > 0.30) {          // painfully slow: react at once
+    scaleIdle = Math.max(0.30, scaleIdle * 0.62);
+    adaptDir = -1; adaptDone++; needReset = true; curScale = 0; frameAcc = 0; frameN = 0;
+    if (scaleLive > 0.26) scaleLive = 0.26;
+    return;
+  }
+  if (adaptDone > 7) return;
+  frameAcc += dt; frameN++;
+  if (frameN < 6) return;
+  const avg = frameAcc / frameN;
+  frameAcc = 0; frameN = 0;
+  if (avg > 58 && scaleIdle > 0.30) {
+    scaleIdle = Math.max(0.30, scaleIdle * 0.80);
+    adaptDir = -1; adaptDone++; needReset = true; curScale = 0;
+    if (avg > 110 && scaleLive > 0.26) scaleLive = 0.26;
+  } else if (avg < 15 && scaleIdle < 1.0 && adaptDir >= 0) {
+    scaleIdle = Math.min(1.0, scaleIdle * 1.16);
+    adaptDir = 1; adaptDone++; needReset = true; curScale = 0;
+  } else adaptDone = 8;
+}
+
+const sppEl = document.getElementById("spp");
+const sppBar = document.getElementById("sppbar");
+const modeEl = document.getElementById("modelbl");
+let lastT = 0, uiT = 0;
+function loop(t){
+  requestAnimationFrame(loop);
+  if (document.hidden) { lastT = t; return; }
+  const dt = lastT ? t - lastT : 16; lastT = t;
+  if (S.orbit) { cam.yaw += dt * 0.00008; lastAct = t; }
+  upload();
+  render(t);
+  adapt(dt);
+  if (t - uiT > 120) {
+    uiT = t;
+    sppEl.textContent = mode === 1 ? samples : "—";
+    sppBar.style.width = mode === 1 ? Math.min(100, samples / 260 * 100) + "%" : "0%";
+    modeEl.textContent = mode === 1
+      ? (samples >= MAXSPP ? "収束しました" : (samples > 260 ? "ほぼ収束" : "収束中 …"))
+      : "PREVIEW（操作中）";
+  }
+  Audio.tick(t);
+}
+
+function touch(){ lastAct = performance.now(); needReset = true; }
+
+// ================================================================ interaction
+function screenRay(px, py){
+  const B = camBasis();
+  const x = (px / innerWidth) * 2 - 1;
+  const y = 1 - (py / innerHeight) * 2;
+  const asp = innerWidth / innerHeight, tn = tanHalfFov(asp);
+  const d = [B.f[0] + B.r[0] * x * tn * asp + B.u[0] * y * tn,
+             B.f[1] + B.r[1] * x * tn * asp + B.u[1] * y * tn,
+             B.f[2] + B.r[2] * x * tn * asp + B.u[2] * y * tn];
+  const l = Math.hypot(d[0], d[1], d[2]);
+  return { o: B.eye, d: d.map(v => v / l) };
+}
+function pickSand(px, py){
+  const r = screenRay(px, py);
+  if (r.d[1] >= -1e-4) return null;
+  const t = (0 - r.o[1]) / r.d[1];
+  if (t < 0) return null;
+  return [r.o[0] + r.d[0] * t, r.o[2] + r.d[2] * t];
+}
+function project(p){
+  const B = camBasis();
+  const v = [p[0] - B.eye[0], p[1] - B.eye[1], p[2] - B.eye[2]];
+  const z = v[0] * B.f[0] + v[1] * B.f[1] + v[2] * B.f[2];
+  if (z <= 0.02) return null;
+  const asp = innerWidth / innerHeight, tn = tanHalfFov(asp);
+  const x = (v[0] * B.r[0] + v[1] * B.r[1] + v[2] * B.r[2]) / (z * tn * asp);
+  const y = (v[0] * B.u[0] + v[1] * B.u[1] + v[2] * B.u[2]) / (z * tn);
+  return [(x * 0.5 + 0.5) * innerWidth, (1 - (y * 0.5 + 0.5)) * innerHeight];
+}
+
+let tool = "rake";
+let drag = null, curOp = null, selStone = -1;
+
+cv.addEventListener("contextmenu", e => e.preventDefault());
+cv.addEventListener("pointerdown", e => {
+  cv.setPointerCapture(e.pointerId);
+  const camDrag = (e.button === 2 || e.button === 1 || tool === "cam" || e.shiftKey);
+  drag = { x: e.clientX, y: e.clientY, cam: camDrag, moved: false, id: e.pointerId };
+  if (camDrag) return;
+  const w = pickSand(e.clientX, e.clientY);
+  if (!w) return;
+  if (tool === "rake") {
+    curOp = { k: "r", p: [w], w: S.rakeW, s: S.rakeS, d: S.rakeD };
+    S.ops.push(curOp);
+    Audio.rake(1);
+  } else if (tool === "stone") {
+    let hit = -1, best = 46;
+    for (let i = 0; i < S.stones.length; i++){
+      const st = S.stones[i], g = stoneGeom(st);
+      const sp = project([st.x, g.cy + g.sy * 0.5, st.z]);
+      if (!sp) continue;
+      const d = Math.hypot(sp[0] - e.clientX, sp[1] - e.clientY);
+      if (d < best) { best = d; hit = i; }
+    }
+    if (hit >= 0) { selStone = hit; drag.stone = hit; }
+    else if (S.stones.length < MAXSTONE) {
+      S.stones.push(newStone(clamp(w[0], -GX + 0.15, GX - 0.15), clamp(w[1], -GZ + 0.15, GZ - 0.15)));
+      selStone = S.stones.length - 1; drag.stone = selStone;
+      Audio.place();
+      rebuildField();
+    } else toast("石は" + MAXSTONE + "個までです");
+    syncStonePanel();
+  } else if (tool === "ring") {
+    curOp = { k: "o", x: w[0], z: w[1], r0: 0.10, r1: 0.62, s: S.rakeS, d: S.rakeD };
+    S.ops.push(curOp); applyOp(curOp); Audio.rake(0.7);
+  } else if (tool === "moss") {
+    curOp = { k: "m", x: w[0], z: w[1], r: S.rakeW * 0.55, a: 0.9 };
+    S.ops.push(curOp); applyOp(curOp);
+  } else if (tool === "flat") {
+    curOp = { k: "f", x: w[0], z: w[1], r: S.rakeW * 0.65, a: 0.85 };
+    S.ops.push(curOp); applyOp(curOp);
+    Audio.rake(0.5);
+  }
+  touch();
+});
+
+let lastRakeW = null;
+cv.addEventListener("pointermove", e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
+
+  if (drag.cam) {
+    cam.yaw -= dx * 0.0055;
+    cam.pitch = clamp(cam.pitch + dy * 0.004, 0.04, 1.45);
+    touch(); return;
+  }
+  const w = pickSand(e.clientX, e.clientY);
+  if (!w) return;
+
+  if (tool === "rake" && curOp) {
+    const last = curOp.p[curOp.p.length - 1];
+    const d = Math.hypot(w[0] - last[0], w[1] - last[1]);
+    if (d > 0.035) {
+      curOp.p.push(w);
+      stampSeg(last[0], last[1], w[0], w[1], curOp.w, curOp.s, curOp.d);
+      Audio.rake(clamp(d * 12, 0.3, 1.6));
+      touch();
+    }
+  } else if (tool === "stone" && drag.stone !== undefined) {
+    const st = S.stones[drag.stone];
+    st.x = clamp(w[0], -GX + 0.15, GX - 0.15);
+    st.z = clamp(w[1], -GZ + 0.15, GZ - 0.15);
+    touch();
+  } else if ((tool === "moss" || tool === "flat") && curOp) {
+    if (Math.hypot(w[0] - curOp.x, w[1] - curOp.z) > curOp.r * 0.30) {
+      curOp = { ...curOp, x: w[0], z: w[1] };
+      S.ops.push(curOp); applyOp(curOp);
+      if (tool === "flat") Audio.rake(0.4);
+      touch();
+    }
+  } else if (tool === "ring" && curOp) {
+    // dragging outward grows the ripple; only the new annulus is stamped, so the
+    // phase stays continuous and there is no full rebuild mid-drag
+    const nr = clamp(Math.hypot(w[0] - curOp.x, w[1] - curOp.z) + 0.30, 0.45, 2.8);
+    if (nr > curOp.r1 + 0.02) {
+      stampRing(curOp.x, curOp.z, curOp.r0, nr, curOp.s, curOp.d, false, curOp.r1 - 0.02);
+      curOp.r1 = nr;
+      Audio.rake(0.6);
+      touch();
+    }
+  }
+});
+
+function endDrag(){
+  if (!drag) return;
+  if (tool === "stone" && drag.stone !== undefined && drag.moved) rebuildField();
+  if (tool === "ring" && curOp) rebuildField();
+  drag = null; curOp = null;
+  Audio.rakeStop();
+  touch();
+}
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0011), 3.0, 15.0);
+  touch();
+}, { passive: false });
+
+// pinch zoom
+let pinch = null;
+cv.addEventListener("touchstart", e => {
+  if (e.touches.length === 2) {
+    pinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    drag = null;
+  }
+}, { passive: true });
+cv.addEventListener("touchmove", e => {
+  if (e.touches.length === 2 && pinch) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    cam.dist = clamp(cam.dist * (pinch / d), 3.0, 15.0);
+    pinch = d; touch();
+  }
+}, { passive: true });
+cv.addEventListener("touchend", () => { pinch = null; }, { passive: true });
+
+addEventListener("keydown", e => {
+  if (e.key === "h" || e.key === "H") document.getElementById("hud").classList.toggle("off");
+  if (e.key === "Delete" || e.key === "Backspace") { if (selStone >= 0) delStone(); }
+});
+
+// ======================================================================= UI
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove("show"), 1900);
+}
+const $ = id => document.getElementById(id);
+
+const TOOLHINT = {
+  rake: "左ドラッグで砂紋を掻く。掻いた向きと直角に筋が立ちます。",
+  stone: "砂の上をクリックで石を据える。石をつかんで動かせます。",
+  ring:  "クリックで波紋。そのままドラッグで大きさを決めます。",
+  moss:  "なぞった所に苔が生えます。",
+  flat:  "なぞった所の砂紋を消して平らにします。",
+  cam:   "ドラッグで視点を回す。ホイールで寄り引き。",
+};
+$("tools").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  tool = b.dataset.tool;
+  [...$("tools").children].forEach(c => c.classList.toggle("on", c === b));
+  cv.classList.toggle("cam", tool === "cam");
+  $("toolhint").textContent = TOOLHINT[tool];
+  $("stonepanel").classList.toggle("show", tool === "stone" && selStone >= 0);
+  const rakeish = (tool === "rake");
+  $("l1").textContent = rakeish ? "砂紋幅" : "筆の幅";
+});
+
+function bindRange(id, valId, get, set, fmt){
+  const el = $(id), v = $(valId);
+  el.value = get();
+  v.textContent = fmt(get());
+  el.addEventListener("input", () => { set(parseFloat(el.value)); v.textContent = fmt(parseFloat(el.value)); touch(); });
+}
+bindRange("rkW", "v1", () => S.rakeW, v => S.rakeW = v, v => v.toFixed(2));
+bindRange("rkS", "v2", () => S.rakeS, v => S.rakeS = v, v => (v * 100).toFixed(1));
+bindRange("rkD", "v3", () => S.rakeD, v => S.rakeD = v, v => (v * 100).toFixed(1));
+bindRange("dof", "vdof", () => S.dof, v => S.dof = v, v => v.toFixed(2));
+bindRange("expo", "vexpo", () => S.expo, v => S.expo = v, v => v.toFixed(1));
+
+const hourEl = $("hour");
+function setHour(h){
+  S.hour = h; hourEl.value = h;
+  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  $("vhour").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+  touch();
+}
+hourEl.addEventListener("input", () => setHour(parseFloat(hourEl.value)));
+setHour(S.hour);
+$("tpre").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  setHour(parseFloat(b.dataset.h));
+});
+$("seasons").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  S.season = parseInt(b.dataset.s);
+  [...$("seasons").children].forEach(c => c.classList.toggle("on", c === b));
+  Audio.season(S.season);
+  touch();
+});
+$("quality").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  S.quality = parseInt(b.dataset.q);
+  [...$("quality").children].forEach(c => c.classList.toggle("on", c === b));
+  buildTrace(S.quality);
+  touch();
+});
+
+function bindToggle(id, get, set){
+  const el = $(id);
+  el.classList.toggle("on", get());
+  el.addEventListener("click", () => { set(!get()); el.classList.toggle("on", get()); touch(); });
+}
+bindToggle("tRipple", () => S.autoRipple, v => { S.autoRipple = v; rebuildField(); });
+bindToggle("tBasin", () => S.basin, v => S.basin = v);
+bindToggle("tOrbit", () => S.orbit, v => S.orbit = v);
+bindToggle("tSound", () => S.sound, v => { S.sound = v; Audio.enable(v); });
+
+$("pRyoanji").onclick = () => { presetRyoanji(); touch(); toast("龍安寺 ― 十五の石"); };
+$("pSanzon").onclick = () => { presetSanzon(); touch(); toast("三尊石組"); };
+$("pIsland").onclick = () => { presetIsland(); touch(); toast("蓬莱島と大海"); };
+$("pEmpty").onclick = () => { presetEmpty(); touch(); toast("まっさらな白砂"); };
+$("bAllRake").onclick = () => { rakeAll(); touch(); Audio.rake(1.2); setTimeout(Audio.rakeStop, 500); };
+$("bClear").onclick = () => { S.ops = []; rebuildField(); touch(); toast("砂をならしました"); };
+$("bBell").onclick = () => Audio.bell();
+
+const panEl = $("panel"), panTog = $("pantog");
+if (innerWidth <= 820) panEl.classList.add("hide");
+panTog.onclick = () => panEl.classList.toggle("hide");
+
+// stone panel
+function syncStonePanel(){
+  const show = (tool === "stone" && selStone >= 0 && S.stones[selStone]);
+  $("stonepanel").classList.toggle("show", !!show);
+  if (!show) return;
+  const st = S.stones[selStone];
+  $("stS").value = st.s; $("vs1").textContent = st.s.toFixed(2);
+  $("stH").value = st.sy; $("vs2").textContent = st.sy.toFixed(1);
+  $("stR").value = st.rot; $("vs3").textContent = (st.rot * 57.3).toFixed(0);
+}
+$("stS").addEventListener("input", () => { if (selStone < 0) return;
+  S.stones[selStone].s = parseFloat($("stS").value); $("vs1").textContent = S.stones[selStone].s.toFixed(2); touch(); });
+$("stS").addEventListener("change", () => { if (selStone < 0) return; rebuildField(); touch(); });
+$("stH").addEventListener("input", () => { if (selStone < 0) return;
+  S.stones[selStone].sy = parseFloat($("stH").value); $("vs2").textContent = S.stones[selStone].sy.toFixed(1); touch(); });
+$("stR").addEventListener("input", () => { if (selStone < 0) return;
+  S.stones[selStone].rot = parseFloat($("stR").value); $("vs3").textContent = (S.stones[selStone].rot * 57.3).toFixed(0); touch(); });
+$("stShape").onclick = () => { if (selStone < 0) return; S.stones[selStone].seed = Math.random() * 9; rebuildField(); touch(); };
+$("stDel").onclick = () => delStone();
+function delStone(){
+  if (selStone < 0 || !S.stones[selStone]) return;
+  S.stones.splice(selStone, 1); selStone = -1;
+  syncStonePanel(); rebuildField(); touch();
+}
+
+// ------------------------------------------------------------- save / load
+const KEY = "karesansui.garden.v1";
+function serialize(){
+  const r3 = v => Math.round(v * 1000) / 1000;
+  return JSON.stringify({
+    v: 1,
+    st: S.stones.map(s => [r3(s.x), r3(s.z), r3(s.s), r3(s.sy), r3(s.rot), r3(s.seed)]),
+    op: S.ops.slice(-500).map(o => o.k === "r"
+      ? ["r", o.p.map(p => [r3(p[0]), r3(p[1])]), r3(o.w), r3(o.s), r3(o.d)]
+      : o.k === "o" ? ["o", r3(o.x), r3(o.z), r3(o.r0), r3(o.r1), r3(o.s), r3(o.d)]
+      : [o.k, r3(o.x), r3(o.z), r3(o.r), r3(o.a)]),
+    h: S.hour, se: S.season, ar: S.autoRipple, ba: S.basin,
+    cam: [cam.yaw, cam.pitch, cam.dist],
+  });
+}
+function deserialize(txt){
+  const d = JSON.parse(txt);
+  S.stones = (d.st || []).map(a => newStone(a[0], a[1], a[2], a[3], a[4], a[5]));
+  S.ops = (d.op || []).map(a => a[0] === "r"
+    ? { k: "r", p: a[1], w: a[2], s: a[3], d: a[4] }
+    : a[0] === "o" ? { k: "o", x: a[1], z: a[2], r0: a[3], r1: a[4], s: a[5], d: a[6] }
+    : { k: a[0], x: a[1], z: a[2], r: a[3], a: a[4] });
+  S.season = d.se ?? 2; S.autoRipple = d.ar ?? true; S.basin = d.ba ?? true;
+  if (d.cam) { cam.yaw = d.cam[0]; cam.pitch = d.cam[1]; cam.dist = d.cam[2]; }
+  [...$("seasons").children].forEach(c => c.classList.toggle("on", parseInt(c.dataset.s) === S.season));
+  $("tRipple").classList.toggle("on", S.autoRipple);
+  $("tBasin").classList.toggle("on", S.basin);
+  setHour(d.h ?? 16.4);
+  rebuildField();
+}
+$("bSave").onclick = () => {
+  try { localStorage.setItem(KEY, serialize()); toast("この庭を保存しました"); }
+  catch (e) { toast("保存できませんでした"); }
+};
+$("bLoad").onclick = () => {
+  const t = localStorage.getItem(KEY);
+  if (!t) { toast("保存された庭がありません"); return; }
+  try { deserialize(t); touch(); toast("庭を読み込みました"); }
+  catch (e) { toast("読み込みに失敗しました"); }
+};
+$("bPng").onclick = () => {
+  if (mode !== 1 || samples < 8) toast("収束を少し待つと綺麗に残せます");
+  pngWanted = true;
+};
+function savePng(){
+  cv.toBlob(b => {
+    if (!b) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = `karesansui_${Date.now()}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast("画像を保存しました");
+  }, "image/png");
+}
+
+// ==================================================================== audio
+const Audio = (() => {
+  let ac = null, master = null, ready = false, on = true;
+  let windSrc = null, windGain = null, windFilt = null, rakeGain = null, rakeSrc = null;
+  let nextShishi = 0, nextBird = 0;
+  const noiseBuf = () => {
+    const n = ac.sampleRate * 2, b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < n; i++){ const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+    return b;
+  };
+  function init(){
+    if (ready) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ac = new AC();
+    master = ac.createGain(); master.gain.value = on ? 0.55 : 0.0;
+    master.connect(ac.destination);
+    const nb = noiseBuf();
+    // wind through the pines beyond the wall
+    windSrc = ac.createBufferSource(); windSrc.buffer = nb; windSrc.loop = true;
+    windFilt = ac.createBiquadFilter(); windFilt.type = "bandpass";
+    windFilt.frequency.value = 420; windFilt.Q.value = 0.7;
+    windGain = ac.createGain(); windGain.gain.value = 0.10;
+    windSrc.connect(windFilt); windFilt.connect(windGain); windGain.connect(master);
+    windSrc.start();
+    // rake hiss (kept alive, gated by gain)
+    rakeSrc = ac.createBufferSource(); rakeSrc.buffer = nb; rakeSrc.loop = true;
+    const rf = ac.createBiquadFilter(); rf.type = "bandpass"; rf.frequency.value = 2100; rf.Q.value = 0.9;
+    rakeGain = ac.createGain(); rakeGain.gain.value = 0;
+    rakeSrc.connect(rf); rf.connect(rakeGain); rakeGain.connect(master);
+    rakeSrc.start();
+    ready = true;
+    if (ac.state === "suspended") ac.resume();
+    nextShishi = ac.currentTime + 9;
+    nextBird = ac.currentTime + 5;
+  }
+  const env = (g, t0, a, d, peak) => {
+    g.gain.cancelScheduledValues(t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d);
+  };
+  function tone(freq, t0, dur, peak, type){
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    o.connect(g); g.connect(master);
+    env(g, t0, 0.004, dur, peak);
+    o.start(t0); o.stop(t0 + dur + 0.1);
+  }
+  // 鹿威し — a bamboo tube tipping and striking stone
+  function shishi(t0){
+    const g = ac.createGain(); g.connect(master);
+    const src = ac.createBufferSource(); src.buffer = noiseBuf();
+    const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 900; bp.Q.value = 3;
+    src.connect(bp); bp.connect(g);
+    env(g, t0, 0.002, 0.09, 0.30);
+    src.start(t0); src.stop(t0 + 0.2);
+    tone(392, t0, 0.55, 0.24, "triangle");
+    tone(986, t0, 0.28, 0.10, "sine");
+    tone(1620, t0, 0.16, 0.05, "sine");
+    // water trickling back
+    for (let i = 0; i < 7; i++){
+      const tt = t0 + 0.35 + Math.random() * 1.6;
+      tone(900 + Math.random() * 1400, tt, 0.06, 0.018, "sine");
+    }
+  }
+  // 梵鐘 — inharmonic partials with a very long decay and a slow beat
+  function bell(){
+    init(); if (!ready) return;
+    const t0 = ac.currentTime + 0.02, f0 = 78;
+    const parts = [[1, 13, 0.34], [2.0, 9.5, 0.30], [2.02, 9.0, 0.22], [3.01, 6.0, 0.15],
+                   [4.17, 4.0, 0.10], [5.43, 2.6, 0.07], [6.79, 1.7, 0.05], [8.21, 1.1, 0.035]];
+    for (const [m, dur, amp] of parts){
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.value = f0 * m; o.type = "sine";
+      o.connect(g); g.connect(master);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(amp, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.start(t0); o.stop(t0 + dur + 0.2);
+    }
+    const src = ac.createBufferSource(); src.buffer = noiseBuf();
+    const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2400; bp.Q.value = 1.2;
+    const g = ac.createGain(); src.connect(bp); bp.connect(g); g.connect(master);
+    env(g, t0, 0.003, 0.22, 0.16);
+    src.start(t0); src.stop(t0 + 0.4);
+  }
+  function bird(t0){
+    const n = 2 + (Math.random() * 3 | 0), base = 2100 + Math.random() * 1500;
+    for (let i = 0; i < n; i++){
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = "sine";
+      const tt = t0 + i * 0.11;
+      o.frequency.setValueAtTime(base, tt);
+      o.frequency.exponentialRampToValueAtTime(base * (1.25 + Math.random() * 0.4), tt + 0.05);
+      o.connect(g); g.connect(master);
+      env(g, tt, 0.008, 0.09, 0.045);
+      o.start(tt); o.stop(tt + 0.2);
+    }
+  }
+  function cricket(t0){
+    for (let i = 0; i < 5; i++){
+      const tt = t0 + i * 0.055;
+      tone(4300 + Math.random() * 300, tt, 0.03, 0.02, "square");
+    }
+  }
+  return {
+    start(){ init(); },
+    enable(v){
+      on = v;
+      if (v) init();
+      if (master) master.gain.setTargetAtTime(v ? 0.55 : 0.0, ac.currentTime, 0.08);
+      if (v && ac && ac.state === "suspended") ac.resume();
+    },
+    season(s){
+      if (!ready) return;
+      windFilt.frequency.setTargetAtTime([380, 300, 460, 620][s], ac.currentTime, 0.5);
+      windGain.gain.setTargetAtTime([0.09, 0.075, 0.11, 0.13][s], ac.currentTime, 0.5);
+    },
+    rake(v){ if (!ready) return; rakeGain.gain.setTargetAtTime(clamp(v, 0, 1.6) * 0.075, ac.currentTime, 0.05); },
+    rakeStop(){ if (!ready) return; rakeGain.gain.setTargetAtTime(0, ac.currentTime, 0.09); },
+    place(){ if (!ready) return; tone(150, ac.currentTime, 0.2, 0.12, "triangle"); tone(74, ac.currentTime, 0.35, 0.16, "sine"); },
+    bell,
+    tick(){
+      if (!ready || !on) return;
+      const t = ac.currentTime;
+      if (t > nextShishi) { shishi(t + 0.1); nextShishi = t + 22 + Math.random() * 22; }
+      if (t > nextBird) {
+        const night = S.hour < 5.4 || S.hour > 18.6;
+        if (night) cricket(t + 0.1); else if (Math.random() < 0.75) bird(t + 0.1);
+        nextBird = t + (night ? 2.5 + Math.random() * 3 : 6 + Math.random() * 12);
+      }
+    },
+  };
+})();
+
+// ================================================================== startup
+resize();
+presetRyoanji();
+touch();
+requestAnimationFrame(loop);
+
+$("enter").onclick = () => {
+  document.getElementById("intro").classList.add("gone");
+  setTimeout(() => { const i = document.getElementById("intro"); if (i) i.style.display = "none"; }, 900);
+  if (S.sound) Audio.start();
+  touch();
+  if (innerWidth <= 820) setTimeout(() => toast("☰ から道具をひらけます"), 1100);
+};
+// keep the tracer warm behind the intro so the first frame is already there
+})();
+</script>
+</body>
+</html>
