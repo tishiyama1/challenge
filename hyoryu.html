@@ -10,11 +10,15 @@
     --gold:#e2c98a; --warn:#e28a5a; --crit:#d6533f;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  button{user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:manipulation}
+  .pad button{touch-action:none}
+  .journal,.prompt,.topbar,.pack{user-select:none; -webkit-user-select:none; -webkit-touch-callout:none}
   html,body{height:100%; margin:0; overflow:hidden}
   body{
     background:var(--bg); color:var(--ink); font-size:15px;
     font-family:'Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif;
-    -webkit-font-smoothing:antialiased; user-select:none; touch-action:none;
+    -webkit-font-smoothing:antialiased; touch-action:none;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
   }
   #app{position:fixed; inset:0; overflow:hidden}
   canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
@@ -168,9 +172,11 @@
   /* 縦長の画面では、島を上段に寄せて下段を手記にあてる */
   @media (orientation:portrait){
     canvas{height:64%}
-    .journal{top:64%; bottom:0; padding:16px 16px 78px;
-      background:#05070b; border-top:1px solid #1b1f27; overflow:hidden}
-    .journal div{margin-bottom:5px}
+    .journal{top:64%; bottom:0; padding:14px 16px 8px;
+      background:#05070b; border-top:1px solid #1b1f27; overflow:hidden;
+      display:flex; flex-direction:column; justify-content:flex-end}
+    .journal div{margin-bottom:5px; flex:0 0 auto}
+    .journal::after{content:''; display:block; flex:0 0 auto; height:62px}
     .prompt{bottom:calc(36% + 48px) !important}
     .pack{bottom:calc(36% + 10px) !important; max-width:74%}
     .vignette{bottom:36%}
@@ -1905,15 +1911,44 @@ addEventListener('keydown',e=>{
   if(e.key.startsWith('Arrow')) e.preventDefault();
 });
 addEventListener('keyup',e=>keys[e.key]=0);
-function bindHold(el,fn){
-  let on=false;
-  const d=e=>{on=true; audioInit(); e.preventDefault()}, u=()=>on=false;
-  el.addEventListener('pointerdown',d); el.addEventListener('pointerup',u);
-  el.addEventListener('pointerleave',u); el.addEventListener('pointercancel',u);
-  return ()=>on;
+/* 押しっぱなしで歩く。指がずれても離すまで続き、長押ししても選択や
+   コンテキストメニューが割り込まないようにする */
+function noSelect(el,hard){
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  el.addEventListener('selectstart',e=>e.preventDefault());
+  el.addEventListener('dragstart',e=>e.preventDefault());
+  if(hard){                       // 自前でpointerdownを拾うボタンだけ、touchも殺す
+    el.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
+    el.addEventListener('touchmove', e=>e.preventDefault(),{passive:false});
+  }
+}
+function bindHold(el){
+  let pid=null;
+  el.addEventListener('pointerdown',e=>{
+    pid=e.pointerId; audioInit();
+    try{ el.setPointerCapture(e.pointerId) }catch(_){}
+    e.preventDefault();
+  });
+  const up=e=>{
+    if(pid===null) return;
+    try{ el.releasePointerCapture(pid) }catch(_){}
+    pid=null;
+  };
+  el.addEventListener('pointerup',up);
+  el.addEventListener('pointercancel',up);
+  el.addEventListener('lostpointercapture',up);
+  noSelect(el,1);
+  return ()=>pid!==null;
 }
 const holdL=bindHold($('bL')), holdR=bindHold($('bR'));
-$('bE').addEventListener('click',()=>{audioInit(); if(!uiOpen) interact()});
+const bAct=$('bE');
+bAct.addEventListener('pointerdown',e=>{ e.preventDefault(); audioInit(); if(!uiOpen) interact() });
+noSelect(bAct,1);
+['bInv','bCraft','bDiary','bMenu'].forEach(id=>noSelect($(id)));
+document.getElementById('app').addEventListener('contextmenu',e=>{
+  if(e.target.closest('.panel')) return;      // パネル内はふつうに扱う
+  e.preventDefault();
+});
 $('bInv').onclick=()=>{audioInit(); openPack()};
 $('bCraft').onclick=()=>{audioInit(); openCraft()};
 $('bDiary').onclick=()=>{audioInit(); openDiary()};
