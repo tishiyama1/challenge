@@ -35,7 +35,9 @@
   .topbar .day{color:#fff; letter-spacing:.2em}
   .topbar .clock{color:var(--gold); letter-spacing:.1em; font-variant-numeric:tabular-nums}
   .topbar .wx{opacity:.85}
-  .vit{margin-left:auto; display:flex; gap:9px; letter-spacing:0}
+  .load{margin-left:auto; font-size:11px; letter-spacing:.08em; color:#b8b1a0; font-variant-numeric:tabular-nums}
+  .load.over{color:var(--warn)}
+  .vit{margin-left:14px; display:flex; gap:9px; letter-spacing:0}
   .vit b{
     width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:12px;
     background:rgba(6,8,12,.5); border:1px solid rgba(255,255,255,.13); font-weight:400; transition:.3s;
@@ -88,6 +90,14 @@
   .menub{width:34px; height:34px; font-size:13px; border-radius:3px}
 
   /* ───────── パネル ───────── */
+  .mapmode .journal{opacity:0}
+  @media (orientation:portrait){ .mapmode canvas{height:100%} .mapmode .vignette{bottom:0} }
+  .mapmode .prompt,.mapmode .pack,.mapmode .pad{display:none !important}
+  .maphint{
+    left:50%; transform:translateX(-50%); bottom:20px; text-align:center; color:#c2bbaa;
+    font-size:11.5px; letter-spacing:.13em; text-shadow:0 1px 6px #000; line-height:1.95; width:92%;
+  }
+  .maphint b{color:var(--gold); font-weight:400}
   .scrim{
     position:absolute; inset:0; background:rgba(4,6,10,.78); pointer-events:auto;
     display:none; align-items:center; justify-content:center; padding:24px; backdrop-filter:blur(4px);
@@ -181,6 +191,12 @@
     .pack{bottom:calc(36% + 10px) !important; max-width:74%}
     .vignette{bottom:36%}
   }
+  @media (max-width:440px){
+    .topbar{font-size:10.5px; gap:9px; letter-spacing:.06em}
+    .load{font-size:10px}
+    .vit{margin-left:8px; gap:6px}
+    .vit b{width:21px; height:21px; font-size:11px}
+  }
   @media (max-width:560px){
     .panel{padding:18px 15px 20px}
     .journal{font-size:12.5px; padding:13px 14px}
@@ -199,12 +215,14 @@
       <span class="day" id="uiDay">1日目</span>
       <span class="clock" id="uiClock">6:00</span>
       <span class="wx" id="uiWx">晴</span>
+      <span class="load" id="uiLoad"></span>
       <span class="vit" id="uiVit"></span>
     </div>
     <div class="prompt" id="uiPrompt"><span class="k">E</span><span id="uiPromptTx"></span></div>
     <div class="pack" id="uiPack"></div>
     <div class="journal" id="uiJournal"></div>
     <div class="keys">
+      <button class="menub" id="bMap" title="島の見取図 (M)">地</button>
       <button class="menub" id="bInv" title="持ち物 (I)">物</button>
       <button class="menub" id="bCraft" title="こしらえる (C)">作</button>
       <button class="menub" id="bDiary" title="日誌 (J)">誌</button>
@@ -212,6 +230,7 @@
     </div>
     <div class="pad l"><button id="bL">←</button><button id="bR">→</button></div>
     <div class="pad r"><button id="bE">✋</button></div>
+    <div class="maphint" id="uiMapHint" style="display:none"></div>
     <div class="toast" id="uiToast"></div>
   </div>
 
@@ -224,282 +243,389 @@
 "use strict";
 /* =========================================================================
    漂流 ― HYORYU
-   無人島ローグライク / 横スクロール / マルチエンディング
+   無人島ローグライク / 地点をめぐる / マルチエンディング
    単一HTML・依存ライブラリなし
    ========================================================================= */
 
 /* ───────── 乱数 ───────── */
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
   t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-let R=mulberry32(1);                       // 島の生成用（シード固定）
+let R=mulberry32(1);                       // 島の生成用
 let Q=mulberry32(Date.now()&0xffffff);     // その場の判定用
 const ri=(r,a,b)=>a+Math.floor(r()*(b-a+1));
 const pick=(r,a)=>a[Math.floor(r()*a.length)];
 const shuffle=(r,a)=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const chance=p=>Q()<p;
+function wpick(r,tbl){                     // {key:weight} から一つ引く
+  let t=0; for(const k in tbl) t+=tbl[k];
+  let v=r()*t;
+  for(const k in tbl){ v-=tbl[k]; if(v<=0) return k }
+  return Object.keys(tbl)[0];
+}
 
 /* ───────── 定数 ───────── */
-const MAX_DAY=40, DAWN=5, DUSK=19, WAKE=6, WALK_PER_H=780;
-const SEA=170, WORLD=3600, GY=0.70;
-const AREA=[
-  {x:0,    n:'波打ち際'}, {x:200,  n:'砂浜'},   {x:1150, n:'密林'},
-  {x:2400, n:'岩場'},     {x:2950, n:'高台'}
-];
-const areaName=x=>{let n=AREA[0].n; for(const a of AREA) if(x>=a.x) n=a.n; return n};
-const biome=x=> x<1150?'sand' : x<2400?'jungle' : x<2950?'rock' : 'cliff';
+const MAX_DAY=40, DAWN=5, DUSK=19, WAKE=6;
+const GY=0.70;
+const CAP0=13;                             // 素手で持てる重さ
 
 /* ───────── 品目 ───────── */
 const ITEM={
-  wood  :{n:'流木',   i:'🪵'}, timber:{n:'角材',  i:'🪵'}, stone :{n:'石',    i:'🪨'},
-  fiber :{n:'繊維',   i:'🌾'}, leaf  :{n:'大葉',  i:'🍃'}, resin :{n:'樹脂',  i:'🟠'},
-  clay  :{n:'粘土',   i:'🟤'}, metal :{n:'金属片',i:'⚙️'}, cloth :{n:'布',    i:'🧵'},
-  bone  :{n:'骨',     i:'🦴'}, shell :{n:'貝',    i:'🐚'}, salt  :{n:'塩',    i:'🧂'},
-  coco  :{n:'椰子の実',i:'🥥'}, fish  :{n:'魚',    i:'🐟'}, meat  :{n:'生肉',  i:'🥩'},
-  dried :{n:'干物',   i:'🍖'}, herb  :{n:'薬草',  i:'🌿'}, egg   :{n:'海鳥の卵',i:'🥚'},
-  water :{n:'水',     i:'💧'}, tin   :{n:'缶詰',  i:'🥫'}, seed  :{n:'種',    i:'🌱'},
-  chart :{n:'海図の断片',i:'🗺️'},relic:{n:'遺品',  i:'📿'}, parts :{n:'無線の部品',i:'📻'},
-  axe   :{n:'石斧',   i:'🪓',t:1}, machete:{n:'山刀',i:'🔪',t:1}, spear:{n:'銛',i:'🔱',t:1},
-  rod   :{n:'釣竿',   i:'🎣',t:1}, rope :{n:'綱',   i:'🪢',t:1}, torch:{n:'松明',i:'🔥'},
-  pot   :{n:'土器',   i:'🏺',t:1}, still:{n:'蒸留器',i:'⚗️',t:1}, lamp:{n:'角灯',i:'🏮',t:1},
-  radio :{n:'無線機', i:'📡',t:1}, skiff:{n:'小舟', i:'🛶',t:1}
+  wood  :{n:'流木',   i:'🪵',w:1}, timber:{n:'角材',  i:'🪵',w:3}, stone :{n:'石',    i:'🪨',w:2},
+  fiber :{n:'繊維',   i:'🌾',w:1}, leaf  :{n:'大葉',  i:'🍃',w:1}, resin :{n:'樹脂',  i:'🟠',w:1},
+  clay  :{n:'粘土',   i:'🟤',w:2}, metal :{n:'金属片',i:'⚙️',w:1}, cloth :{n:'布',    i:'🧵',w:1},
+  bone  :{n:'骨',     i:'🦴',w:1}, shell :{n:'貝',    i:'🐚',w:1}, salt  :{n:'塩',    i:'🧂',w:1},
+  coco  :{n:'椰子の実',i:'🥥',w:2}, fish  :{n:'魚',    i:'🐟',w:1}, meat  :{n:'生肉',  i:'🥩',w:2},
+  hide  :{n:'毛皮',   i:'🟫',w:2}, dried :{n:'干物',  i:'🍖',w:1}, cooked:{n:'焼いた身',i:'🍗',w:1},
+  herb  :{n:'薬草',   i:'🌿',w:1}, egg   :{n:'海鳥の卵',i:'🥚',w:1}, water :{n:'水',   i:'💧',w:2},
+  tin   :{n:'缶詰',   i:'🥫',w:1}, seed  :{n:'種',    i:'🌱',w:1}, bamboo:{n:'竹',    i:'🎍',w:2},
+  chart :{n:'海図の断片',i:'🗺️',w:1}, relic:{n:'遺品', i:'📿',w:1}, parts :{n:'無線の部品',i:'📻',w:2},
+  axe   :{n:'石斧',   i:'🪓',w:2,t:1}, machete:{n:'山刀',i:'🔪',w:2,t:1}, spear:{n:'銛',i:'🔱',w:2,t:1},
+  rod   :{n:'釣竿',   i:'🎣',w:2,t:1}, rope :{n:'綱',   i:'🪢',w:2,t:1}, torch:{n:'松明',i:'🔥',w:1},
+  pot   :{n:'土器',   i:'🏺',w:2,t:1}, still:{n:'蒸留器',i:'⚗️',w:3,t:1}, lamp:{n:'角灯',i:'🏮',w:2,t:1},
+  radio :{n:'無線機', i:'📡',w:3,t:1}, basket:{n:'編み籠',i:'🧺',w:1,t:1}, frame:{n:'背負子',i:'🎒',w:2,t:1},
+  knife :{n:'貝の刃', i:'🔪',w:1,t:1}
 };
-/* 未鑑定：見た目は毎周シャッフルされる */
+/* 未鑑定：見た目と効き目の対応は毎周シャッフルされる */
 const UNK=[
   {id:'n1',n:'赤い実',   i:'🔴'},{id:'n2',n:'青い実',  i:'🔵'},{id:'n3',n:'黒い実', i:'⚫'},
   {id:'n4',n:'白い実',   i:'⚪'},{id:'n5',n:'縞の実',  i:'🟣'},
   {id:'m1',n:'白い茸',   i:'🍄'},{id:'m2',n:'赤い茸',  i:'🍄'},{id:'m3',n:'斑の茸', i:'🍄'}
 ];
+const NUTS=['n1','n2','n3','n4','n5'], MUSH=['m1','m2','m3'];
 const EFFECT={
-  nutri :{n:'滋養',   d:'よく腹に溜まる',           f:s=>{s.food+=34;lg('腹に力が戻る。')}},
-  juicy :{n:'水気',   d:'喉を潤す',                 f:s=>{s.water+=30;s.food+=8;lg('喉の渇きがすこし引いた。')}},
-  poison:{n:'毒',     d:'内臓を灼く',               f:s=>{s.hp-=22;s.food-=10;s.sick=3;lg('喉が灼ける。手が震えだした。','bad')}},
-  numb  :{n:'痺れ',   d:'手足の感覚を奪う',         f:s=>{s.hp-=9;s.numb=2;lg('指の感覚が遠い。','bad')}},
-  halluc:{n:'幻覚',   d:'見えないものを見せる',     f:s=>{s.san-=16;s.food+=10;lg('椰子の葉が、人の手のように動いた。','bad')}},
-  calm  :{n:'鎮静',   d:'心をなだめる',             f:s=>{s.san+=22;lg('胸の底のざわつきが、すこし静まる。','good')}},
-  cure  :{n:'薬',     d:'熱と痛みを引かせる',       f:s=>{s.hp+=20;s.sick=0;lg('熱がひいていく。','good')}},
-  bitter:{n:'苦味',   d:'ただ苦いだけ',             f:s=>{s.food+=6;lg('えぐみだけが舌に残った。')}}
+  nutri :{n:'滋養',   d:'よく腹に溜まる',       f:s=>{s.food+=34;lg('腹に力が戻る。')}},
+  juicy :{n:'水気',   d:'喉を潤す',             f:s=>{s.water+=30;s.food+=8;lg('喉の渇きがすこし引いた。')}},
+  poison:{n:'毒',     d:'内臓を灼く',           f:s=>{s.hp-=22;s.food-=10;s.sick=3;lg('喉が灼ける。手が震えだした。','bad')}},
+  numb  :{n:'痺れ',   d:'手足の感覚を奪う',     f:s=>{s.hp-=9;s.numb=2;lg('指の感覚が遠い。','bad')}},
+  halluc:{n:'幻覚',   d:'見えないものを見せる', f:s=>{s.san-=16;s.food+=10;lg('葉の影が、人の手のように動いた。','bad')}},
+  calm  :{n:'鎮静',   d:'心をなだめる',         f:s=>{s.san+=22;lg('胸の底のざわつきが、すこし静まる。','good')}},
+  cure  :{n:'薬',     d:'熱と痛みを引かせる',   f:s=>{s.hp+=20;s.sick=0;lg('熱がひいていく。','good')}},
+  bitter:{n:'苦味',   d:'ただ苦いだけ',         f:s=>{s.food+=6;lg('えぐみだけが舌に残った。')}}
 };
 const EFFKEYS=Object.keys(EFFECT);
 
 /* ───────── こしらえもの ───────── */
 const RECIPE=[
-  {id:'axe',   n:'石斧',   c:{stone:2,wood:1,fiber:1},    sk:'craft', lv:0, t:60, d:'木を伐り倒せるようになる'},
-  {id:'rope',  n:'綱',     c:{fiber:4},                    sk:'gather',lv:1, t:40, d:'崖を降りるのに要る'},
+  {id:'knife', n:'貝の刃', c:{shell:2,fiber:1},            sk:'craft', lv:0, t:30, d:'ないよりはましな刃'},
+  {id:'axe',   n:'石斧',   c:{stone:2,wood:1,fiber:2},     sk:'craft', lv:0, t:60, d:'木を伐り倒せるようになる'},
+  {id:'basket',n:'編み籠', c:{fiber:5},                    sk:'gather',lv:1, t:50, d:'荷を6ぶん多く持てる'},
+  {id:'rope',  n:'綱',     c:{fiber:4},                    sk:'gather',lv:1, t:40, d:'崖を降り、筏を縛る'},
   {id:'torch', n:'松明',   c:{wood:1,fiber:1,resin:1},     sk:'craft', lv:0, t:30, d:'暗がりと夜を照らす'},
   {id:'spear', n:'銛',     c:{wood:2,stone:1,fiber:1},     sk:'craft', lv:1, t:60, d:'獣と魚に届く'},
-  {id:'rod',   n:'釣竿',   c:{wood:1,fiber:2},             sk:'fish',  lv:0, t:40, d:'岩場で魚が釣れる'},
+  {id:'rod',   n:'釣竿',   c:{wood:1,fiber:2},             sk:'fish',  lv:0, t:40, d:'魚が釣れるようになる'},
+  {id:'frame', n:'背負子', c:{timber:2,rope:1,fiber:3},    sk:'craft', lv:2, t:80, d:'荷を10ぶん多く持てる'},
   {id:'machete',n:'山刀',  c:{metal:1,wood:1,fiber:1},     sk:'craft', lv:2, t:80, d:'藪を斬り開ける'},
   {id:'pot',   n:'土器',   c:{clay:3},                     sk:'craft', lv:1, t:80, d:'水を運び、煮炊きできる', fire:1},
   {id:'still', n:'蒸留器', c:{pot:1,metal:1,fiber:2},      sk:'craft', lv:3, t:120,d:'海水から真水を採る'},
   {id:'lamp',  n:'角灯',   c:{metal:1,cloth:1,resin:2},    sk:'craft', lv:3, t:90, d:'消えない灯り'},
   {id:'dried', n:'干物',   c:{fish:2,salt:1},              sk:'craft', lv:0, t:60, d:'腐らない食料', fire:1, out:2},
-  {id:'salt',  n:'塩',     c:{water:1},                    sk:'craft', lv:0, t:50, d:'海水を煮つめる',   fire:1, sea:1},
-  {id:'skiff', n:'小舟',   c:{timber:6,fiber:6,resin:3},   sk:'sail',  lv:2, t:180,d:'入り江の対岸へ渡れる'},
+  {id:'salt',  n:'塩',     c:{water:1},                    sk:'craft', lv:0, t:50, d:'海水を煮つめる',  fire:1, shore:1},
+  {id:'split', n:'竹を割る', c:{bamboo:2},                sk:'craft', lv:0, t:30, d:'竹は、割れば材になる', out:2, makes:'timber'},
   {id:'radio', n:'無線機', c:{parts:2,metal:2,cloth:1},    sk:'craft', lv:4, t:150,d:'助けを呼べるかもしれない'}
 ];
-/* 建てもの＝進捗そのもの（ゲージの代わりに風景が変わる） */
+/* 建てもの＝進捗そのもの。立地に条件がつく */
 const BUILD=[
-  {id:'hut',  s:1, n:'風よけ',    c:{wood:4,leaf:4},            sk:'build',lv:0,t:90, at:700, d:'夜風と雨を、すこしだけ防ぐ'},
-  {id:'hut',  s:2, n:'小屋',      c:{timber:6,fiber:6,leaf:10}, sk:'build',lv:1,t:180,at:700, d:'眠りが深くなる。雨に濡れない'},
-  {id:'hut',  s:3, n:'井戸と畑',  c:{stone:8,clay:4,seed:2},    sk:'build',lv:3,t:240,at:700, d:'水と食が、島から絶えなくなる'},
-  {id:'raft', s:1, n:'いかだの骨組', c:{timber:6,rope:2},       sk:'sail', lv:0,t:150,at:250, d:'海へ出るための、はじまり'},
-  {id:'raft', s:2, n:'いかだの甲板', c:{timber:8,resin:4},      sk:'sail', lv:1,t:180,at:250, d:'波を越えられる形になった'},
-  {id:'raft', s:3, n:'帆と舵',    c:{cloth:6,timber:4,rope:2},  sk:'sail', lv:3,t:210,at:250, d:'風を掴める。あとは、決めるだけ'},
-  {id:'tower',s:2, n:'狼煙台',    c:{timber:10,stone:6},        sk:'build',lv:2,t:210,at:3430,d:'高台から、煙は遠くまで届く'},
-  {id:'tower',s:3, n:'狼煙に火',  c:{wood:6,resin:2},           sk:'build',lv:0,t:60, at:3430,d:'空へ、まっすぐ立ちのぼる'}
+  {id:'hut',  s:1, n:'風よけ',    c:{wood:4,leaf:4},            sk:'build',lv:0,t:90, d:'夜風と雨を、すこしだけ防ぐ'},
+  {id:'hut',  s:2, n:'小屋',      c:{timber:4,fiber:5,leaf:6},  sk:'build',lv:1,t:180,d:'眠りが深くなる。雨に濡れない'},
+  {id:'hut',  s:3, n:'井戸と畑',  c:{stone:8,clay:4,seed:2},    sk:'build',lv:3,t:240,d:'水と食が、島から絶えなくなる', need:'water'},
+  {id:'raft', s:1, n:'いかだの骨組', c:{timber:4,rope:1},       sk:'sail', lv:0,t:150,d:'海へ出るための、はじまり',   need:'shore'},
+  {id:'raft', s:2, n:'いかだの甲板', c:{timber:6,resin:3},      sk:'sail', lv:1,t:180,d:'波を越えられる形になった',   need:'shore'},
+  {id:'raft', s:3, n:'帆と舵',    c:{cloth:4,timber:3,rope:1},  sk:'sail', lv:3,t:210,d:'風を掴める。あとは、決めるだけ', need:'shore'},
+  {id:'tower',s:2, n:'狼煙台',    c:{timber:5,stone:4},         sk:'build',lv:2,t:210,d:'高みから、煙は遠くまで届く', need:'view'},
+  {id:'tower',s:3, n:'狼煙に火',  c:{wood:6,resin:2},           sk:'build',lv:0,t:60, d:'空へ、まっすぐ立ちのぼる',   need:'view'}
 ];
 const SKILL={fish:'漁労',hunt:'狩猟',gather:'採集',craft:'工作',build:'建築',sail:'航海'};
-const SKNEED=[0,3,8,16,28];   // 次のLvに要る熟練
+const SKNEED=[0,3,8,16,28];
+
+/* ───────── 地点 ───────── */
+const ATTR={water:'水場',shore:'浜',view:'眺望',shelter:'雨をしのげる',dark:'暗い',lore:'なにかの跡'};
+const KIND={
+  shore   :{n:'砂浜',   res:{wood:4,shell:3,coco:2,fiber:1},              attr:['shore'],           dg:0, len:1100},
+  dune    :{n:'砂丘',   res:{wood:2,shell:2,fiber:2},                     attr:['shore','view'],    dg:0, len:1000},
+  rocky   :{n:'岩浜',   res:{stone:4,shell:2,fish:2,salt:2},              attr:['shore'],           dg:1, len:900},
+  tidepool:{n:'潮だまり',res:{shell:4,fish:3,salt:3},                     attr:['shore'],           dg:0, len:800},
+  cape    :{n:'岬',     res:{wood:2,shell:2,egg:1},                       attr:['shore','view'],    dg:1, len:900},
+  jungle  :{n:'密林',   res:{timber:4,fiber:3,fruit:3,resin:2,leaf:3},    attr:[],                  dg:1, len:1300},
+  grove   :{n:'椰子林', res:{coco:4,leaf:4,fiber:2,wood:2},               attr:[],                  dg:0, len:1100},
+  thicket :{n:'藪',     res:{fiber:4,fruit:3,herb:2,mush:2},              attr:[],                  dg:1, len:1000},
+  bamboo  :{n:'竹林',   res:{bamboo:4,fiber:3,timber:1},                  attr:[],                  dg:0, len:1000},
+  marsh   :{n:'沼',     res:{clay:4,herb:3,water:2,mush:2},               attr:['water'],           dg:2, len:1000},
+  fall    :{n:'滝',     res:{water:4,fish:2,clay:2,herb:1},               attr:['water'],           dg:1, len:900},
+  spring  :{n:'湧水',   res:{water:5,herb:2,clay:1},                      attr:['water'],           dg:0, len:700},
+  cave    :{n:'洞窟',   res:{stone:4,metal:2,bone:2,mush:2},              attr:['shelter','dark'],  dg:2, len:1000},
+  cliff   :{n:'断崖',   res:{egg:4,stone:2,bone:1},                       attr:['view'],            dg:3, len:900},
+  trail   :{n:'獣道',   res:{meat:3,bone:3,hide:2,fruit:1},               attr:[],                  dg:3, len:1100},
+  wreck   :{n:'座礁船', res:{cloth:3,metal:3,tin:2,parts:2,timber:2},     attr:['shore','shelter'], dg:2, len:900},
+  ruinhut :{n:'廃屋',   res:{cloth:2,metal:2,timber:2,tool:1,tin:1},      attr:['shelter'],         dg:1, len:800},
+  ruins   :{n:'石柱の丘',res:{stone:3,relic:1},                           attr:['lore','view'],     dg:2, len:900}
+};
+/* 採れるものの実体（抽選で引かれたあと、これで品に変わる） */
+const RESOLVE={
+  fruit:()=>pick(Q,NUTS), mush:()=>pick(Q,MUSH),
+  tool :()=>pick(Q,['knife','rod','pot','rope','machete'])
+};
 
 /* =========================================================================
-   状態と島の生成
+   状態と島の生成 ― 島は拠点を中心とした地点のつながりでできている
    ========================================================================= */
-let S=null;                                   // 現在の漂流
-const META_KEY='hyoryu.meta.v1', SAVE_KEY='hyoryu.save.v1';
+let S=null;
+const META_KEY='hyoryu.meta.v2', SAVE_KEY='hyoryu.save.v2';
 let META={endings:{},effects:{},runs:0,deaths:0,best:0};
-try{ const m=JSON.parse(localStorage.getItem(META_KEY)); if(m&&m.endings) META=Object.assign(META,m); }catch(e){}
+try{ const m=JSON.parse(localStorage.getItem(META_KEY)); if(m&&m.endings) META=Object.assign(META,m) }catch(e){}
 const saveMeta=()=>{try{localStorage.setItem(META_KEY,JSON.stringify(META))}catch(e){}};
 
-/* ───────── 採れるもの ───────── */
-const NODE={
-  driftwood:{n:'流木',    v:'ひろう', give:{wood:2},   t:30, sk:'gather', bio:'sand'},
-  palm     :{n:'椰子',    v:'よじ登る',give:{coco:1,leaf:1}, t:45, sk:'gather', bio:'sand'},
-  bigleaf  :{n:'芭蕉',    v:'刈る',   give:{leaf:3},   t:35, sk:'gather', bio:'jungle'},
-  shellbed :{n:'貝溜まり',v:'ほじる', give:{shell:2},  t:35, sk:'gather', bio:'sand'},
-  tree     :{n:'大木',    v:'伐る',   give:{timber:2}, t:70, sk:'craft', need:'axe', bio:'jungle'},
-  vine     :{n:'蔓',      v:'剥ぐ',   give:{fiber:3},  t:35, sk:'gather', bio:'jungle'},
-  bush     :{n:'茂み',    v:'さぐる', give:{'?':1},    t:35, sk:'gather', bio:'jungle'},
-  herbtuft :{n:'薬草',    v:'摘む',   give:{herb:2},   t:30, sk:'gather', bio:'jungle'},
-  resintree:{n:'脂の木',  v:'掻く',   give:{resin:2},  t:40, sk:'gather', bio:'jungle'},
-  spring   :{n:'湧き水',  v:'飲む',   give:{water:1},  t:40, sk:'gather', bio:'jungle', spring:1},
-  claybank :{n:'粘土',    v:'掘る',   give:{clay:3},   t:45, sk:'gather', bio:'jungle'},
-  rockpile :{n:'石',      v:'割る',   give:{stone:3},  t:45, sk:'gather', bio:'rock'},
-  fishspot :{n:'磯',      v:'釣る',   give:{fish:2},   t:70, sk:'fish',  need:'rodspear', bio:'rock'},
-  nest     :{n:'海鳥の巣',v:'あさる', give:{egg:2},    t:45, sk:'gather', bio:'cliff'},
-  wreckpile:{n:'漂着物',  v:'あらためる', t:25, sk:'gather', drift:1}
-};
-const GATEK={
-  thicket :{n:'獣道',    d:'密林の奥へ、細く道が続いている', deep:[2,3], dark:0},
-  ravine  :{n:'涸れ沢',  d:'水の涸れた沢が、島の内へ切れこむ', deep:[2,3], dark:0},
-  cave    :{n:'洞窟',    d:'岩の口が、黒く開いている',       deep:[2,4], dark:1, need:'light'},
-  tidepool:{n:'潮だまり',d:'潮が引き、岩の底が露わになった', deep:[1,2], dark:0, tide:1},
-  wreck   :{n:'座礁物',  d:'嵐が、船だったものを運んできた', deep:[1,2], dark:0, storm:1},
-  fissure :{n:'亀裂',    d:'崖の腹に、裂け目が下りている',   deep:[2,3], dark:1, need:'rope'}
-};
-
-/* ───────── 島（周回ごとにシードで生成） ───────── */
-function genIsland(seed){
-  R=mulberry32(seed);
-  const W={deco:{trees:[],rocks:[],grass:[],shells:[]}, nodes:[], gates:[]};
-  const D=W.deco;
-  for(let i=0;i<64;i++) D.trees.push({x:1180+R()*1180,h:54+R()*48,w:26+R()*20,k:R()<.42?'palm':'broad',s:R()});
-  for(let i=0;i<7;i++)  D.trees.push({x:980+R()*190,h:70+R()*28,w:24,k:'palm',s:R()});
-  for(let i=0;i<32;i++) D.rocks.push({x:2380+R()*640,r:7+R()*19,s:R()});
-  for(let i=0;i<300;i++)D.grass.push({x:R()*WORLD,s:R()});
-  for(let i=0;i<170;i++)D.shells.push({x:SEA+R()*1000,d:R(),s:R()});
-
-  const put=(k,x,uses)=>W.nodes.push({k,x:Math.round(x),uses,max:uses,seen:0});
-  // 砂浜
-  for(let i=0;i<5;i++) put('driftwood', 260+R()*820, 2);
-  for(let i=0;i<3;i++) put('shellbed',  240+R()*860, 3);
-  for(let i=0;i<3;i++) put('palm',      990+R()*180, 2);
-  // 密林（水場は拠点から近い場所に必ず一つ）
-  put('spring', 1250+R()*260, 5);
-  put('spring', 1700+R()*600, 5);
-  for(let i=0;i<7;i++) put('tree',     1200+R()*1150, 3);
-  for(let i=0;i<6;i++) put('vine',     1200+R()*1150, 3);
-  for(let i=0;i<5;i++) put('bush',     1200+R()*1150, 2);
-  for(let i=0;i<3;i++) put('herbtuft', 1250+R()*1100, 2);
-  for(let i=0;i<3;i++) put('resintree',1300+R()*1000, 2);
-  for(let i=0;i<2;i++) put('claybank', 1400+R()*900,  3);
-  for(let i=0;i<3;i++) put('bigleaf',  1200+R()*1000, 3);
-  for(let i=0;i<3;i++) put('rockpile', 1250+R()*950,  2);   // 沢の石。斧はここで作れる
-  // 岩場・高台
-  for(let i=0;i<5;i++) put('rockpile', 2430+R()*480, 3);
-  for(let i=0;i<3;i++) put('fishspot', 2420+R()*500, 3);
-  for(let i=0;i<3;i++) put('nest',     3020+R()*520, 2);
-
-  // 枝の入口（位置は固定、開くかは日ごと）
-  const gv=[['thicket',1300+R()*300],['thicket',1900+R()*350],['ravine',1650+R()*250],
-            ['ravine',2450+R()*200],['cave',2760],['cave',2560+R()*120],
-            ['tidepool',2900+R()*40],['wreck',420+R()*380],['fissure',3120+R()*160]];
-  gv.forEach((g,i)=>W.gates.push({id:i,k:g[0],x:Math.round(g[1]),seen:0,open:0,done:0}));
-  return W;
+/* ───────── 六角の島 ─────────
+   島は最初から在るのではなく、足を踏み入れた分だけ生まれる。
+   だから広さも、地点の数も、外からは決してわからない。 */
+const HDIR=[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+const HDIRN=['東','北東','北西','西','南西','南東'];
+const K=(q,r)=>q+','+r;
+const unK=k=>k.split(',').map(Number);
+const hexDist=(q,r,q2,r2)=>{ const dq=q-q2, dr=r-r2; return (Math.abs(dq)+Math.abs(dq+dr)+Math.abs(dr))/2 };
+function hexPix(q,r){ return {x:1.5*q, y:1.7320508*(r+q/2)} }
+function sectorOf(q,r){ const p=hexPix(q,r); let a=Math.atan2(p.y,p.x); if(a<0)a+=6.2832; return Math.floor(a/1.0472)%6 }
+function hash2(q,r,salt){
+  let n=Math.imul(q+7919,374761393) ^ Math.imul(r+104729,668265263) ^ Math.imul((S.seed|0)+(salt|0),2246822519);
+  n=Math.imul(n^(n>>>13),1274126177);
+  return ((n^(n>>>16))>>>0)/4294967296;
+}
+function hnoise(q,r){                     // すこし滑らかな値ノイズ
+  return hash2(q,r,0)*.5 + (hash2(q+1,r,1)+hash2(q-1,r,1)+hash2(q,r+1,1)+hash2(q,r-1,1))*.1
+       + (hash2(q+1,r-1,2)+hash2(q-1,r+1,2))*.05;
+}
+/* その升が陸かどうか。海が出たら、そこで打ち止め */
+function isLand(q,r){
+  if(!q&&!r) return true;
+  const d=hexDist(q,r,0,0);
+  let R=S.isleR+(hnoise(q,r)-.5)*2.6;
+  if(S.mainDir>=0 && sectorOf(q,r)===S.mainDir) R=Math.max(R,60);   // この方角だけ、陸が続く
+  return d<=R;
+}
+const isCoast=(q,r)=>HDIR.some(d=>!isLand(q+d[0],r+d[1]));
+/* 升の中身は、はじめて目にしたときに決まる */
+const COAST_K=['shore','shore','rocky','tidepool','cape','dune','wreck'];
+const INLAND_K=['jungle','jungle','grove','thicket','bamboo','marsh','fall','spring','cave','cliff','trail','ruinhut'];
+function genHex(q,r){
+  const key=K(q,r);
+  if(S.hex[key]) return S.hex[key];
+  const sea=!isLand(q,r);
+  const d=hexDist(q,r,0,0), rr=hash2(q,r,7);
+  let kind='shore';
+  if(!sea){
+    if(!q&&!r) kind='shore';
+    else if(isCoast(q,r)) kind=COAST_K[Math.floor(hash2(q,r,11)*COAST_K.length)];
+    else kind=INLAND_K[Math.floor(hash2(q,r,13)*INLAND_K.length)];
+    // 難所と遺構は遠くにだけ
+    if(d<2&&(kind==='cliff'||kind==='trail'||kind==='cave')) kind=hash2(q,r,17)<.5?'grove':'thicket';
+    if(d>=3&&!S.ruinPlaced&&hash2(q,r,19)<.14&&!isCoast(q,r)){ kind='ruins'; S.ruinPlaced=1 }
+    if(d>=6&&kind==='wreck') kind='cliff';
+    // 起点のまわりには水場をひとつ約束しておく
+    if(d===1&&!S.waterNear&&hash2(q,r,23)<.45){ kind=['spring','fall','marsh'][Math.floor(hash2(q,r,29)*3)]; S.waterNear=1 }
+    if(d===2&&!S.waterNear){ kind=['spring','fall'][hash2(q,r,31)<.5?0:1]; S.waterNear=1 }
+  }
+  const KD=sea?null:KIND[kind];
+  const h={q,r,key,sea,kind, seen:1, visited:0, rich:sea?0:70+hash2(q,r,37)*30,
+    sd:hash2(q,r,41)*99, len:sea?0:KD.len, spots:[],
+    name:sea?'海':(d?HDIRN[sectorOf(q,r)]+'の'+KD.n:KD.n)};
+  if(!sea){
+    const ns=2+Math.floor(hash2(q,r,43)*4);
+    for(let i=0;i<ns;i++) h.spots.push({x:Math.round(120+(i+hash2(q,r,50+i)*.7)*(h.len-220)/ns),
+      left:2+Math.floor(hash2(q,r,60+i)*2), max:3, sd:hash2(q,r,70+i)});
+  }
+  S.hex[key]=h;
+  return h;
+}
+/* 立ってみて、はじめて六方の様子がわかる（陸か海かだけ） */
+function revealAround(q,r){
+  HDIR.forEach(d=>{
+    const h=genHex(q+d[0],r+d[1]);
+    if(h.sea) h.known=1;                 // 海は遠目にもわかる
+  });
+}
+const here=()=>S.hex[S.at];
+const campLoc=()=>S.hex[S.camp];
+const hasAt=(l,a)=>l&&!l.sea&&KIND[l.kind].attr.includes(a);
+const atCamp=()=>S.at===S.camp;
+const knownHexes=()=>Object.values(S.hex);
+/* 升をひとつ越えるのにかかる時間 */
+function hexTime(a,b){
+  const B=S.hex[b]||{kind:'jungle'};
+  const rough={jungle:26,marsh:30,cliff:28,thicket:20,cave:18,trail:16,bamboo:12}[B.kind]||0;
+  return 52+rough+Math.round(hash2(B.q||0,B.r||0,77)*16);
+}
+/* 分かっている陸だけを通る道すじ */
+function route(from,to){
+  if(from===to) return {path:[from],time:0};
+  const dist={[from]:0}, prev={}, seen={}, q=[from];
+  while(q.length){
+    q.sort((a,b)=>dist[a]-dist[b]);
+    const u=q.shift();
+    if(seen[u]) continue; seen[u]=1;
+    if(u===to) break;
+    const [uq,ur]=unK(u);
+    HDIR.forEach(d=>{
+      const v=K(uq+d[0],ur+d[1]), H=S.hex[v];
+      if(!H||H.sea) return;
+      if(!H.visited && v!==to) return;          // 未踏地は「行き先」としてしか通れない
+      const nd=dist[u]+hexTime(u,v);
+      if(dist[v]===undefined||nd<dist[v]){ dist[v]=nd; prev[v]=u; q.push(v) }
+    });
+  }
+  if(dist[to]===undefined) return null;
+  const path=[to]; let c=to;
+  while(c!==from){ c=prev[c]; if(c===undefined) return null; path.unshift(c) }
+  return {path,time:dist[to]};
 }
 
-/* ───────── 新しい漂流をはじめる ───────── */
+/* ───────── 新しい漂流 ───────── */
 function newRun(seed){
   seed = seed || (Date.now()^Math.floor(Math.random()*1e9))>>>0;
-  const world=genIsland(seed);
-  const eff=shuffle(mulberry32(seed^0x5bf03635), EFFKEYS);   // 見た目と効き目の対応は毎周変わる
+  const eff=shuffle(mulberry32(seed^0x5bf03635), EFFKEYS);
   const map={}; UNK.forEach((u,i)=>map[u.id]=eff[i]);
   S={
-    seed, world, unk:map, tried:{}, hint:{},
+    seed, hex:{}, unk:map, hint:{},
     day:1, min:WAKE*60, over:false,
-    hp:88, food:52, water:44, warm:70, san:96,
-    sick:0, numb:0, wet:0, fed:0,
-    inv:{}, skills:{fish:0,hunt:0,gather:0,craft:0,build:0,sail:0}, xp:{fish:0,hunt:0,gather:0,craft:0,build:0,sail:0},
+    hp:88, food:55, water:58, warm:70, san:96,
+    sick:0, numb:0, wet:0,
+    inv:{}, store:{}, skills:{fish:0,hunt:0,gather:0,craft:0,build:0,sail:0},
+    xp:{fish:0,hunt:0,gather:0,craft:0,build:0,sail:0},
     built:{hut:0,raft:0,tower:0}, fire:0, lit:0,
-    x:430, face:1, zone:null, ret:0,
-    log:[], diary:[], seenGate:{}, drift:[],
-    reach:1150, ruins:0, lore:[], met:0, helped:0, cruel:0, buried:0,
-    weather:'clear', wxNext:'clear', stormed:0, tide:.5,
-    flags:{}, kills:0, nights:0, deepest:0, walked:0, ended:null
+    at:'0,0', camp:'0,0', x:260, face:1, view:'scene', sel:null, cq:0, cr:0,
+    isleR:2.0+mulberry32(seed^0x9e37)()*2.9, mainDir:-1, ruinPlaced:0, waterNear:0, reached:0,
+    log:[], diary:[], drift:[], ruins:0, lore:[], met:0, helped:0, cruel:0, buried:0,
+    weather:'clear', stormed:0, moved:0, searches:0, walked:0,
+    flags:{}, kills:0, nights:0, ended:null
   };
+  if(mulberry32(seed^0x51ed)()<0.10) S.mainDir=Math.floor(mulberry32(seed^0x7f2a)()*6);   // 稀に、島ではない
+  genHex(0,0).visited=1; revealAround(0,0);
+  // 漂着した浜のとなりには、必ず水がある（そこまでは運任せにしない）
+  const nb=HDIR.map(d=>S.hex[K(d[0],d[1])]).filter(h=>h&&!h.sea);
+  if(nb.length&&!nb.some(h=>hasAt(h,'water'))){
+    const t=nb[Math.floor(hash2(0,0,97)*nb.length)];
+    t.kind=['spring','fall','marsh'][Math.floor(hash2(0,0,98)*3)];
+    t.len=KIND[t.kind].len; t.name=HDIRN[sectorOf(t.q,t.r)]+'の'+KIND[t.kind].n;
+    t.spots.forEach(sp=>sp.x=Math.min(sp.x,t.len-140));
+    S.waterNear=1;
+  }
   addItem('cloth',1);
-  rollWeather();
-  dailyReset(true);
+  rollWeather(); dailyReset(true);
   S.diary.push({d:0,t:'波が退いたあと、砂の上で目を覚ました。船の名も、流された日付も思い出せない。'});
   lg('波の音で目が覚めた。ここがどこなのかは、わからない。');
-  lg('浜には、砕けた船の切れ端が散らばっている。まず、水だ。');
-  S.food=55; S.water=58;
+  lg('とりあえず、この浜を野営地にする。まず水を探さないと。');
 }
 
-/* ───────── 持ち物 ───────── */
-function addItem(id,n){ n=n||1; S.inv[id]=(S.inv[id]||0)+n; return n }
+/* ───────── 持ち物と重さ ───────── */
+const wOf=id=>ITEM[id]?ITEM[id].w:1;
+function load(){ let w=0; for(const k in S.inv) w+=wOf(k)*S.inv[k]; return w }
+function capacity(){ return CAP0 + (has('basket')?6:0) + (has('frame')?10:0) }
+function room(){ return capacity()-load() }
+/* 持てるぶんだけ受け取る。入りきらなければその旨を返す */
+function addItem(id,n){
+  n=n||1;
+  const w=wOf(id), can=Math.max(0,Math.floor(room()/w));
+  const got=Math.min(n,can);
+  if(got>0) S.inv[id]=(S.inv[id]||0)+got;
+  if(got<n) S.overflow=(S.overflow||0)+(n-got);
+  return got;
+}
 function delItem(id,n){ n=n||1; if(!S.inv[id])return 0; S.inv[id]-=n; if(S.inv[id]<=0)delete S.inv[id]; return n }
 function has(id,n){ return (S.inv[id]||0) >= (n||1) }
 function itemName(id){ if(ITEM[id])return ITEM[id].n; const u=UNK.find(u=>u.id===id); return u?u.n:id }
 function itemIcon(id){ if(ITEM[id])return ITEM[id].i; const u=UNK.find(u=>u.id===id); return u?u.i:'▫' }
 function isUnk(id){ return !!UNK.find(u=>u.id===id) }
-function packCount(){ let n=0; for(const k in S.inv) n+=S.inv[k]; return n }
+/* 置き場（拠点）。重さの制限はないが、嵐と獣に荒らされる */
+function toStore(id,n){ n=Math.min(n||1,S.inv[id]||0); if(!n)return 0; delItem(id,n); S.store[id]=(S.store[id]||0)+n; return n }
+function fromStore(id,n){
+  n=Math.min(n||1,S.store[id]||0); if(!n)return 0;
+  const got=addItem(id,n); S.store[id]-=got; if(S.store[id]<=0)delete S.store[id];
+  if(got<n) lg('これ以上は持てない。','bad');
+  return got;
+}
+function payFrom(c){                       // 作る／建てるは手持ち＋置き場から払う
+  for(const k in c){
+    let need=c[k];
+    const fromInv=Math.min(need,S.inv[k]||0); delItem(k,fromInv); need-=fromInv;
+    if(need>0){ S.store[k]-=need; if(S.store[k]<=0) delete S.store[k] }
+  }
+}
+function stockOf(k){ return (S.inv[k]||0)+(atCamp()?(S.store[k]||0):0) }
+function canPay(c){ for(const k in c) if(stockOf(k)<c[k]) return false; return true }
+function costStr(c){ return Object.keys(c).map(k=>itemName(k)+'×'+c[k]).join('　') }
 
 /* ───────── 熟練 ───────── */
 function gain(sk,n){
-  if(!sk||!S.xp[sk])S.xp[sk]=S.xp[sk]||0;
-  S.xp[sk]+=n||1;
+  S.xp[sk]=(S.xp[sk]||0)+(n||1);
   const lv=S.skills[sk];
   if(lv<4 && S.xp[sk]>=SKNEED[lv+1]){
-    S.skills[sk]=lv+1;
-    toast('熟練 ― '+SKILL[sk]+' が上がった');
+    S.skills[sk]=lv+1; toast('熟練 ― '+SKILL[sk]+' が上がった');
     lg('手が、覚えはじめている。（'+SKILL[sk]+'）','good');
   }
 }
 const sk=k=>S.skills[k];
 
 /* ───────── 記録 ───────── */
-function lg(t,k){ S.log.push({t,k:k||''}); if(S.log.length>60)S.log.shift(); drawLog(); }
-function diary(t){ S.diary.push({d:S.day,t}); }
+function lg(t,k){ S.log.push({t,k:k||''}); if(S.log.length>60)S.log.shift(); drawLog() }
+function diary(t){ S.diary.push({d:S.day,t}) }
 function toast(t){
   const e=document.getElementById('uiToast');
   e.textContent=t; e.classList.add('on');
   clearTimeout(toast._t); toast._t=setTimeout(()=>e.classList.remove('on'),2100);
 }
 
-/* ───────── 時刻・天候・潮 ───────── */
+/* ───────── 時刻・天候 ───────── */
 const hourOf=()=>S.min/60;
 const isNight=()=>{const h=hourOf(); return h>=DUSK||h<DAWN};
 function clockStr(){ const h=Math.floor(S.min/60)%24, m=Math.floor(S.min%60/10)*10; return h+':'+String(m).padStart(2,'0') }
-const WX={clear:{n:'晴',   c:0,  r:0},  cloud:{n:'曇',   c:2,  r:0},
-          rain :{n:'雨',   c:6,  r:1},  storm:{n:'嵐',   c:11, r:1}, fog:{n:'霧', c:4, r:0}};
+const WX={clear:{n:'晴',c:0},cloud:{n:'曇',c:2},rain:{n:'雨',c:4},storm:{n:'嵐',c:11},fog:{n:'霧',c:4}};
 function rollWeather(){
   const r=mulberry32(S.seed*7919+S.day);
   const t=[['clear',.34],['cloud',.26],['rain',.2],['fog',.08],['storm',.12]];
   let v=r(),acc=0,w='clear';
   for(const[k,p]of t){acc+=p; if(v<acc){w=k;break}}
   if(S.day>=MAX_DAY-1) w='storm';
-  if(S.day<=2) w='clear';                       // 漂着してすぐは荒れない
-  else if(S.day<=4&&w==='storm') w='cloud';
+  if(S.day<=2) w='clear'; else if(S.day<=4&&w==='storm') w='cloud';
   S.weather=w;
-  S.tide=0.5+0.5*Math.sin((S.day*2.1+S.min/600));
 }
-const lowTide=()=>Math.sin(S.day*2.1+S.min/600)<-0.25;
 
 /* ───────── 一日のはじまり ───────── */
 function dailyReset(first){
   rollWeather();
-  // 採れる場所は少しずつ戻る
-  S.world.nodes.forEach(n=>{ if(n.uses<n.max && (n.k!=='tree'||chance(.5))) n.uses=Math.min(n.max,n.uses+1) });
-  // 漂着物を撒き直す
-  S.drift=[];
-  const cnt = (S.weather==='storm'?2:0)+(S.stormed?3:0)+ri(Q,2,4);
-  for(let i=0;i<cnt;i++) S.drift.push({x:Math.round(210+Q()*940), got:0, k:Math.floor(Q()*3)});
-  // 今日ひらく枝
-  const r=mulberry32(S.seed*104729+S.day);
-  const elig=S.world.gates.filter(g=>{
-    const G=GATEK[g.k];
-    if(G.tide && !lowTide()) return false;
-    if(G.storm && !S.stormed) return false;
-    return true;
+  knownHexes().forEach(l=>{
+    if(l.sea) return;
+    l.rich=Math.min(100,l.rich+6);
+    l.spots.forEach(sp=>{ if(sp.left<sp.max && chance(.55)) sp.left++ });
   });
-  S.world.gates.forEach(g=>g.open=0);
-  shuffle(r,elig).slice(0, S.stormed?4:3).forEach(g=>g.open=1);
-  S.world.gates.forEach(g=>{ if(GATEK[g.k].tide&&lowTide()) g.open=1; if(GATEK[g.k].storm&&S.stormed) g.open=1; });
+  // 漂着物は「浜のある地点」にだけ流れ着く
+  S.drift=[];
+  const c=campLoc();
+  if(hasAt(c,'shore')){
+    const n=(S.stormed?ri(Q,2,4):0)+ri(Q,1,3);
+    for(let i=0;i<n;i++) S.drift.push({x:Math.round(140+Q()*(c.len-260)), got:0, k:Math.floor(Q()*3)});
+  }
+  if(S.weather==='rain'||S.weather==='storm'){
+    S.water=clamp(S.water+16,0,100);
+    if(stockOf('pot')&&(S.store.water||0)<3){ S.store.water=(S.store.water||0)+1; }
+    if(!first) lg('雨。葉を広げて受けた水を飲む。','good');
+  }
   if(!first){
-    S.stormed = S.weather==='storm' ? 1 : 0;
+    S.stormed = S.weather==='storm'?1:0;
     if(S.weather==='storm') stormDamage();
   }
 }
 function stormDamage(){
   lg('夜通し、島じゅうが鳴っていた。','bad');
-  diary('嵐。波が浜の上まで駆け上がってきた。');
-  if(S.built.raft>0 && chance(.45-sk('sail')*.07)){
-    S.built.raft--; lg('いかだが波にさらわれ、組んだところが崩れている。','bad');
-  }else if(S.built.hut>1 && chance(.3)){
-    S.built.hut--; lg('屋根が飛んだ。','bad');
+  diary('嵐。波が野営地の上まで駆け上がってきた。');
+  if(S.built.raft>0 && chance(.42-sk('sail')*.07)){ S.built.raft--; lg('いかだが波にさらわれ、組んだところが崩れている。','bad') }
+  else if(S.built.hut>1 && chance(.3)){ S.built.hut--; lg('屋根が飛んだ。','bad') }
+  if(S.built.tower>2){ S.built.tower=2; lg('狼煙の火は、とうに消えている。','bad') }
+  // 置き場も無事では済まない
+  const ks=Object.keys(S.store);
+  if(ks.length&&chance(.5)){
+    const k=pick(Q,ks), n=Math.max(1,Math.floor(S.store[k]*(.3+Q()*.4)));
+    S.store[k]-=n; if(S.store[k]<=0)delete S.store[k];
+    lg('置き場の'+itemName(k)+'が流されていた。','bad');
   }
-  if(S.built.tower>2){ S.built.tower=2; lg('狼煙の火は、とうに消えている。','bad'); }
 }
 
 /* ───────── 時間を進める ───────── */
@@ -507,40 +633,38 @@ function advance(m,noWrap){
   if(S.over) return;
   for(let i=0;i<m;i++){
     S.min++;
-    const h=S.min/60, night=(h>=DUSK||h<DAWN);
-    const per=1/60;
-    S.food -= 1.35*per;
-    S.water-= 1.95*per*(S.weather==='storm'?1.15:1);
-    // 体温（昼の南の島はあたたかい。冷えるのは夜と雨、そして濡れた体）
-    if((S.weather==='rain'||S.weather==='storm')&&!S.zone&&!(S.built.hut>=2&&nearCamp())) S.wet=1;
-    if(nearFire()&&S.wet&&Q()<per*2) S.wet=0;
-    let cold = (night?6:-5) + WX[S.weather].c + (S.wet?5:0)
-             - (nearFire()?22:0) - (S.built.hut>=2&&nearCamp()?9:0) - (S.zone?2:0);
-    S.warm = clamp(S.warm - cold*per*1.1, 0, 100);
-    // 正気
-    let san = 0.16 + (night&&!nearFire()?0.5:0) + (S.zone&&S.zone.dark&&!S.lit?1.1:0)
-            + (S.weather==='storm'?0.35:0) + (S.food<15||S.water<15?0.5:0);
-    if(nearFire()) san -= 0.5;
-    S.san -= san*per*2.4;
-    // 消耗
+    const h=S.min/60, night=(h>=DUSK||h<DAWN), per=1/60;
+    const L=here(), shelter=atCamp()?S.built.hut:0;
+    S.food -= 1.18*per;
+    S.water-= 1.62*per*(S.weather==='storm'?1.15:1);
+    if((S.weather==='rain'||S.weather==='storm') && !hasAt(L,'shelter') && shelter<2) S.wet=1;
+    if(fireHere()&&S.wet&&Q()<per*2) S.wet=0;
+    if(S.wet&&!night&&(S.weather==='clear'||S.weather==='cloud')&&Q()<per*0.6) S.wet=0;   // 陽に乾く
+    let cold=(night?4:-6)+WX[S.weather].c+(S.wet?4:0)
+            -(fireHere()?22:0)-shelter*4.5-(hasAt(L,'shelter')?5:0);
+    S.warm=clamp(S.warm-cold*per*1.1,0,100);
+    let san=0.12+(night&&!fireHere()?0.3:0)+(hasAt(L,'dark')&&!S.lit?1.0:0)
+           +(S.weather==='storm'?0.35:0)+(S.food<15||S.water<15?0.5:0);
+    if(fireHere()) san-=0.5;
+    if(atCamp()) san-=0.12;
+    S.san-=san*per*2.4;
     if(S.food<=0){ S.food=0; S.hp-=7*per }
     if(S.water<=0){S.water=0; S.hp-=11*per }
     if(S.warm<=0){ S.warm=0; S.hp-=4*per }
-    if(S.sick)     S.hp-=3*per;
-    S.food=clamp(S.food,0,100); S.water=clamp(S.water,0,100); S.san=clamp(S.san,0,100);
-    S.hp=clamp(S.hp,0,100);
-    if(S.lit>0){ S.lit-=per*60/ (has('lamp')?9999:1); }
+    if(S.sick) S.hp-=1.5*per;
+    else if(S.food>45&&S.water>45) S.hp+=0.9*per;      // 食えて飲めていれば、傷は塞がる
+    S.food=clamp(S.food,0,100); S.water=clamp(S.water,0,100);
+    S.san=clamp(S.san,0,100); S.hp=clamp(S.hp,0,100);
+    if(S.lit>0 && !has('lamp')) S.lit-=1;
     if(S.hp<=0){ death(); return }
-    if(S.san<=0){ ending(pickEnding('sanity')); return }
+    if(S.san<=0){ ending('madness'); return }
     if(!noWrap && S.min>=24*60){ collapse(); return }
   }
   warnVitals(); hintProgress();
 }
-/* 数値を見せない代わりに、体のほうから知らせる */
+const fireHere=()=>atCamp()&&S.fire>0;
 function warnVitals(){
-  const f=S.flags, w=(k,v,lo,hi,t)=>{
-    if(v<lo&&!f[k]){ f[k]=1; lg(t,'bad') } else if(v>hi) f[k]=0;
-  };
+  const f=S.flags, w=(k,v,lo,hi,t)=>{ if(v<lo&&!f[k]){f[k]=1;lg(t,'bad')} else if(v>hi) f[k]=0 };
   w('w1',S.water,32,55,'喉が張りついている。水を探さないと。');
   w('w2',S.water,13,40,'唾も出ない。頭の芯が痛む。');
   w('f1',S.food,30,55,'腹が鳴りやまない。');
@@ -548,29 +672,27 @@ function warnVitals(){
   w('c1',S.warm,38,62,'指先の感覚が鈍い。冷える。');
   w('c2',S.warm,16,45,'歯の根が合わない。火が要る。');
   w('h1',S.hp,34,60,'傷が熱をもっている。無理はきかない。');
+  if(S.sick&&!f.sk1){ f.sk1=1; lg('熱がある。薬草があれば、噛んでおきたい。','bad') } else if(!S.sick) f.sk1=0;
   w('s1',S.san,45,66,'ひとりごとが増えた。');
   w('s2',S.san,24,40,'視界の隅で、何かが動く。振り向くと、いない。');
 }
-function nearCamp(){ return !S.zone && Math.abs(S.x-700)<260 }
-function nearFire(){ return !S.zone && S.fire>0 && Math.abs(S.x-500)<250 }
 
 /* ───────── 進捗の“におわせ”（数値は出さない） ───────── */
 function escapeScore(){
-  let v=S.built.raft*22 + S.built.tower*15;
-  if(has('chart')) v+=8; if(has('radio')) v+=18; if(has('skiff')) v+=6;
-  v += Math.min(12,(S.inv.dried||0)*2) + Math.min(6,(S.inv.water||0)*2);
+  let v=S.built.raft*22+S.built.tower*15;
+  if(stockOf('chart'))v+=8; if(has('radio'))v+=18;
+  v+=Math.min(12,stockOf('dried')*2)+Math.min(6,stockOf('water')*2);
   return clamp(v,0,100);
 }
 function settleScore(){
   let v=S.built.hut*22;
   if(S.built.hut>=3) v+=12;
-  v += Math.min(10,(S.inv.dried||0)*1.5) + (has('pot')?6:0) + (has('still')?8:0) + S.helped*6;
-  v += Math.min(10, S.world.nodes.filter(n=>n.seen).length*0.5);
+  v+=Math.min(10,stockOf('dried')*1.5)+(stockOf('pot')?6:0)+(stockOf('still')?8:0)+S.helped*6;
+  v+=Math.min(10,knownHexes().filter(l=>l.visited).length*1.0);
   return clamp(v,0,100);
 }
 function hintProgress(){
-  const e=escapeScore(), s=settleScore();
-  const f=S.flags;
+  const e=escapeScore(), s=settleScore(), f=S.flags;
   if(e>=50&&!f.e50){f.e50=1; lg('浜のいかだを眺める。……そろそろ、海に出られる気がする。','good'); diary('いかだが形になってきた。海が、すこし近く見える。')}
   if(e>=80&&!f.e80){f.e80=1; lg('風の向きを読む癖がついた。あとは、決めるだけだ。','good')}
   if(s>=50&&!f.s50){f.s50=1; lg('火のそばに座ると、不思議と落ち着く。ここで暮らしていける気がする。','good'); diary('小屋の中で雨音を聞いた。悪くない、と思ってしまった。')}
@@ -591,28 +713,24 @@ function resize(){
   CW=Math.max(1,r.width); CH=Math.max(1,r.height);
   cv.width=Math.round(CW*d); cv.height=Math.round(CH*d);
   off.width=cv.width; off.height=cv.height;
-  SC = CH>CW ? Math.max(CH/272, CW/440)          // 縦持ちは寄って見せる
-             : Math.max(1.15, Math.min(CH/258, CW/430));
+  SC = CH>CW ? Math.max(CH/272, CW/440) : Math.max(1.15, Math.min(CH/258, CW/430));
   VW=CW/SC; VH=CH/SC;
   ctx.setTransform(d,0,0,d,0,0); octx.setTransform(d*SC,0,0,d*SC,0,0);
 }
 addEventListener('resize',resize);
 
-/* ───────── 地形 ───────── */
+/* 地点ごとの地形。浜なら左が海、洞窟なら天井がある */
+const seaSide=()=>hasAt(here(),'shore');
+const darkHere=()=>hasAt(here(),'dark');
+const SEA=150;
 function groundY(x){
-  if(S.zone){
-    const z=S.zone, y=VH*(z.dark?0.80:0.74);
-    return y + Math.sin(x*0.006+z.sd)*4 + Math.sin(x*0.017)*2.5;
-  }
-  let y=VH*GY;
-  if(x<SEA)  y += (SEA-x)*0.16;
-  if(x>2400) y -= (x-2400)*0.022;
-  if(x>2950) y -= Math.min(Math.pow((x-2950)/450,1.7)*95, 78);
-  y += Math.sin(x*0.004)*3.5 + Math.sin(x*0.011)*2;
-  return y;
+  const L=here(), y=VH*(darkHere()?0.78:GY);
+  let v=y+Math.sin(x*0.005+L.sd)*4+Math.sin(x*0.013)*2.5;
+  if(seaSide()&&x<SEA) v+=(SEA-x)*0.16;
+  if(L.kind==='cliff'||L.kind==='cape') v-=Math.min(70,Math.max(0,(x-L.len*.45))*0.09);
+  return v;
 }
-const worldLen=()=>S.zone?S.zone.len:WORLD;
-
+const worldLen=()=>here().len;
 /* ───────── 空の色（時刻で連続に変わる） ───────── */
 const PAL={
   night:['#04060f','#0a1024','#141d3c','#1d2947'],
@@ -713,27 +831,37 @@ function sea(c,sk){
 }
 function treeline(c,sk){
   c.fillStyle=mixc('#2f4a37','#070b17',sk.dark);
+  const L=here(), lush=({jungle:1,grove:.8,thicket:.7,bamboo:.8,trail:.9,marsh:.5,fall:.7,
+                        spring:.5,ruinhut:.4,ruins:.3,cave:.3,rocky:.2,tidepool:.15,
+                        shore:.35,dune:.2,cape:.25,cliff:.2,wreck:.2})[L.kind]||.4;
   c.beginPath(); c.moveTo(-4,VH);
   for(let sx=-4;sx<=VW+8;sx+=6){
-    const real=sx+cam, wx=sx+cam*.62+400, base=VH*GY+9;
-    const mask=Math.max(0,Math.min(1,(real-1080)/340))*Math.max(0,Math.min(1,(2760-real)/300));
-    c.lineTo(sx, base-(20+Math.abs(Math.sin(wx*0.0043))*34+Math.sin(wx*0.017)*5)*mask);
+    const real=sx+cam, wx=sx+cam*.62+L.sd*30, base=VH*GY+9;
+    const edge=Math.min(1,Math.max(0,(real-(seaSide()?SEA+60:0))/220));
+    c.lineTo(sx, base-(16+Math.abs(Math.sin(wx*0.0043))*34+Math.sin(wx*0.017)*5)*lush*edge);
   }
   c.lineTo(VW+8,VH); c.closePath(); c.fill();
 }
-const SOIL={sand:['#d8c096','#b09872','#6b5c44'], jungle:['#6d7a46','#4b5c33','#2a3320'],
-            rock:['#8b8d93','#6a6c74','#34363d'], cliff:['#847a6a','#61594b','#2f2c26'],
-            cave:['#5a5560','#403c48','#1a1820'], thicket:['#5f7040','#3f5230','#212c1c'],
-            ravine:['#7d7566','#5a5449','#2b2823'], tidepool:['#7f8a8c','#5c6668','#2a3133'],
-            wreck:['#8a7f6a','#655c4c','#2e2a24'], fissure:['#6e6672','#4d4753','#221f27']};
+const SOIL={
+  shore :['#d8c096','#b09872','#6b5c44'], dune  :['#e0c89c','#bda078','#75634a'],
+  rocky :['#8b8d93','#6a6c74','#34363d'], tidepool:['#7f8a8c','#5c6668','#2a3133'],
+  cape  :['#a89878','#7d7160','#3d3830'], jungle:['#6d7a46','#4b5c33','#2a3320'],
+  grove :['#a8a06a','#7d7a4c','#43412c'], thicket:['#5f7040','#3f5230','#212c1c'],
+  bamboo:['#8a9a58','#5f6d3c','#333a22'], marsh :['#6a6a4c','#4a4b36','#26261c'],
+  fall  :['#7d8a84','#586460','#2c3230'], spring:['#88907a','#616858','#2e322a'],
+  cave  :['#5a5560','#403c48','#1a1820'], cliff :['#847a6a','#61594b','#2f2c26'],
+  trail :['#7a6a4e','#564a36','#2a2620'], wreck :['#8a7f6a','#655c4c','#2e2a24'],
+  ruinhut:['#8d8270','#645c4e','#302c26'], ruins:['#93907f','#68655a','#31302a']};
+/* 砂の汀を描く地点 */
+const SANDY={shore:1,dune:1,cape:1,tidepool:1};
 function ground(c,sk){
-  const kind=S.zone?S.zone.kind:null;
+  const kind=here().kind;
   c.save();
   c.beginPath(); c.moveTo(-10,VH+10);
   for(let sx=-10;sx<=VW+10;sx+=3) c.lineTo(sx,groundY(sx+cam));
   c.lineTo(VW+10,VH+10); c.closePath(); c.clip();
   for(let sx=-12;sx<=VW+12;sx+=4){
-    const b=kind||biome(sx+cam);
+    const b=kind;
     c.fillStyle=mixc(SOIL[b][1],'#141a2b',sk.dark*.85);
     c.fillRect(sx-1,groundY(sx+cam)-6,6,VH+16);
   }
@@ -745,9 +873,9 @@ function ground(c,sk){
 
   c.lineCap='butt';
   for(let sx=-10;sx<=VW+10;sx+=4){
-    const wx=sx+cam, y1=groundY(wx), y2=groundY(wx+4), b=kind||biome(wx);
+    const wx=sx+cam, y1=groundY(wx), y2=groundY(wx+4), b=kind;
     const seg=(o,w,col)=>{c.strokeStyle=col; c.lineWidth=w; c.beginPath(); c.moveTo(sx,y1+o); c.lineTo(sx+4,y2+o); c.stroke()};
-    if(b==='sand'){
+    if(SANDY[b]){
       seg(3,7,mixc('#8d7c5e','#16203a',sk.dark));
       seg(8.5,4,mixc('#e2d5b2','#1d2740',sk.dark));
       seg(Math.sin(T*.03+wx*.05)*1.1,1.8,`rgba(${sk.dark>.5?'150,180,230':'255,255,255'},${sk.dark>.5?.3:.72})`);
@@ -757,7 +885,7 @@ function ground(c,sk){
       seg(2.5,5,mixc(top,'#1b2130',sk.dark));
     }
   }
-  if(!S.zone) S.world.deco.shells.forEach(o=>{
+  decoOf(here()).sh.forEach(o=>{
     const sx=o.x-cam; if(sx<-6||sx>VW+6) return;
     const y=groundY(o.x)+7+o.d*(VH-groundY(o.x)-9);
     c.fillStyle=`rgba(255,250,232,${(.1+o.s*.22)*(1-sk.dark*.8)})`; c.fillRect(sx,y,1+o.s*2,1);
@@ -868,76 +996,63 @@ function towerArt(c,x,y,st,sk){
   }
 }
 /* ───────── 採取地点・入口・漂着物 ───────── */
+
+/* ───────── 地点のなかの物 ───────── */
 function marker(c,x,y,col){
   const a=.3+.3*Math.sin(T*.006+x);
   c.fillStyle=col.replace('A',a.toFixed(2));
   c.beginPath(); c.moveTo(x,y-14); c.lineTo(x+2.4,y-17.5); c.lineTo(x,y-21); c.lineTo(x-2.4,y-17.5); c.fill();
 }
-function nodeArt(c,n,x,y,sk){
-  const dead=n.uses<=0, al=dead?.35:1;
-  c.globalAlpha=al;
+/* 探せる場所。地点の種類で見た目が変わる */
+function spotArt(c,sp,x,y,sk){
+  const k=here().kind, dead=sp.left<=0;
+  c.globalAlpha=dead?.35:1;
   const wood=mixc('#8d7148','#3a3a44',sk.dark), grn=mixc('#3f6b3a','#16221c',sk.dark),
         gry=mixc('#7c7e85','#232833',sk.dark);
-  switch(n.k){
-    case 'driftwood': c.fillStyle=wood; c.fillRect(x-13,y-5,26,5); c.fillRect(x-4,y-9,17,4); break;
-    case 'shellbed':  c.fillStyle=mixc('#d9cdb4','#3c4354',sk.dark);
-      for(let i=0;i<4;i++){c.beginPath();c.ellipse(x-9+i*6,y-2,3.4,2.4,0,0,7);c.fill()} break;
-    case 'palm':      c.fillStyle=mixc('#7a5c33','#2a2a33',sk.dark);
-      for(let i=0;i<3;i++){c.beginPath();c.arc(x-5+i*5,y-4,3.4,0,7);c.fill()} break;
-    case 'tree':      c.fillStyle=mixc('#4a3826','#161a26',sk.dark); c.fillRect(x-4,y-46,8,46);
+  const blob=(w,h,col)=>{ c.fillStyle=col; c.beginPath(); c.ellipse(x,y-h*.4,w,h*.5,0,0,7); c.fill() };
+  switch(k){
+    case 'shore': case 'dune': case 'cape':
+      c.fillStyle=wood; c.fillRect(x-13,y-5,26,5); c.fillRect(x-4,y-9,17,4);
+      c.fillStyle=mixc('#d9cdb4','#3c4354',sk.dark);
+      for(let i=0;i<3;i++){c.beginPath();c.ellipse(x-14+i*5,y-1,3,2.2,0,0,7);c.fill()} break;
+    case 'rocky': case 'tidepool':
+      c.fillStyle=gry; c.beginPath(); c.ellipse(x-6,y-4,9,6,0,0,7); c.ellipse(x+7,y-3,7,5,0,0,7); c.fill();
+      c.fillStyle=mixc('#2f6f80','#0d2030',sk.dark);
+      c.beginPath(); c.ellipse(x,y+1,15,4,0,0,7); c.fill();
+      c.fillStyle=`rgba(255,255,255,${.18+.14*Math.sin(T*.012+x)})`; c.fillRect(x-9,y,18,.9); break;
+    case 'jungle': case 'grove': case 'thicket':
+      c.fillStyle=mixc('#4a3826','#161a26',sk.dark); c.fillRect(x-4,y-40,8,40);
       c.fillStyle=grn; c.beginPath();
-      for(let i=0;i<4;i++){const ox=Math.sin(i*2.1)*15,oy=-48-Math.cos(i*1.7)*11;
-        c.moveTo(x+ox+18,y+oy); c.ellipse(x+ox,y+oy,18,13,0,0,7)} c.fill(); break;
-    case 'vine':      c.strokeStyle=grn; c.lineWidth=2;
-      for(let i=0;i<3;i++){c.beginPath();c.moveTo(x-6+i*6,y);
-        c.quadraticCurveTo(x-3+i*6,y-16,x-7+i*6+Math.sin(T*.002+i)*2,y-30);c.stroke()} break;
-    case 'bush':      c.fillStyle=grn; c.beginPath();
-      for(let i=0;i<3;i++){c.moveTo(x-8+i*8+7,y-8); c.ellipse(x-8+i*8,y-8,7,7,0,0,7)} c.fill();
-      if(!dead){c.fillStyle=mixc('#c9524a','#3a2530',sk.dark);
-        for(let i=0;i<3;i++){c.beginPath();c.arc(x-7+i*7,y-12,1.8,0,7);c.fill()}} break;
-    case 'herbtuft':  c.strokeStyle=mixc('#6ea05a','#1e2a20',sk.dark); c.lineWidth=1.6;
-      for(let i=0;i<5;i++){c.beginPath();c.moveTo(x-6+i*3,y);c.quadraticCurveTo(x-7+i*3,y-8,x-10+i*4,y-13);c.stroke()} break;
-    case 'resintree': c.fillStyle=mixc('#4a3826','#161a26',sk.dark); c.fillRect(x-3,y-34,7,34);
-      c.fillStyle=mixc('#d89b3c','#3d3122',sk.dark); c.beginPath(); c.ellipse(x+3,y-20,2.6,5,0,0,7); c.fill(); break;
-    case 'spring':    c.fillStyle=gry; c.beginPath(); c.ellipse(x,y-2,13,5,0,0,7); c.fill();
-      c.fillStyle=mixc('#5fb0c8','#1d3550',sk.dark); c.beginPath(); c.ellipse(x,y-3,9,3.2,0,0,7); c.fill();
-      c.fillStyle=`rgba(255,255,255,${.3+.2*Math.sin(T*.02)})`; c.fillRect(x-6,y-4,12,.8); break;
-    case 'claybank':  c.fillStyle=mixc('#8a6a4a','#2c2a2c',sk.dark);
-      c.beginPath(); c.moveTo(x-13,y); c.lineTo(x-7,y-11); c.lineTo(x+9,y-9); c.lineTo(x+14,y); c.fill(); break;
-    case 'rockpile':  c.fillStyle=gry;
-      c.beginPath(); c.ellipse(x-6,y-4,8,6,0,0,7); c.ellipse(x+6,y-3,7,5,0,0,7); c.ellipse(x,y-9,6,5,0,0,7); c.fill(); break;
-    case 'fishspot':  c.fillStyle=mixc('#6a7c86','#1d2530',sk.dark);
-      c.beginPath(); c.ellipse(x,y-1,17,4,0,0,7); c.fill();
-      c.fillStyle=`rgba(255,255,255,${.18+.14*Math.sin(T*.01+x)})`; c.fillRect(x-11,y-2,22,.9); break;
-    case 'nest':      c.fillStyle=mixc('#8a7248','#2b2a30',sk.dark);
-      c.beginPath(); c.arc(x,y-3,8,Math.PI,0); c.fill();
-      if(!dead){c.fillStyle=mixc('#efe6d2','#4a4d58',sk.dark);
-        c.beginPath();c.ellipse(x-2,y-6,2.6,3.2,0,0,7);c.ellipse(x+3,y-6,2.6,3.2,0,0,7);c.fill()} break;
+      for(let i=0;i<4;i++){const ox=Math.sin(i*2.1+sp.sd*8)*15, oy=-42-Math.cos(i*1.7)*10;
+        c.moveTo(x+ox+17,y+oy); c.ellipse(x+ox,y+oy,17,12,0,0,7)} c.fill(); break;
+    case 'bamboo':
+      c.strokeStyle=mixc('#7fa04a','#1d2a1c',sk.dark); c.lineWidth=3;
+      for(let i=0;i<4;i++){ c.beginPath(); c.moveTo(x-9+i*6,y);
+        c.lineTo(x-11+i*6+Math.sin(T*.002+i)*2,y-38-((i*13)%14)); c.stroke() } break;
+    case 'marsh': case 'fall': case 'spring':
+      c.fillStyle=gry; c.beginPath(); c.ellipse(x,y-2,15,5,0,0,7); c.fill();
+      c.fillStyle=mixc('#5fb0c8','#1d3550',sk.dark); c.beginPath(); c.ellipse(x,y-3,11,3.4,0,0,7); c.fill();
+      c.fillStyle=`rgba(255,255,255,${.3+.2*Math.sin(T*.02+x)})`; c.fillRect(x-7,y-4,14,.8); break;
+    case 'cave': case 'ruins':
+      c.fillStyle=gry; c.beginPath();
+      c.ellipse(x-5,y-5,8,7,0,0,7); c.ellipse(x+6,y-3,6,5,0,0,7); c.fill();
+      if(k==='ruins'){ c.fillStyle=mixc('#7b7466','#232630',sk.dark); c.fillRect(x-3,y-30,7,30) } break;
+    case 'cliff':
+      c.fillStyle=mixc('#8a7248','#2b2a30',sk.dark); c.beginPath(); c.arc(x,y-3,8,Math.PI,0); c.fill();
+      if(!dead){ c.fillStyle=mixc('#efe6d2','#4a4d58',sk.dark);
+        c.beginPath(); c.ellipse(x-2,y-6,2.6,3.2,0,0,7); c.ellipse(x+3,y-6,2.6,3.2,0,0,7); c.fill() } break;
+    case 'trail':
+      c.fillStyle=mixc('#6b5a3e','#241f26',sk.dark);
+      for(let i=0;i<3;i++){c.beginPath();c.ellipse(x-9+i*9,y-2,4,2.4,.4,0,7);c.fill()}
+      c.fillStyle=mixc('#cfc4ae','#3a3a44',sk.dark); c.fillRect(x-2,y-9,12,2.4); break;
+    case 'wreck': case 'ruinhut':
+      c.fillStyle=mixc('#6b5233','#282830',sk.dark);
+      c.save(); c.translate(x,y); c.rotate(-.18);
+      c.fillRect(-20,-14,40,13); c.fillRect(-4,-32,4,20); c.restore(); break;
+    default: blob(12,16,grn);
   }
   c.globalAlpha=1;
   if(!dead) marker(c,x,y,'rgba(255,240,205,A)');
-}
-function gateArt(c,g,x,y,sk){
-  const dark=mixc('#15181f','#04060c',sk.dark);
-  switch(g.k){
-    case 'cave': case 'fissure':
-      c.fillStyle=dark; c.beginPath(); c.ellipse(x,y,24,29,0,Math.PI,0); c.fill();
-      c.fillRect(x-24,y-2,48,4); break;
-    case 'thicket':
-      c.fillStyle=mixc('#28492a','#0b1218',sk.dark);
-      c.beginPath(); c.ellipse(x-16,y-14,13,17,0,0,7); c.ellipse(x+16,y-14,13,17,0,0,7); c.fill();
-      c.fillStyle=dark; c.beginPath(); c.ellipse(x,y,9,15,0,Math.PI,0); c.fill(); break;
-    case 'ravine':
-      c.fillStyle=dark; c.beginPath(); c.moveTo(x-18,y); c.lineTo(x-7,y-20); c.lineTo(x+7,y-20); c.lineTo(x+18,y); c.fill(); break;
-    case 'tidepool':
-      c.fillStyle=mixc('#2f6f80','#0d2030',sk.dark); c.beginPath(); c.ellipse(x,y+1,26,7,0,0,7); c.fill();
-      c.fillStyle=`rgba(255,255,255,${.2+.14*Math.sin(T*.012)})`; c.fillRect(x-16,y-1,32,1); break;
-    case 'wreck':
-      c.fillStyle=mixc('#6b5233','#282830',sk.dark);
-      c.save(); c.translate(x,y); c.rotate(-.22);
-      c.fillRect(-30,-16,60,15); c.fillRect(-6,-40,5,26); c.restore(); break;
-  }
-  marker(c,x,y-6,'rgba(180,220,255,A)');
 }
 function driftArt(c,d,x,y,sk){
   if(d.got) return;
@@ -955,12 +1070,13 @@ function playerArt(c,x,y,sk){
   c.fillRect(x-4.5,y-23,9,14);
   c.fillRect(x-4.5+sw*3,y-9,3.6,9); c.fillRect(x+.9-sw*3,y-9,3.6,9);
   c.fillRect(x-7.5*S.face-sw*2,y-22,3,11);
+  if(load()>capacity()*.75){ c.fillStyle=mixc('#6b5a3e','#20222c',sk.dark); c.fillRect(x-3.5*S.face-2,y-22,7,9) }
   if(S.lit>0){ glow(c,x+8*S.face,y-20,46,'rgba(255,170,70,.36)');
     c.fillStyle='#ffb347'; c.beginPath(); c.arc(x+8*S.face,y-21,2.4,0,7); c.fill() }
 }
-/* ───────── 天候 ───────── */
 function weatherFX(c,sk){
   const w=S.weather;
+  if(hasAt(here(),'dark')) return;
   if(w==='rain'||w==='storm'){
     const st=w==='storm', n=st?260:130, sl=st?4:2, ln=st?9:6;
     c.strokeStyle=st?'rgba(200,214,238,.30)':'rgba(186,204,232,.22)'; c.lineWidth=st?.9:.7;
@@ -980,129 +1096,249 @@ function weatherFX(c,sk){
   }
   if(w==='storm'&&Math.sin(T*.013)>.9993){ c.fillStyle='rgba(255,255,255,.5)'; c.fillRect(0,0,VW,VH) }
 }
-/* ───────── 洞窟の天井 ───────── */
 function ceiling(c,sk){
-  if(!S.zone||!S.zone.dark) return;
-  c.fillStyle=mixc('#2a2630','#080a10',sk.dark*.4+.5);
+  if(!darkHere()) return;
+  const sd=here().sd;
+  c.fillStyle=mixc('#2a2630','#080a10',.6);
   c.beginPath(); c.moveTo(-10,-10);
   for(let sx=-10;sx<=VW+10;sx+=6){
     const wx=sx+cam;
-    c.lineTo(sx, 22+Math.sin(wx*0.009+S.zone.sd)*13+Math.sin(wx*0.031)*6);
+    c.lineTo(sx, 22+Math.sin(wx*0.009+sd)*13+Math.sin(wx*0.031)*6);
   }
   c.lineTo(VW+10,-10); c.closePath(); c.fill();
-  c.fillStyle=mixc('#3a3542','#0c0e15',sk.dark*.4+.5);
+  c.fillStyle=mixc('#3a3542','#0c0e15',.6);
   for(let i=0;i<26;i++){
-    const wx=S.zone.sd*100+i*137, sx=wx-cam; if(sx<-20||sx>VW+20) continue;
-    const top=22+Math.sin(wx*0.009+S.zone.sd)*13+Math.sin(wx*0.031)*6;
+    const wx=sd*100+i*137, sx=wx-cam; if(sx<-20||sx>VW+20) continue;
+    const top=22+Math.sin(wx*0.009+sd)*13+Math.sin(wx*0.031)*6;
     c.beginPath(); c.moveTo(sx-5,top); c.lineTo(sx,top+13+((i*37)%17)); c.lineTo(sx+5,top); c.fill();
   }
 }
+/* 地点の草木（地点ごとに固定の見え方） */
+function decoOf(L){
+  if(L._deco) return L._deco;
+  const r=mulberry32((S.seed^Math.imul(L.q+31,7919)^Math.imul(L.r+17,104729))>>>0), d=[];
+  const k=L.kind, n=({jungle:22,grove:16,thicket:18,bamboo:20,marsh:10,trail:14}[k]||8);
+  for(let i=0;i<n;i++){
+    const x=r()*L.len;
+    if(k==='jungle'||k==='trail') d.push({t:'tree',x,h:50+r()*46,w:24+r()*18,k:r()<.3?'palm':'broad',s:r()});
+    else if(k==='grove'||k==='shore'||k==='cape'||k==='dune') d.push({t:'tree',x,h:58+r()*34,w:24,k:'palm',s:r()});
+    else if(k==='thicket'||k==='marsh') d.push({t:'tree',x,h:28+r()*22,w:20+r()*10,k:'broad',s:r()});
+    else if(k==='bamboo') d.push({t:'bam',x,h:52+r()*40,s:r()});
+    else d.push({t:'rock',x,r:6+r()*16});
+  }
+  const g=[]; for(let i=0;i<160;i++) g.push({x:r()*L.len,s:r()});
+  const sh=[]; for(let i=0;i<120;i++) sh.push({x:r()*L.len,d:r(),s:r()});
+  return L._deco={d,g,sh};
+}
+function bambooArt(c,x,y,h,s,sk){
+  c.strokeStyle=mixc('#6f9247','#16211a',sk.dark); c.lineWidth=3.4; c.lineCap='round';
+  const sway=Math.sin(T*.002+s*9)*(S.weather==='storm'?5:1.6);
+  c.beginPath(); c.moveTo(x,y); c.quadraticCurveTo(x+sway*.4,y-h*.6,x+sway,y-h); c.stroke();
+  c.fillStyle=mixc('#4f7c46','#132018',sk.dark);
+  for(let i=1;i<4;i++){
+    const yy=y-h*(i/4), xx=x+sway*(i/4);
+    c.beginPath(); c.ellipse(xx+7,yy,8,2.4,-.5,0,7); c.ellipse(xx-7,yy-4,8,2.4,.5,0,7); c.fill();
+  }
+}
 
-/* ───────── 1フレーム ───────── */
+/* =========================================================================
+   島の見取図
+   ========================================================================= */
+let mapHit=[];
+const HEXCOL={
+  shore:'#c9b184', dune:'#d3bb90', rocky:'#8a8c92', tidepool:'#7f9296', cape:'#a2947a',
+  jungle:'#4e6c40', grove:'#8a8a52', thicket:'#5c7442', bamboo:'#7e9450', marsh:'#5e6448',
+  fall:'#6d8a86', spring:'#7e9184', cave:'#4e4a56', cliff:'#7d7364', trail:'#6f5f46',
+  wreck:'#7d7260', ruinhut:'#847a6a', ruins:'#8d8a7a'
+};
+function drawMap(c){
+  const w=CW,h=CH;
+  const g=c.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#0c1622'); g.addColorStop(1,'#070d16');
+  c.fillStyle=g; c.fillRect(0,0,w,h);
+
+  const R=Math.max(20,Math.min(34, Math.min(w,h)/11));      // 升の大きさ
+  const hp=(q,r)=>({x:w/2+(1.5*(q-S.cq))*R, y:h/2+1.7320508*((r-S.cr)+(q-S.cq)/2)*R});
+  const poly=(x,y,rad)=>{ c.beginPath();
+    for(let i=0;i<6;i++){ const a=i*1.0472, px=x+Math.cos(a)*rad, py=y+Math.sin(a)*rad;
+      i?c.lineTo(px,py):c.moveTo(px,py) } c.closePath() };
+
+  mapHit=[];
+  const list=knownHexes();
+  // 海（まだ見えていない海は描かない）
+  list.forEach(l=>{
+    if(!l.sea||!l.known) return;
+    const p=hp(l.q,l.r); if(p.x<-R*2||p.x>w+R*2||p.y<-R*2||p.y>h+R*2) return;
+    poly(p.x,p.y,R*.94); c.fillStyle='#12304a'; c.fill();
+    c.strokeStyle='rgba(120,170,200,.18)'; c.lineWidth=1; c.stroke();
+    c.strokeStyle='rgba(160,205,230,.34)'; c.lineWidth=1.1;
+    for(let i=0;i<2;i++){ c.beginPath();
+      const y0=p.y-4+i*8+Math.sin(T*.02+l.q+i)*1.2;
+      c.moveTo(p.x-R*.44,y0); c.quadraticCurveTo(p.x-R*.15,y0-3,p.x,y0);
+      c.quadraticCurveTo(p.x+R*.15,y0+3,p.x+R*.44,y0); c.stroke() }
+  });
+  // 陸
+  list.forEach(l=>{
+    if(l.sea) return;
+    const p=hp(l.q,l.r); if(p.x<-R*2||p.x>w+R*2||p.y<-R*2||p.y>h+R*2) return;
+    const cur=l.key===S.at, camp=l.key===S.camp, sel=l.key===S.sel;
+    mapHit.push({key:l.key,x:p.x,y:p.y,r:R*.95});
+    poly(p.x,p.y,R*.94);
+    if(l.visited){
+      c.fillStyle=HEXCOL[l.kind]||'#6a6a5a'; c.fill();
+      c.globalAlpha=.22; c.fillStyle='#000'; c.fill(); c.globalAlpha=1;
+      c.fillStyle=HEXCOL[l.kind]||'#6a6a5a'; c.globalAlpha=.85; c.fill(); c.globalAlpha=1;
+    }else{
+      c.fillStyle='#232a33'; c.fill();
+      c.setLineDash([4,3]); c.strokeStyle='rgba(226,201,138,.45)'; c.lineWidth=1.2; c.stroke(); c.setLineDash([]);
+      c.fillStyle='rgba(226,201,138,.6)'; c.font='600 15px "Hiragino Sans",sans-serif';
+      c.textAlign='center'; c.fillText('？',p.x,p.y+5);
+    }
+    c.strokeStyle=cur?'#fff':'rgba(10,14,20,.6)'; c.lineWidth=cur?2.4:1.2;
+    poly(p.x,p.y,R*.94); c.stroke();
+    if(sel){ c.strokeStyle='rgba(255,225,150,.95)'; c.lineWidth=2.2; poly(p.x,p.y,R*.86); c.stroke() }
+    if(l.visited){
+      c.fillStyle='rgba(240,235,222,.95)'; c.font='500 '+(R<25?9:10)+'px "Hiragino Sans",sans-serif';
+      c.textAlign='center';
+      const nm=l.name.replace(/^(東|西|南|北|北東|北西|南東|南西)の/,'');
+      c.fillText(nm,p.x,p.y+R*.52);
+      if(l.rich<35){ c.fillStyle='rgba(210,140,120,.95)'; c.fillText('荒',p.x+R*.55,p.y-R*.45) }
+      const at=KIND[l.kind].attr;
+      if(at.length){ c.fillStyle='rgba(255,255,255,.75)'; c.font='9px sans-serif';
+        c.fillText(at.map(x=>({water:'💧',shore:'🌊',view:'👁',shelter:'🏠',dark:'🕯',lore:'𓉢'})[x]).join(''),p.x,p.y-R*.4) }
+    }
+    if(camp){ c.fillStyle='#e2c98a'; c.font='14px sans-serif'; c.textAlign='center'; c.fillText('⛺',p.x,p.y+4) }
+    if(cur){ c.strokeStyle='rgba(255,255,255,.85)'; c.lineWidth=1.6;
+      const rr=R*.3+Math.sin(T*.05)*1.6;
+      c.beginPath(); c.arc(p.x,p.y,rr,0,7); c.stroke() }
+  });
+  // 選んだ先への道すじ
+  if(S.sel&&S.hex[S.sel]&&!S.hex[S.sel].sea){
+    const r3=route(S.at,S.sel);
+    if(r3&&r3.path.length>1){
+      c.strokeStyle='rgba(255,225,150,.8)'; c.lineWidth=2.6; c.setLineDash([]);
+      c.beginPath();
+      r3.path.forEach((k,i)=>{ const [q,r]=unK(k), p=hp(q,r); i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y) });
+      c.stroke();
+    }
+  }
+  // 表題と方位
+  c.fillStyle='rgba(226,201,138,.5)'; c.font='500 13px "Hiragino Mincho ProN",serif';
+  c.textAlign='left'; c.fillText('見 取 図',20,58);
+  c.fillStyle='rgba(200,193,175,.35)'; c.font='500 10px "Hiragino Sans",sans-serif';
+  c.fillText('踏んだところしか、地図にならない',20,76);
+  const nx=w-40, ny=h-52;
+  c.strokeStyle='rgba(226,201,138,.4)'; c.lineWidth=1;
+  c.beginPath(); c.moveTo(nx,ny+13); c.lineTo(nx,ny-13); c.moveTo(nx-6,ny-6); c.lineTo(nx,ny-13); c.lineTo(nx+6,ny-6); c.stroke();
+  c.fillStyle='rgba(226,201,138,.7)'; c.font='600 11px "Hiragino Sans",sans-serif'; c.textAlign='center';
+  c.fillText('北',nx,ny-18);
+}
+function mapClick(x,y){
+  let best=null,bd=1e9;
+  mapHit.forEach(h=>{ const d=Math.hypot(h.x-x,h.y-y); if(d<h.r&&d<bd){bd=d;best=h} });
+  if(!best){ S.sel=null; mapHint(); return }
+  if(best.key===S.at){ S.sel=null; closeMap(); return }
+  if(S.sel===best.key) travelTo(best.key);
+  else { S.sel=best.key; mapHint() }
+}
+function mapPan(dx,dy){
+  const R=Math.max(20,Math.min(34,Math.min(CW,CH)/11));
+  S.cq-=dx/(1.5*R); S.cr-=dy/(1.7320508*R)-dx/(3*R);
+}
+
+/* =========================================================================
+   1フレーム
+   ========================================================================= */
 function draw(){
   requestAnimationFrame(draw);
-  if(!S){ return }
+  if(!S) return;
   T++;
   const c=octx, sk=skyNow();
-  const inZone=!!S.zone;
-  cam=clamp(S.x-VW*0.42, inZone?0:-40, Math.max(0,worldLen()-VW));
   c.clearRect(0,0,VW,VH);
 
-  if(inZone){
-    const z=S.zone;
-    const g=c.createLinearGradient(0,0,0,VH);
-    g.addColorStop(0,z.dark?'#07080d':mixc('#25402a','#080d12',sk.dark));
-    g.addColorStop(1,z.dark?'#0d0f16':mixc('#3d5238','#0a1016',sk.dark));
-    c.fillStyle=g; c.fillRect(0,0,VW,VH);
-    if(!z.dark){
-      c.fillStyle=mixc('#1e3a24','#070d12',sk.dark);
-      c.beginPath(); c.moveTo(-4,VH);
-      for(let sx=-4;sx<=VW+8;sx+=7){
-        const wx=sx+cam*.6;
-        c.lineTo(sx, groundY(sx+cam)-26-Math.abs(Math.sin(wx*0.006+z.sd))*40);
-      }
-      c.lineTo(VW+8,VH); c.closePath(); c.fill();
-    }
-    ground(c,sk); ceiling(c,sk);
-    z.deco.forEach(o=>{
-      const sx=o.x-cam; if(sx<-90||sx>VW+90) return;
-      if(o.t==='tree') (o.k==='palm'?palm:broadleaf)(c,sx,groundY(o.x),o.h,o.w,o.s,sk);
-      else{ c.fillStyle=mixc(SOIL[z.kind][2],'#0b0d14',sk.dark*.6);
-        c.beginPath(); c.ellipse(sx,groundY(o.x)-o.r*.4,o.r,o.r*.8,0,0,7); c.fill() }
-    });
-  }else{
-    sky(c,sk); sea(c,sk); treeline(c,sk); ground(c,sk); shore(c,sk);
-    S.world.deco.trees.forEach(o=>{
-      const sx=o.x-cam; if(sx<-90||sx>VW+90) return;
-      (o.k==='palm'?palm:broadleaf)(c,sx,groundY(o.x),o.h,o.w,o.s,sk);
-    });
-    S.world.deco.rocks.forEach(o=>{
-      const sx=o.x-cam; if(sx<-40||sx>VW+40) return;
-      c.fillStyle=mixc('#71737a','#1a1e28',sk.dark);
-      c.beginPath(); c.ellipse(sx,groundY(o.x)-o.r*.35,o.r,o.r*.7,0,0,7); c.fill();
-    });
+  if(S.view==='map'){
+    ctx.clearRect(0,0,CW,CH);
+    drawMap(ctx);
+    return;
   }
 
-  // 対象物
-  const props=nearProps();
-  props.forEach(p=>{
-    const sx=p.x-cam; if(sx<-60||sx>VW+60) return;
-    const y=groundY(p.x);
-    if(p.type==='node') nodeArt(c,p.o,sx,y,sk);
-    else if(p.type==='gate') gateArt(c,p.o,sx,y,sk);
-    else if(p.type==='drift') driftArt(c,p.o,sx,y,sk);
-    else if(p.type==='cache'){
-      c.fillStyle=mixc('#8a6a3c','#2f2b2a',sk.dark);
-      c.fillRect(sx-11,y-13,23,13); c.fillStyle=mixc('#c9a961','#4a4433',sk.dark); c.fillRect(sx-11,y-8,23,2);
-      if(!p.o.got) marker(c,sx,y,'rgba(255,225,150,A)');
-    }
-    else if(p.type==='ruin'){
-      c.fillStyle=mixc('#7b7466','#232630',sk.dark);
-      c.fillRect(sx-22,y-30,7,30); c.fillRect(sx+15,y-30,7,30); c.fillRect(sx-26,y-36,52,7);
-      if(!p.o.got) marker(c,sx,y-16,'rgba(210,180,255,A)');
-    }
-    else if(p.type==='exit'){
-      c.fillStyle=mixc('#cfd6e0','#39414f',sk.dark);
-      c.globalAlpha=.5; c.beginPath(); c.ellipse(sx,y-14,10,15,0,0,7); c.fill(); c.globalAlpha=1;
-      marker(c,sx,y-4,'rgba(200,255,220,A)');
-    }
+  const L=here(), deco=decoOf(L);
+  cam=clamp(S.x-VW*0.42,-30,Math.max(0,worldLen()-VW));
+
+  if(darkHere()){
+    const g=c.createLinearGradient(0,0,0,VH);
+    g.addColorStop(0,'#07080d'); g.addColorStop(1,'#0d0f16');
+    c.fillStyle=g; c.fillRect(0,0,VW,VH);
+  }else{
+    sky(c,sk);
+    if(seaSide()) sea(c,sk);
+    treeline(c,sk);
+  }
+  ground(c,sk);
+  if(seaSide()) shore(c,sk);
+  ceiling(c,sk);
+
+  deco.d.forEach(o=>{
+    const sx=o.x-cam; if(sx<-90||sx>VW+90) return;
+    const y=groundY(o.x);
+    if(o.t==='tree') (o.k==='palm'?palm:broadleaf)(c,sx,y,o.h,o.w,o.s,sk);
+    else if(o.t==='bam') bambooArt(c,sx,y,o.h,o.s,sk);
+    else { c.fillStyle=mixc('#71737a','#1a1e28',sk.dark);
+      c.beginPath(); c.ellipse(sx,y-o.r*.35,o.r,o.r*.7,0,0,7); c.fill() }
   });
 
-  if(!inZone){
-    hutArt(c,700-cam,groundY(700),S.built.hut,sk);
-    fireArt(c,500-cam,groundY(500),S.fire>0,sk);
-    raftArt(c,250-cam,groundY(250),S.built.raft,sk);
-    towerArt(c,3430-cam,groundY(3430),S.built.tower,sk);
+  L.spots.forEach(sp=>{
+    const sx=sp.x-cam; if(sx<-60||sx>VW+60) return;
+    spotArt(c,sp,sx,groundY(sp.x),sk);
+  });
+  if(hasAt(L,'water')){
+    const wx=Math.round(L.len*.46)-cam, wy=groundY(Math.round(L.len*.46));
+    if(wx>-60&&wx<VW+60){
+      c.fillStyle=mixc('#6f7c80','#242a33',sk.dark);
+      c.beginPath(); c.ellipse(wx,wy-1,22,7,0,0,7); c.fill();
+      c.fillStyle=mixc('#5fb0c8','#1d3550',sk.dark);
+      c.beginPath(); c.ellipse(wx,wy-3,17,5,0,0,7); c.fill();
+      c.fillStyle=`rgba(255,255,255,${.28+.2*Math.sin(T*.02)})`; c.fillRect(wx-11,wy-4,22,.9);
+      marker(c,wx,wy,'rgba(150,220,255,A)');
+    }
+  }
+  if(atCamp()){
+    S.drift.forEach(d=>{ const sx=d.x-cam; if(sx>-60&&sx<VW+60) driftArt(c,d,sx,groundY(d.x),sk) });
+    const cxp=campSpots();
+    hutArt(c,cxp.hut-cam,groundY(cxp.hut),S.built.hut,sk);
+    fireArt(c,cxp.fire-cam,groundY(cxp.fire),S.fire>0,sk);
+    if(hasAt(L,'shore')) raftArt(c,cxp.raft-cam,groundY(cxp.raft),S.built.raft,sk);
+    if(hasAt(L,'view'))  towerArt(c,cxp.tower-cam,groundY(cxp.tower),S.built.tower,sk);
+    storeArt(c,cxp.store-cam,groundY(cxp.store),sk);
   }
   playerArt(c,S.x-cam,groundY(S.x),sk);
 
-  if(!inZone) S.world.deco.grass.forEach(o=>{
+  deco.g.forEach(o=>{
     const sx=o.x-cam*1.3; if(sx<-14||sx>VW+14) return;
-    if(o.x<1150&&o.s>.34) return;
     c.strokeStyle=`rgba(${sk.dark>.5?'8,12,20':'28,42,24'},${sk.dark>.5?.92:.5})`;
     c.lineWidth=1.4; c.beginPath(); c.moveTo(sx,VH);
     c.quadraticCurveTo(sx+2.5,VH-9-o.s*8,sx+6+Math.sin(T*.003+o.s*8)*1.8,VH-17-o.s*13); c.stroke();
   });
 
-  c.globalCompositeOperation='multiply'; c.fillStyle=sk.tint; c.fillRect(0,0,VW,VH);
-  c.globalCompositeOperation='source-over';
-  weatherFX(c,sk);
-
-  // 灯りと闇
-  const dk = inZone&&S.zone.dark ? 1 : sk.dark;
+  if(!darkHere()){
+    c.globalCompositeOperation='multiply'; c.fillStyle=sk.tint; c.fillRect(0,0,VW,VH);
+    c.globalCompositeOperation='source-over';
+    weatherFX(c,sk);
+  }
+  const dk = darkHere()?1:sk.dark;
   if(dk>.25){
-    if(!inZone&&S.fire>0){
+    if(atCamp()&&S.fire>0){
+      const fx=campSpots().fire-cam;
       c.globalCompositeOperation='lighter';
-      glow(c,500-cam,groundY(500)-12,150+Math.sin(T*.02)*6,`rgba(255,168,80,${.4*dk})`);
+      glow(c,fx,groundY(campSpots().fire)-12,150+Math.sin(T*.02)*6,`rgba(255,168,80,${.4*dk})`);
       c.globalCompositeOperation='source-over';
     }
-    const r=S.lit>0?VH*.62:VH*(inZone&&S.zone.dark?.20:.34);
+    const r=S.lit>0?VH*.62:VH*(darkHere()?.20:.34);
     const v=c.createRadialGradient(S.x-cam,groundY(S.x)-18,r*.35,S.x-cam,groundY(S.x)-18,r*2.5);
     v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,`rgba(2,3,7,${.55+.42*dk})`);
     c.fillStyle=v; c.fillRect(0,0,VW,VH);
   }
 
-  // 正気（数値ではなく画面で伝える）
   const san=S.san;
   ctx.clearRect(0,0,CW,CH);
   ctx.filter = san>62?'none' : san>32?'saturate(.62) contrast(1.05)':'saturate(.2) contrast(1.18) hue-rotate(-14deg)';
@@ -1115,7 +1351,7 @@ function draw(){
     ctx.fillStyle=v; ctx.fillRect(0,0,CW,CH);
   }
   if(san<28){
-    const hx2=(S.phantom-cam)*SC, hy=groundY(S.phantom)*SC;
+    const hx2=((S.phantom||0)-cam)*SC, hy=groundY(S.phantom||0)*SC;
     if(hx2>-40&&hx2<CW+40){
       ctx.globalAlpha=.3+.2*Math.sin(T*.01); ctx.fillStyle='#000';
       ctx.beginPath(); ctx.ellipse(hx2,hy-29*SC,5*SC,6*SC,0,0,7); ctx.fill();
@@ -1123,117 +1359,171 @@ function draw(){
     }
   }
 }
+/* 拠点の設えは地点の広さに合わせて置く */
+function campSpots(){
+  const L=campLoc(), u=L.len;
+  return {raft:Math.round(u*.10), fire:Math.round(u*.36), hut:Math.round(u*.52),
+          store:Math.round(u*.64), tower:Math.round(u*.84)};
+}
+function storeArt(c,x,y,sk){
+  const n=Object.keys(S.store).length;
+  c.fillStyle=mixc('#6d5433','#282830',sk.dark);
+  c.fillRect(x-14,y-11,28,11);
+  c.fillStyle=mixc('#8c6d43','#3a3a45',sk.dark); c.fillRect(x-16,y-15,32,5);
+  if(n){ c.fillStyle=mixc('#c9a961','#4a4433',sk.dark);
+    for(let i=0;i<Math.min(4,n);i++) c.fillRect(x-11+i*7,y-20,5,5) }
+}
 
 /* =========================================================================
-   枝（毎回生成される小空間）
+   島をめぐる ― 移動・探索・拠点
    ========================================================================= */
-ITEM.cooked={n:'焼いた身',i:'🍗'};
-Object.assign(NODE,{
-  oreveil :{n:'鉱脈',    v:'掘る',   give:{metal:2},  t:70, sk:'craft', need:'axe'},
-  bones   :{n:'獣の骨',  v:'拾う',   give:{bone:2},   t:30, sk:'gather'},
-  salvage :{n:'船の残骸',v:'こじ開ける', t:55, sk:'craft'},
-  saltpan :{n:'塩だまり',v:'掻き集める',give:{salt:2},t:40, sk:'gather'},
-  mush    :{n:'茸の群れ',v:'採る',   give:{'?m':1},   t:30, sk:'gather'},
-  puddle  :{n:'溜まり水',v:'汲む',   give:{water:1},  t:35, sk:'gather', spring:1}
-});
-const ZNODES={
-  thicket :['vine','bush','tree','herbtuft','resintree','mush','bones'],
-  ravine  :['claybank','rockpile','puddle','herbtuft','vine','bones'],
-  cave    :['rockpile','oreveil','claybank','mush','puddle','bones'],
-  tidepool:['shellbed','fishspot','saltpan','shellbed'],
-  wreck   :['salvage','salvage','driftwood','shellbed'],
-  fissure :['rockpile','oreveil','bones','mush']
-};
-function genBranch(gate){
-  const seed=(S.seed^(gate.id*7919)^(S.day*104729))>>>0, r=mulberry32(seed);
-  const G=GATEK[gate.k], depth=ri(r,G.deep[0],G.deep[1]);
-  const z={kind:gate.k, name:G.n, depth, dark:G.dark, sd:r()*99,
-           len:640+depth*560, deco:[], nodes:[], props:[], gateId:gate.id, shortcut:0};
-  for(let i=0;i<depth*9+8;i++){
-    const x=60+r()*(z.len-90);
-    if(gate.k==='thicket') z.deco.push({t:'tree',x,h:44+r()*44,w:22+r()*18,k:r()<.3?'palm':'broad',s:r()});
-    else z.deco.push({t:'rock',x,r:5+r()*16});
+function openMap(){ if(S.over)return; S.view='map'; S.sel=null;
+  const [q,r]=unK(S.at); S.cq=q; S.cr=r;
+  document.body.classList.add('mapmode'); requestAnimationFrame(resize); mapHint(); hit('ui') }
+function closeMap(){ S.view='scene'; document.body.classList.remove('mapmode');
+  $('uiMapHint').style.display='none'; requestAnimationFrame(resize) }
+function mapHint(){
+  const e=$('uiMapHint'); e.style.display='block';
+  if(!S.sel){
+    const n=knownHexes().filter(l=>l.visited).length;
+    e.innerHTML='升を選ぶ　―　もう一度おすと発つ　／　<b>地</b>で戻る<br>'+
+      '<span style="opacity:.6">いま '+here().name+'　'+attrLine(here())+'　／　踏んだ升 '+n+'</span>';
+    return;
   }
-  const tbl=ZNODES[gate.k];
-  for(let i=0;i<depth*3+2;i++){
-    const x=Math.round(120+r()*(z.len-200));
-    z.nodes.push({k:pick(r,tbl), x, uses:ri(r,1,2), max:2, seen:1});
-  }
-  z.props.push({type:'cache', x:Math.round(z.len-70), o:{got:0, tier:depth}});
-  const ruinP = .5 + S.day/60 + (S.day>22&&S.ruins===0 ? .5 : 0);
-  if((gate.k==='cave'||gate.k==='fissure'||gate.k==='ravine') && S.ruins<3 && r()<ruinP)
-    z.props.push({type:'ruin', x:Math.round(z.len-190), o:{got:0}});
-  if((gate.k==='cave'||gate.k==='ravine') && r()<.3){
-    z.shortcut=Math.round(clamp(gate.x+(r()<.5?-1:1)*(500+r()*700),260,3400));
-    z.props.push({type:'exit', x:Math.round(z.len-24), o:{sc:1}});
-  }
-  z.props.push({type:'exit', x:14, o:{sc:0}});
-  return z;
+  const L=S.hex[S.sel], r=route(S.at,S.sel);
+  if(L.sea){ e.innerHTML='<b>海</b>　その先に陸はない。'; return }
+  const t=r?travelCost(r.time):0;
+  e.innerHTML='<b>'+(L.visited?L.name:'まだ踏んでいない升')+'</b>'+
+    (r?'　片道およそ '+Math.floor(t/60)+'時間'+(t%60?String(t%60).padStart(2,'0')+'分':'')+
+       '　（着くのは '+arriveStr(t)+'ごろ）':'　道がわからない')+'<br>'+
+    (L.visited? '<span style="opacity:.6">'+attrLine(L)+'　'+richWord(L)+'</span>'
+              : '<span style="opacity:.6">何があるかは、行ってみるまでわからない</span>')+
+    (r?'<br>もう一度おすと発つ':'');
 }
-function enterGate(g){
-  if(GATEK[g.k].need==='rope' && !has('rope')){ lg('降りる術がない。綱があれば。','bad'); return }
-  if(GATEK[g.k].need==='light' && !S.lit && !has('torch') && !has('lamp')){
-    lg('中は真っ暗だ。灯りなしでは踏み込めない。','bad'); return }
-  if(GATEK[g.k].need==='light' && !S.lit) useLight();
-  S.zone=genBranch(g); S.ret=g.x; S.x=30; S.face=1; g.done=1; g.open=0;
-  advance(20);
-  lg(GATEK[g.k].d+'。'+ (S.zone.depth>2?'思ったより、奥が深い。':''));
-  diary(areaName(g.x)+'の'+GATEK[g.k].n+'に入った。');
-  S.deepest=Math.max(S.deepest,S.zone.depth);
-  if(chance(.34)) setTimeout(()=>zoneEvent(),400);
+function attrLine(L){
+  if(!L||L.sea) return '海';
+  const a=KIND[L.kind].attr.map(k=>ATTR[k]);
+  return a.length?a.join('・'):'とくに何もない';
+}
+function richWord(L){ return L.rich>72?'手つかず':L.rich>45?'まだ採れる':L.rich>22?'採り尽くしかけ':'荒れている' }
+function arriveStr(t){ const m=(S.min+t)%1440, h=Math.floor(m/60); return h+':'+String(Math.floor(m%60/10)*10).padStart(2,'0') }
+function travelCost(base){
+  let t=base;
+  if(load()>capacity()*.8) t*=1.28;
+  if(S.warm<25||S.food<14||S.water<14) t*=1.2;
+  if(S.weather==='storm') t*=1.3; else if(S.weather==='rain') t*=1.1;
+  if(isNight()) t*=1.25;
+  return Math.round(t);
+}
+function travelTo(key){
+  const r=route(S.at,key); if(!r) return;
+  closeMap();
+  const t=travelCost(r.time), hops=r.path.length-1;
+  lg('荷を担いで歩きだした。');
+  for(let i=0;i<hops&&!S.over;i++){
+    advance(Math.round(t/hops));
+    if(S.over) return;
+    if(chance(.2+(isNight()?.12:0))) travelEvent();
+  }
+  if(S.over) return;
+  const L=S.hex[key], first=!L.visited;
+  L.visited=1;
+  const [q,rr]=unK(key);
+  S.at=key; S.x=Math.round(L.len*.2); S.face=1; S.moved++;
+  revealAround(q,rr);
+  const d=hexDist(q,rr,0,0);
+  S.reached=Math.max(S.reached,d);
+  if(first){
+    lg('着いた。'+L.name+'。'+KINDLINE(L),'good');
+    diary(L.name+'に出た。'+attrLine(L)+'。');
+    gain('gather',2); S.san=clamp(S.san+4,0,100);
+    // 六方のうち、どこが海だったか
+    const sea=HDIR.filter(dd=>{const h=S.hex[K(q+dd[0],rr+dd[1])]; return h&&h.sea}).length;
+    if(sea>=3) lg('三方が海だ。ここから先はない。');
+    else if(sea) lg('海が見える。この向きは、ここで陸が尽きている。');
+    if(S.mainDir>=0 && sectorOf(q,rr)===S.mainDir && d>=5) mainlandHint(d);
+  }else lg(L.name+'に着いた。'+richWord(L)+'。');
   hit('enter');
 }
-function leaveZone(sc){
-  const z=S.zone;
-  S.x = sc&&z.shortcut ? z.shortcut : S.ret;
-  S.zone=null; advance(20);
-  if(sc&&z.shortcut){ lg('岩を抜けると、見覚えのない場所に出た。'+areaName(S.x)+'だ。','good'); diary('抜け道を見つけた。島が、すこし縮んだ気がする。') }
-  else lg(z.name+'を出た。'+(z.props.some(p=>p.type==='cache'&&!p.o.got)?'奥に、何か残してきた気がする。':''));
-  hit('enter');
+/* 島ではなかった、という筋 */
+function mainlandHint(d){
+  if(d>=8&&!S.flags.mainland3){
+    S.flags.mainland3=1;
+    lg('木立の向こうに、直線が走っていた。舗装された路だ。','good');
+    diary('舗装路を見つけた。ここは、島ではない。');
+    toast('道が、外へ続いている');
+  }else if(d>=7&&!S.flags.mainland2){
+    S.flags.mainland2=1;
+    lg('一本の柱が立っている。碍子がついていた。電柱だ。','bad');
+    diary('電柱があった。ありえない。');
+  }else if(!S.flags.mainland1){
+    S.flags.mainland1=1;
+    lg('歩いても歩いても、海に出ない。陸が、まだ続いている。','bad');
+    diary('この方角だけ、いくら歩いても海に出ない。');
+  }
 }
-/* ───────── 枝の中の出来事 ───────── */
-function zoneEvent(){
-  if(!S.zone||S.over) return;
-  const k=S.zone.kind, r=Q();
-  if((k==='cave'||k==='fissure')&&r<.34){
-    lg('頭上で、岩が鳴った。','bad');
-    if(chance(.5)){ S.hp-=ri(Q,6,14); lg('落ちてきた欠片が肩を打つ。','bad') }
-    else lg('身をかがめてやり過ごした。');
-  }else if(k==='thicket'&&r<.5){ beast() }
-  else if(k==='wreck'&&r<.4){ lg('船倉の暗がりで、何かが崩れる音がした。'); if(chance(.4)){S.san-=8} }
-  else if(r<.3){ lg('風の音が、人の声に聞こえた。'); S.san-=4 }
-  else beast();
+function KINDLINE(L){
+  return ({
+    shore:'波打ち際に、いろいろと打ち上げられている。', dune:'風紋の向こうに海が見下ろせる。',
+    rocky:'黒い岩が海へせり出している。', tidepool:'潮が引いて、岩の底が露わになっている。',
+    cape:'岬の先。水平線がまるく見える。', jungle:'見上げるほどの木が、光を遮っている。',
+    grove:'椰子がまっすぐ並んでいる。', thicket:'棘のある藪。踏み込むと足を取られる。',
+    bamboo:'風が鳴っている。竹が擦れる音だ。', marsh:'足首まで沈む。虫の羽音がやまない。',
+    fall:'水音。落ちた水が、白く砕けている。', spring:'岩の隙間から、澄んだ水が湧いている。',
+    cave:'岩の口が黒く開いている。灯りがないと奥へは行けない。',
+    cliff:'切り立っている。下から潮の音がのぼってくる。',
+    trail:'獣の通った跡。糞と、折れた枝。', wreck:'船だったものが、腹を見せて横たわっている。',
+    ruinhut:'誰かが建てた小屋の骨組みが残っている。', ruins:'石の柱が、いくつも立っている。'
+  })[L.kind]||'';
+}
+/* ───────── 道中の出来事 ───────── */
+function travelEvent(){
+  const r=Q();
+  if(r<.16){ S.hp-=ri(Q,4,10); lg('根に足を取られて転んだ。膝が切れている。','bad') }
+  else if(r<.3){ const t=ri(Q,20,50); advance(t); lg('道を見失って、'+t+'分ほど余計に歩いた。','bad') }
+  else if(r<.42){ const it=pick(Q,['wood','fiber','stone','shell','leaf']); const g=addItem(it,1);
+    lg(g?'道端に'+itemName(it)+'が落ちていた。':'道端に何か落ちていたが、手が塞がっていた。') }
+  else if(r<.52&&S.weather!=='clear'){ advance(ri(Q,30,60)); S.warm=clamp(S.warm+8,0,100);
+    lg('岩陰で雨をやり過ごした。') }
+  else if(r<.62){ const [q,rr]=unK(S.at); revealAround(q,rr);
+    lg('尾根の上から、行く先の見当がついた。'); }
+  else if(r<.74){ S.san-=5; lg('人の声が聞こえた気がして、立ち止まった。誰もいない。') }
+  else if(r<.86){ beast() }
+  else if(S.day>5&&S.met<3&&chance(.5)){ castaway() }
+  else { const it=pick(Q,NUTS); if(addItem(it,1)) lg('道すがら、'+itemName(it)+'をひとつ摘んだ。') }
 }
 function beast(){
-  const strong=S.zone?S.zone.depth>=3:0;
-  lg('低い唸り声。'+(strong?'大きい。':'茂みが揺れている。'),'bad');
+  lg('低い唸り声。茂みが揺れている。','bad');
   choice('獣が、こちらを見ている。',[
     {t:'銛を構える', ok:has('spear'), f:()=>{
-      if(chance(.35+sk('hunt')*.11+(has('spear')?.2:0))){
-        lg('突いた。手が痺れるほどの手応え。','good'); addItem('meat',2); addItem('bone',1); gain('hunt',3); S.kills++;
-      }else{ S.hp-=ri(Q,10,20); lg('牙が腕をかすめた。血が出ている。','bad'); gain('hunt',1) }
+      if(chance(.35+sk('hunt')*.11)){ lg('突いた。手が痺れるほどの手応え。','good');
+        addItem('meat',2); addItem('bone',1); gain('hunt',3); S.kills++ }
+      else { S.hp-=ri(Q,10,20); lg('牙が腕をかすめた。血が出ている。','bad'); gain('hunt',1) }
       advance(30);
     }},
     {t:'火を突きつける', ok:S.lit>0||has('torch'), f:()=>{
       if(!S.lit) useLight();
       lg('炎を突き出すと、獣は闇へ退いた。','good'); S.lit=Math.max(0,S.lit-20); advance(15);
     }},
+    {t:'荷を捨てて逃げる', ok:1, f:()=>{
+      const ks=Object.keys(S.inv).filter(k=>!ITEM[k]||!ITEM[k].t);
+      if(ks.length){ const k=pick(Q,ks); const n=Math.min(S.inv[k],ri(Q,1,3)); delItem(k,n);
+        lg(itemName(k)+'を撒いて逃げた。','bad') }
+      else lg('捨てるものもない。ただ走った。','bad');
+      advance(20); S.san-=6;
+    }},
     {t:'そっと退がる', ok:1, f:()=>{
-      if(chance(.55+sk('gather')*.06)){ lg('息を殺して、離れた。'); }
+      if(chance(.5+sk('gather')*.06)) lg('息を殺して、離れた。');
       else { S.hp-=ri(Q,6,14); S.san-=6; lg('追われた。転びながら逃げた。','bad') }
       advance(20);
     }}
   ]);
 }
-/* ───────── 他の漂流者 ───────── */
 function castaway(){
   S.met++;
-  const kinds=[
-    {t:'骨',   d:'岩陰に、人の骨があった。まだ布の切れ端が残っている。'},
-    {t:'生存者',d:'痩せた男が、こちらに手を伸ばしている。声が出ないらしい。'},
-    {t:'ボート',d:'破れたゴムボート。中で、女がひとり眠るように倒れている。'}
-  ];
-  const k=kinds[Math.min(S.met-1,2)];
+  const k=[{t:'骨',d:'岩陰に、人の骨があった。まだ布の切れ端が残っている。'},
+           {t:'生存者',d:'痩せた男が、こちらに手を伸ばしている。声が出ないらしい。'},
+           {t:'ボート',d:'破れたゴムボート。中で、女がひとり眠るように倒れている。'}][Math.min(S.met-1,2)];
   lg(k.d,'bad'); diary(k.d);
   if(k.t==='骨'){
     choice(k.d,[
@@ -1245,12 +1535,12 @@ function castaway(){
     ]);
   }else{
     choice(k.d,[
-      {t:'水と食べ物を分ける', ok:has('water')||has('coco')||has('dried'), f:()=>{
-        ['water','coco','dried','fish'].some(i=>has(i)&&delItem(i,1));
+      {t:'水と食べ物を分ける', ok:has('water')||has('coco')||has('dried')||has('tin'), f:()=>{
+        ['water','coco','dried','tin','fish'].some(i=>has(i)&&delItem(i,1));
         S.helped++; S.san+=20; gain('gather',2); advance(60);
         lg('分けた。相手は何度も頷いた。名を、聞いた。','good');
         diary('もう一人、この島にいる。分け合うことにした。');
-        if(chance(.6)){ addItem('chart',1); lg('礼だと、濡れた海図の切れ端を渡された。','good') }
+        if(chance(.6)&&addItem('chart',1)) lg('礼だと、濡れた海図の切れ端を渡された。','good');
       }},
       {t:'荷だけ受け取る', ok:1, f:()=>{ S.cruel++; S.san-=16; addItem('tin',2); addItem('cloth',1); advance(30);
         lg('荷を取って、背を向けた。呼ぶ声が、しばらく聞こえていた。','bad');
@@ -1261,241 +1551,307 @@ function castaway(){
 }
 
 /* =========================================================================
-   対象物と行動
+   探す ― 何が出るかは、やってみるまでわからない
    ========================================================================= */
-/* 島は道具で「伸びる」── 藪と崖が、行ける範囲を区切る */
-const BUSH_X=2280, CLIFF_X=2980;
-function passLimit(){
-  if(S.zone) return S.zone.len-14;
-  if(!has('axe')&&!has('machete')) return BUSH_X;
-  if(!has('rope')) return CLIFF_X;
-  return WORLD-14;
-}
-function blocked(lim){
-  if(S._blk===lim && T-S._blkT<240) return;
-  S._blk=lim; S._blkT=T;
-  lg(lim===BUSH_X?'棘だらけの藪が道を塞いでいる。斧か山刀があれば、斬り開けるはずだ。'
-                 :'岩壁が立ちはだかる。綱があれば、上へ登れそうだ。','bad');
-}
-function nearProps(){
-  const a=[];
-  if(S.zone){
-    S.zone.nodes.forEach(o=>a.push({type:'node',x:o.x,o}));
-    S.zone.props.forEach(p=>a.push({type:p.type,x:p.x,o:p.o}));
-  }else{
-    S.world.nodes.forEach(o=>a.push({type:'node',x:o.x,o}));
-    S.world.gates.forEach(o=>{ if(o.open&&!o.done) a.push({type:'gate',x:o.x,o}) });
-    S.drift.forEach(o=>{ if(!o.got) a.push({type:'drift',x:o.x,o}) });
-    a.push({type:'camp',x:500,o:{k:'fire'}});
-    a.push({type:'camp',x:700,o:{k:'hut'}});
-    a.push({type:'camp',x:250,o:{k:'raft'}});
-    a.push({type:'camp',x:3430,o:{k:'tower'}});
-    a.push({type:'camp',x:3180,o:{k:'lookout'}});
+const RESN={
+  wood:'流木',timber:'角材',stone:'石',fiber:'繊維',leaf:'大葉',resin:'樹脂',clay:'粘土',
+  metal:'金属片',cloth:'布',bone:'骨',shell:'貝',salt:'塩',coco:'椰子の実',fish:'魚',
+  meat:'肉',hide:'毛皮',herb:'薬草',egg:'卵',water:'水',tin:'缶詰',parts:'部品',
+  bamboo:'竹',relic:'遺品',fruit:'木の実',mush:'茸',tool:'道具'
+};
+function searchSpot(sp){
+  const L=here(), K=KIND[L.kind];
+  if(sp.left<=0){ lg('ここはもう、掘り返したあとだ。'); return }
+  if(hasAt(L,'dark')&&!S.lit&&!has('torch')&&!has('lamp')){ lg('暗すぎて手元が見えない。灯りが要る。','bad'); return }
+  if(hasAt(L,'dark')&&!S.lit) useLight();
+
+  const t=clamp(58+ri(Q,-14,20)-sk('gather')*3,25,90);
+  advance(t); if(S.over) return;
+  sp.left--; L.rich=Math.max(0,L.rich-6); S.searches++;
+  gain('gather',1);
+
+  // 事故（地点の危なさ）
+  if(chance(.05+K.dg*.035)){ mishap(); if(S.over) return }
+
+  // 空振り。荒れた場所ほど出ない
+  let miss=.22-sk('gather')*.035+(1-L.rich/100)*.30;
+  if(S.weather==='storm') miss+=.12; if(S.weather==='rain') miss+=.05;
+  if(has('knife')||has('axe')) miss-=.05;
+  if(Q()<clamp(miss,.08,.8)){
+    lg(pick(Q,['ひとしきり探したが、めぼしいものはなかった。','手が土に汚れただけだった。',
+               '目ぼしいものは、先に何かが持っていったあとだった。','時間ばかりが過ぎた。']));
+    return;
   }
+  // 何が出るか
+  let key=wpick(Q,K.res);
+  if(key==='fish'&&!has('rod')&&!has('spear')){
+    if(chance(.6)){ lg('魚影は見えたが、素手では届かない。'); return }
+  }
+  if(key==='meat'&&!has('spear')){
+    if(chance(.75)){ lg('獣の気配。追ったが、追いつけるはずもなかった。'); gain('hunt',1); return }
+  }
+  if(key==='water'){ drinkHere(); return }
+
+  const id = RESOLVE[key] ? RESOLVE[key]() : key;
+  const FOODY={shell:1,coco:1,fish:1,egg:1,meat:1,fruit:1,mush:1,herb:1,leaf:1,fiber:1};
+  let n=(FOODY[key]?2:1)+(chance(.28+sk('gather')*.06)?1:0);
+  if(key==='timber'&&!has('axe')&&!has('machete')){ lg('倒せそうな木はあるが、素手では歯が立たない。'); return }
+  const got=addItem(id,n);
+  if(got<n) lg('これ以上は持てない。'+itemName(id)+'を置いていく。','bad');
+  if(got>0){
+    lg(pick(Q,['見つけた。','手に入れた。','拾いあげた。'])+itemName(id)+(got>1?'×'+got:'')+'。');
+    if(key==='fish') gain('fish',2); if(key==='meat') gain('hunt',2);
+  }
+  hit('get');
+  if(chance(.07)){
+    S.water=clamp(S.water+38,0,100);
+    lg('岩のくぼみに、雨水が溜まっていた。掌で掬って飲む。','good'); hit('water');
+  }
+  // 島は、どこにいても多少は食わせてくれる
+  if(chance(.14)){
+    const f=pick(Q,['shell','egg',pick(Q,NUTS)]);
+    if(addItem(f,1)) lg('ついでに'+itemName(f)+'をひとつ見つけた。');
+  }
+  // まれに良いもの
+  if(chance(.055)){
+    const r=Q();
+    if(r<.3&&addItem('chart',1)) lg('砂に埋もれた紙。海図の切れ端だ。','good');
+    else if(r<.55&&addItem('parts',1)) lg('見慣れぬ機械の部品が出てきた。','good');
+    else if(r<.8){ const tl=RESOLVE.tool(); if(addItem(tl,1)) lg('誰かの落とし物らしい。'+itemName(tl)+'。','good') }
+    else if(hasAt(L,'lore')) touchRuin();
+  }
+  // 隣の升の様子が見えることがある
+  if(chance(.25)){ const [q,rr]=unK(S.at); revealAround(q,rr) }
+}
+function drinkHere(){
+  S.water=100; S.wet=0;
+  lg('顔をつけて飲んだ。腹の底まで冷たい。','good');
+  if(has('pot')&&(S.inv.water||0)<3){ if(addItem('water',1)) lg('土器にも汲んでおいた。') }
+  hit('water');
+}
+function mishap(){
+  const L=here(), r=Q();
+  if(r<.28){ S.hp-=ri(Q,5,12); lg('足を滑らせた。したたかに腰を打つ。','bad') }
+  else if(r<.5){ S.hp-=ri(Q,3,8); S.sick=Math.max(S.sick,2); lg('虫に刺された。腫れて熱をもっている。','bad') }
+  else if(r<.68&&hasAt(L,'dark')){ S.hp-=ri(Q,6,14); lg('頭上で岩が鳴り、欠片が肩を打った。','bad') }
+  else if(r<.82){ S.san-=8; lg('足元に骨があった。人のものだ。','bad') }
+  else beast();
+}
+function touchRuin(){
+  if(S.ruins>=3) return;
+  S.ruins++;
+  const LORE=[
+    '石に刻まれていた。「三十七人。水は西の窪み。船は来ない」',
+    '削られた文字が続く。「六人になった。海へ出た者は帰らない。ここで待て」',
+    '最後の一行だけ、深く彫られていた。「島は、待つ者を選ぶ」'
+  ];
+  const t=LORE[S.ruins-1];
+  S.lore.push(t); lg(t,'good'); diary('石柱の文を読んだ。'+t);
+  S.san-=8; addItem('relic',1);
+  toast('遺構 '+S.ruins+' / 3'); hit('ruin');
+}
+
+/* =========================================================================
+   その場のもの
+   ========================================================================= */
+function nearProps(){
+  const a=[], L=here();
+  L.spots.forEach(sp=>a.push({type:'spot',x:sp.x,o:sp}));
+  if(hasAt(L,'water')) a.push({type:'water',x:Math.round(L.len*.46),o:{}});
+  if(atCamp()){
+    S.drift.forEach(d=>{ if(!d.got) a.push({type:'drift',x:d.x,o:d}) });
+    const c=campSpots();
+    a.push({type:'camp',x:c.fire,o:{k:'fire'}});
+    a.push({type:'camp',x:c.hut,o:{k:'hut'}});
+    a.push({type:'camp',x:c.store,o:{k:'store'}});
+    if(hasAt(L,'shore')) a.push({type:'camp',x:c.raft,o:{k:'raft'}});
+    if(hasAt(L,'view'))  a.push({type:'camp',x:c.tower,o:{k:'tower'}});
+  }else if(hasAt(L,'view')) a.push({type:'camp',x:Math.round(L.len*.8),o:{k:'lookout'}});
   return a;
 }
 function propName(p){
-  if(p.type==='node') return NODE[p.o.k].v+'　'+NODE[p.o.k].n + (p.o.uses<=0?'（もう何もない）':'');
-  if(p.type==='gate') return '入る　'+GATEK[p.o.k].n;
+  if(p.type==='spot') return p.o.left>0?'さがす':'（もう掘り返したあとだ）';
+  if(p.type==='water') return '水を飲む';
   if(p.type==='drift') return 'あらためる　漂着物';
-  if(p.type==='cache') return p.o.got?'空の箱':'こじ開ける　打ち上げられた箱';
-  if(p.type==='ruin') return p.o.got?'苔むした石柱':'触れる　石柱';
-  if(p.type==='exit') return p.o.sc?'奥へ抜ける':'外へ戻る';
-  if(p.type==='camp'){
-    const k=p.o.k;
-    if(k==='fire') return S.fire>0?'火のそば':'焚き火をおこす';
-    if(k==='hut')  return S.built.hut>0?'ねぐら':'寝床をこしらえる';
-    if(k==='raft') return S.built.raft>=3?'いかだ（進水できる）':'いかだを組む';
-    if(k==='tower')return S.built.tower>=3?'狼煙（上げられる）':'狼煙台を建てる';
-    if(k==='lookout') return '見晴らす';
-  }
+  const k=p.o.k;
+  if(k==='fire') return S.fire>0?'火のそば':'焚き火をおこす';
+  if(k==='hut')  return S.built.hut>0?'ねぐら':'寝床をこしらえる';
+  if(k==='store')return '置き場';
+  if(k==='raft') return S.built.raft>=3?'いかだ（進水できる）':'いかだを組む';
+  if(k==='tower')return S.built.tower>=3?'狼煙（上げられる）':'狼煙台を建てる';
+  if(k==='lookout') return '見晴らす';
   return '';
 }
 function nearest(){
-  let best=null,bd=48;
+  let best=null,bd=46;
   nearProps().forEach(p=>{ const d=Math.abs(p.x-S.x); if(d<bd){bd=d;best=p} });
   return best;
 }
 function interact(){
   const p=nearest(); if(!p||S.over) return;
-  if(p.type==='node')  doGather(p.o);
-  else if(p.type==='gate') enterGate(p.o);
+  if(p.type==='spot') searchSpot(p.o);
+  else if(p.type==='water'){ advance(25); drinkHere(); gain('gather',1) }
   else if(p.type==='drift') openDrift(p.o);
-  else if(p.type==='cache') openCache(p.o);
-  else if(p.type==='ruin')  touchRuin(p.o);
-  else if(p.type==='exit')  leaveZone(p.o.sc);
-  else if(p.type==='camp')  campMenu(p.o.k);
+  else campMenu(p.o.k);
 }
-/* ───────── 採る ───────── */
-function doGather(n){
-  const D=NODE[n.k];
-  if(n.uses<=0){ lg('もう、めぼしいものは残っていない。'); return }
-  if(D.need==='axe'&&!has('axe')&&!has('machete')){ lg('素手では歯が立たない。斧が要る。','bad'); return }
-  if(D.need==='rodspear'&&!has('rod')&&!has('spear')){ lg('道具がない。釣竿か銛があれば。','bad'); return }
-  if(D.spring){
-    S.water=100; S.wet=0; lg('顔をつけて飲んだ。腹の底まで冷たい。','good');
-    if(has('pot')&&!has('water')){ addItem('water',1); lg('土器に汲んでおいた。') }
-    else if(has('pot')&&(S.inv.water||0)<3){ addItem('water',1) }
-    n.uses--; advance(D.t); gain('gather',1); n.seen=1; hit('water'); return;
-  }
-  advance(D.t);
-  n.uses--; n.seen=1; gain(D.sk,2);
-  let got=[];
-  if(n.k==='bush'||n.k==='mush'){
-    const pool = n.k==='mush' ? ['m1','m2','m3'] : ['n1','n2','n3','n4','n5'];
-    if(chance(.22)){ addItem('herb',1); got.push('薬草') }
-    else{ const id=pick(Q,pool); addItem(id,1); got.push(itemName(id)) }
-    if(chance(.3+sk('gather')*.06)){ const id=pick(Q,pool); addItem(id,1); got.push(itemName(id)) }
-  }else if(n.k==='salvage'){
-    const t=[['cloth',2],['metal',2],['tin',1],['parts',1],['rope',1],['timber',2]];
-    const a=pick(Q,t); addItem(a[0],a[1]); got.push(itemName(a[0])+'×'+a[1]);
-    if(chance(.35)){ const b=pick(Q,t); addItem(b[0],b[1]); got.push(itemName(b[0])+'×'+b[1]) }
-  }else if(n.k==='fishspot'){
-    const p=.42+sk('fish')*.12+(has('rod')?.12:0);
-    if(chance(p)){ const c2=1+(chance(.3+sk('fish')*.08)?1:0); addItem('fish',c2); got.push('魚×'+c2); gain('fish',2) }
-    else { lg('糸を垂れたが、影も見えなかった。'); gain('fish',1); return }
-  }else{
-    for(const k in D.give){ const c2=D.give[k]+(chance(.25+sk(D.sk)*.07)?1:0); addItem(k,c2); got.push(itemName(k)+'×'+c2) }
-  }
-  lg(D.n+'を'+D.v+'。'+got.join('、')+'。');
-  hit('get');
-  if(S.zone&&chance(.16)) zoneEvent();
-}
-/* ───────── 漂着物・宝 ───────── */
 const DRIFT_T=[
-  ()=>{addItem('wood',2); return '流木が二本'},
-  ()=>{addItem('cloth',1); return '塩の噴いた布'},
-  ()=>{addItem('fiber',2); return 'もつれた縄'},
-  ()=>{addItem('tin',1); return '無傷の缶詰'},
-  ()=>{addItem('metal',1); return 'ひしゃげた金属片'},
-  ()=>{addItem('coco',2); return '椰子の実がふたつ'},
-  ()=>{const id=pick(Q,['n1','n2','n3','n4','n5']); addItem(id,1); return '見慣れぬ実'},
-  ()=>{addItem('resin',2); return '固まった樹脂'},
-  ()=>{addItem('seed',1); return '袋に入った種'},
-  ()=>{addItem('chart',1); return '海図の切れ端'},
-  ()=>{addItem('parts',1); return '機械の部品'},
-  ()=>{return '海藻と砂だけだった'}
+  ()=>{addItem('wood',2); return '流木が二本'}, ()=>{addItem('cloth',1); return '塩の噴いた布'},
+  ()=>{addItem('fiber',2); return 'もつれた縄'}, ()=>{addItem('tin',1); return '無傷の缶詰'},
+  ()=>{addItem('metal',1); return 'ひしゃげた金属片'}, ()=>{addItem('coco',2); return '椰子の実がふたつ'},
+  ()=>{addItem(pick(Q,NUTS),1); return '見慣れぬ実'}, ()=>{addItem('resin',2); return '固まった樹脂'},
+  ()=>{addItem('seed',1); return '袋に入った種'}, ()=>{addItem('chart',1); return '海図の切れ端'},
+  ()=>{addItem('parts',1); return '機械の部品'}, ()=>'海藻と砂だけだった'
 ];
 function openDrift(d){
   d.got=1; advance(20); gain('gather',1);
   const w=[0,0,1,1,2,2,3,4,5,5,6,6,7,8,9,10,11,11];
-  let t=DRIFT_T[pick(Q,w)]();
-  if(chance(.12)&&S.day>4){ t=DRIFT_T[9]() }
-  lg('波打ち際の漂着物をあらためた。'+t+'。');
-  hit('get');
-  if(S.day>6&&S.met<3&&chance(.14)) castaway();
-}
-function openCache(o){
-  if(o.got){ lg('もう空だ。'); return }
-  o.got=1; advance(30); gain('gather',2);
-  const n=o.tier+1; let got=[];
-  const t=[['timber',2],['cloth',2],['metal',2],['tin',2],['rope',1],['parts',1],['resin',2],['salt',2],['seed',1]];
-  for(let i=0;i<n;i++){ const a=pick(Q,t); addItem(a[0],a[1]); got.push(itemName(a[0])+'×'+a[1]) }
-  if(o.tier>=3&&chance(.5)){ addItem('chart',1); got.push('海図の断片') }
-  lg('箱をこじ開けた。'+got.join('、')+'。','good');
+  lg('波打ち際の漂着物をあらためた。'+DRIFT_T[pick(Q,w)]()+'。');
   hit('get');
 }
-const LORE=[
-  '石に刻まれていた。「三十七人。水は西の窪み。船は来ない」',
-  '削られた文字が続く。「六人になった。海へ出た者は帰らない。ここで待て」',
-  '最後の一行だけ、深く彫られていた。「島は、待つ者を選ぶ」'
-];
-function touchRuin(o){
-  if(o.got){ lg('冷たい石だ。'); return }
-  o.got=1; S.ruins++; advance(40);
-  const t=LORE[Math.min(S.ruins-1,2)];
-  S.lore.push(t); lg(t,'good'); diary('石柱を見つけた。'+t);
-  S.san-=10; addItem('relic',1);
-  toast('遺構 '+S.ruins+' / 3');
-  hit('ruin');
+
+/* =========================================================================
+   拠点
+   ========================================================================= */
+function nextBuild(id){
+  const b=BUILD.find(b=>b.id===id&&b.s===S.built[id]+1);
+  return b;
 }
-/* ───────── 拠点 ───────── */
+function buildOpt(b){
+  const L=campLoc(), okSk=sk(b.sk)>=b.lv, okAt=!b.need||hasAt(L,b.need);
+  return {t:b.n+'を'+(b.id==='tower'&&b.s===3?'つける':'こしらえる'), ok:canPay(b.c)&&okSk&&okAt,
+    sub:costStr(b.c)+(okSk?'':'　／　'+SKILL[b.sk]+' Lv'+(b.lv+1)+'が要る')
+        +(okAt?'':'　／　'+ATTR[b.need]+'のある場所でないと建てられない'),
+    f:()=>{ payFrom(b.c); advance(b.t); S.built[b.id]=b.s; gain(b.sk,4);
+      lg(b.n+'ができた。'+b.d+'。','good'); diary(b.n+'をこしらえた。'); hit('build'); hintProgress() }};
+}
 function campMenu(k){
-  if(k==='lookout'){
-    advance(40); gain('gather',1); S.surveyed=1;
-    lg('島を見渡した。稜線の向こうまで、道の見当がついた。','good');
-    lg('空の色から、明日は'+(S.weather==='storm'?'荒れが続く':'そう荒れない')+'とみた。');
-    S.san+=6; return;
+  const L=here();
+  if(k==='lookout'||(k==='tower'&&!atCamp())){
+    advance(45); gain('gather',1); S.san=clamp(S.san+6,0,100);
+    const [q,rr]=unK(S.at); let n=0, sea=0;
+    for(let dq=-2;dq<=2;dq++) for(let dr=-2;dr<=2;dr++){
+      if(hexDist(q+dq,rr+dr,q,rr)>2) continue;
+      const h=genHex(q+dq,rr+dr);
+      if(h.sea){ if(!h.known){h.known=1; sea++} } else if(!h.visited) n++;
+    }
+    lg('高みから見渡した。'+(sea?'海の際が'+sea+'方向ぶん見て取れた。':'')+
+       (n?'まだ踏んでいない升が'+n+'つ、この目に入る。':'見渡すかぎり、踏んだところばかりだ。'),'good');
+    return;
   }
   if(k==='fire'){
-    const opts=[
-      {t:'火をおこす', ok:S.fire<=0&&has('wood'), f:()=>{
-        const p=.55+sk('craft')*.12+(has('resin')?.2:0);
-        advance(30); delItem('wood',1);
-        if(chance(p)){ S.fire=1; lg('火がついた。煙が、まっすぐ立ちのぼる。','good'); gain('craft',2); hit('fire') }
+    choice('焚き火',[
+      {t:'火をおこす', ok:S.fire<=0&&stockOf('wood')>=1, f:()=>{
+        advance(30); payFrom({wood:1});
+        if(chance(.55+sk('craft')*.12+(stockOf('resin')?.15:0))){ S.fire=2; lg('火がついた。煙が、まっすぐ立ちのぼる。','good'); gain('craft',2); hit('fire') }
         else lg('湿っている。煙ばかりで、火にならない。','bad');
       }},
-      {t:'薪をくべる', ok:S.fire>0&&has('wood'), f:()=>{ delItem('wood',1); S.fire=2; advance(15); lg('火が大きくなった。') }},
-      {t:'焼く（魚・肉）', ok:S.fire>0&&(has('fish')||has('meat')), f:()=>{
+      {t:'薪をくべる', ok:S.fire>0&&stockOf('wood')>=1, f:()=>{ payFrom({wood:1}); S.fire=3; advance(15); lg('火が大きくなった。') }},
+      {t:'焼く（魚・肉）', ok:S.fire>0&&(stockOf('fish')||stockOf('meat')), f:()=>{
         advance(40); let n=0;
-        while(has('fish')&&n<3){ delItem('fish',1); addItem('cooked',1); n++ }
-        while(has('meat')&&n<3){ delItem('meat',1); addItem('cooked',1); n++ }
+        while(stockOf('fish')&&n<3){ payFrom({fish:1}); addItem('cooked',1); n++ }
+        while(stockOf('meat')&&n<3){ payFrom({meat:1}); addItem('cooked',1); n++ }
         gain('craft',1); lg('炙った。脂の匂いが、腹の底を殴ってくる。','good');
       }},
-      {t:'火にあたる（1時間）', ok:S.fire>0, f:()=>{ advance(60); S.warm=clamp(S.warm+34,0,100); S.san+=7; S.wet=0;
-        lg('掌をかざす。震えが止まっていく。','good') }},
-      {t:'日誌を書く', ok:1, f:()=>{ advance(30); S.san+=10;
-        lg('憶えていることを、砂に書いてから紙に写した。','good'); diary('今日のことを書いた。'+(S.day>20?'もう、書くことが減ってきた。':'')) }}
-    ];
-    choice('焚き火', opts); return;
+      {t:'火にあたる（1時間）', ok:S.fire>0, f:()=>{ advance(60); S.warm=clamp(S.warm+34,0,100);
+        S.san=clamp(S.san+7,0,100); S.wet=0; lg('掌をかざす。震えが止まっていく。','good') }},
+      {t:'日誌を書く', ok:1, f:()=>{ advance(30); S.san=clamp(S.san+10,0,100);
+        lg('憶えていることを書きつけた。','good'); diary('今日のことを書いた。') }}
+    ]);
+    return;
   }
+  if(k==='store'){ openStore(); return }
   if(k==='hut'){
-    const opts=[
-      {t:'眠る（朝まで）', ok:1, f:()=>sleep()},
-      {t:'横になる（2時間）', ok:1, f:()=>{ advance(120); S.hp=clamp(S.hp+6,0,100); lg('目を閉じた。波の音が近い。') }}
-    ];
-    const b=nextBuild('hut');
-    if(b) opts.unshift(buildOpt(b));
-    choice(S.built.hut>0?'ねぐら':'寝床', opts); return;
+    const o=[{t:'眠る（朝まで）',ok:1,f:()=>sleep()},
+             {t:'横になる（2時間）',ok:1,f:()=>{advance(120); S.hp=clamp(S.hp+6,0,100); lg('目を閉じた。波の音が近い。')}},
+             {t:'野営地を移す',ok:1,f:()=>moveCampMenu(),sub:'いまは '+campLoc().name}];
+    const b=nextBuild('hut'); if(b) o.unshift(buildOpt(b));
+    choice(S.built.hut>0?'ねぐら':'寝床',o); return;
   }
   if(k==='raft'){
-    const opts=[];
-    const b=nextBuild('raft'); if(b) opts.push(buildOpt(b));
-    opts.push({t:'いかだで海へ出る', ok:S.built.raft>=1, f:()=>confirmEnd('raft'),
-               sub:S.built.raft>=3?'風は掴めそうだ':'まだ、心もとない'});
-    choice('いかだ', opts); return;
+    const o=[]; const b=nextBuild('raft'); if(b) o.push(buildOpt(b));
+    o.push({t:'いかだで海へ出る',ok:S.built.raft>=1,f:()=>confirmEnd('raft'),
+            sub:S.built.raft>=3?'風は掴めそうだ':'まだ、心もとない'});
+    choice('いかだ',o); return;
   }
   if(k==='tower'){
-    const opts=[];
-    const b=nextBuild('tower'); if(b) opts.push(buildOpt(b));
-    opts.push({t:'狼煙を上げて待つ', ok:S.built.tower>=3, f:()=>confirmEnd('smoke'),
-               sub:S.built.tower>=3?'煙は、遠くまで届く':'まず台と火が要る'});
-    choice('高台', opts); return;
+    const o=[]; const b=nextBuild('tower'); if(b) o.push(buildOpt(b));
+    o.push({t:'狼煙を上げて待つ',ok:S.built.tower>=3,f:()=>confirmEnd('smoke'),
+            sub:S.built.tower>=3?'煙は、遠くまで届く':'まず台と火が要る'});
+    choice('高み',o); return;
   }
 }
-function nextBuild(id){ return BUILD.find(b=>b.id===id && b.s===S.built[id]+1) }
-function canPay(c){ for(const k in c) if(!has(k,c[k])) return false; return true }
-function costStr(c){ return Object.keys(c).map(k=>itemName(k)+'×'+c[k]).join('　') }
-function buildOpt(b){
-  const okSk=sk(b.sk)>=b.lv;
-  return {t:b.n+'を'+(b.id==='tower'&&b.s===3?'つける':'こしらえる'), ok:canPay(b.c)&&okSk,
-    sub:costStr(b.c)+(okSk?'':'　／　'+SKILL[b.sk]+' Lv'+(b.lv+1)+'が要る'),
-    f:()=>{
-      for(const k in b.c) delItem(k,b.c[k]);
-      advance(b.t); S.built[b.id]=b.s; gain(b.sk,4);
-      lg(b.n+'ができた。'+b.d+'。','good'); diary(b.n+'をこしらえた。');
-      hit('build'); hintProgress();
-    }};
+/* 置き場：持てないものはここに積む */
+function openStore(){
+  const inv=Object.keys(S.inv), st=Object.keys(S.store);
+  let h='<h2>置き場<span>荷 '+load()+' / '+capacity()+'</span></h2>';
+  h+='<p class="memo">持てる量には限りがある。使わないものはここへ。'+
+     '<b>嵐や獣に荒らされることがある</b>。</p><h3>手持ち → 置く</h3><div class="grid">';
+  if(!inv.length) h+='<p class="memo">何も持っていない。</p>';
+  inv.forEach(id=>h+='<button class="cell" data-put="'+id+'"><u>'+itemIcon(id)+'</u><span class="nm">'+
+    itemName(id)+'<br><span class="sub">重さ '+wOf(id)+'</span></span><span class="ct">'+S.inv[id]+'</span></button>');
+  h+='</div><h3>置き場 → 取る</h3><div class="grid">';
+  if(!st.length) h+='<p class="memo">まだ何も置いていない。</p>';
+  st.forEach(id=>h+='<button class="cell" data-take="'+id+'"><u>'+itemIcon(id)+'</u><span class="nm">'+
+    itemName(id)+'</span><span class="ct">'+S.store[id]+'</span></button>');
+  h+='</div><button class="close" data-x="1">とじる</button>';
+  openPanel(h);
 }
+function moveCampMenu(){
+  const cand=knownHexes().filter(l=>l.visited&&!l.sea&&l.key!==S.camp);
+  let h='<h2>野営地を移す<span>いまは '+campLoc().name+'</span></h2>';
+  h+='<p class="memo">建てたものは置いていくことになる（材はいくらか戻る）。'+
+     '置き場の荷は運べるが、まる半日かかる。<br>'+
+     '<b>浜</b>がなければいかだは組めず、<b>眺望</b>がなければ狼煙は上げられない。</p><div class="grid">';
+  cand.forEach(l=>{
+    h+='<button class="cell" data-camp="'+l.key+'"><u>⛺</u><span class="nm">'+l.name+
+       '<br><span class="sub">'+attrLine(l)+'</span></span></button>';
+  });
+  if(!cand.length) h+='<p class="memo">ほかに行った場所がない。</p>';
+  h+='</div><button class="close" data-x="1">とじる</button>';
+  openPanel(h);
+}
+function moveCamp(key){
+  const back={};
+  BUILD.forEach(b=>{ if(S.built[b.id]>=b.s) for(const k in b.c) back[k]=(back[k]||0)+Math.floor(b.c[k]/2) });
+  S.built={hut:0,raft:0,tower:0}; S.fire=0;
+  for(const k in back) S.store[k]=(S.store[k]||0)+back[k];
+  const r=route(S.at,key);
+  closePanel();
+  advance(Math.round((r?travelCost(r.time):60)+240));
+  if(S.over) return;
+  S.camp=key; S.at=key;
+  const L=S.hex[key]; L.visited=1; S.x=Math.round(L.len*.3);
+  const [q,rr]=unK(key); revealAround(q,rr);
+  S.flags.e50=S.flags.s50=0;
+  lg('野営地を'+L.name+'へ移した。'+(Object.keys(back).length?'解いた材は置き場へ。':''),'good');
+  diary('野営地を'+L.name+'に移した。');
+  dailyReset(true); hit('build');
+}
+
 /* ───────── 眠る ───────── */
 function sleep(){
-  const shelter=S.built.hut, fire=S.fire>0;
+  const shelter=atCamp()?S.built.hut:0, fire=fireHere(), L=here();
   const to=(24-S.min/60)+WAKE;
   advance(Math.max(30,Math.round(to*60)),true);
   if(S.over) return;
-  let rec=8+shelter*7+(fire?6:0)-(S.weather==='storm'?8:0)-(S.weather==='rain'&&shelter<2?6:0);
-  if(S.food>25&&S.water>25) rec+=8; else rec-=6;
+  let rec=10+shelter*7+(fire?6:0)+(hasAt(L,'shelter')?5:0)-(S.weather==='storm'?8:0)
+         -(S.weather==='rain'&&shelter<2&&!hasAt(L,'shelter')?6:0);
+  rec += (S.food>25&&S.water>25)?8:-6;
   S.hp=clamp(S.hp+rec,0,100);
-  S.san=clamp(S.san+(shelter?8:2)+(fire?4:0),0,100);
-  if(shelter<1&&chance(.3)){ S.hp-=6; S.san-=8; lg('夜通し、何かが近くを歩いていた。','bad') }
-  if(S.weather==='rain'&&shelter<2){ S.wet=1; lg('雨に濡れて眠った。骨まで冷えている。','bad') }
-  if(S.fire>0||shelter){ S.warm=Math.max(S.warm, 34+(fire?26:0)+shelter*10) }
-  if(S.fire>0){ S.fire--; }
+  S.san=clamp(S.san+(shelter?9:4)+(fire?5:0)+(atCamp()?2:0)+(hasAt(L,'shelter')?4:0),0,100);
+  if(shelter<1&&!hasAt(L,'shelter')&&chance(.3)){ S.hp-=6; S.san-=8; lg('夜通し、何かが近くを歩いていた。','bad') }
+  if(S.weather==='rain'&&shelter<2&&!hasAt(L,'shelter')){ S.wet=1; lg('雨に濡れて眠った。骨まで冷えている。','bad') }
+  if(fire||shelter) S.warm=Math.max(S.warm,34+(fire?26:0)+shelter*10);
+  if(!atCamp()&&chance(.25)){
+    const ks=Object.keys(S.inv).filter(k=>!ITEM[k]||!ITEM[k].t);
+    if(ks.length){ const k=pick(Q,ks); delItem(k,1); lg('寝ているあいだに'+itemName(k)+'を持っていかれた。','bad') }
+  }
+  if(S.fire>0) S.fire--;
   newDay();
 }
 function collapse(){
   if(S._col) return; S._col=1;
-  lg('立っていられない。膝から砂に落ちた。','bad');
+  lg('立っていられない。膝から崩れ落ちた。','bad');
   S.hp-=14; S.san-=10;
   advance(Math.max(1,(24+WAKE)*60-S.min),true);
   S._col=0;
@@ -1505,29 +1861,28 @@ function collapse(){
 }
 function newDay(){
   S.min=WAKE*60; S.day++; S.nights++;
-  if(S.day>MAX_DAY){ forcedEnding(); return }
-  if(S.zone){ S.zone=null; S.x=S.ret }
+  if(S.sick){ S.sick--; if(!S.sick) lg('熱がひいた。','good') }
+  if(S.numb) S.numb--;
+  if(S.day>MAX_DAY){ ending(pickEnding('storm')); return }
   dailyReset(false);
-  lg('── '+S.day+'日目　'+WX[S.weather].n+' ──');
+  lg('── '+S.day+'日目　'+WX[S.weather].n+'　'+here().name+' ──');
   if(S.day===MAX_DAY-2) lg('空の色が、これまでと違う。海が膨らんでいる。','bad');
   if(S.day===MAX_DAY-1) lg('嵐が来る。この島にいられるのは、もう長くない。','bad');
   if(S.day===MAX_DAY)   lg('今日で終わりだ。決めなければ、海が決める。','bad');
-  saveRun(); drawHUD();
-  hit('day');
+  saveRun(); drawHUD(); hit('day');
 }
-
 /* =========================================================================
    食う・使う
    ========================================================================= */
 const EAT={
-  coco  :s=>{s.food+=16;s.water+=24;lg('椰子の実を割った。汁が顎を伝う。')},
-  fish  :s=>{s.food+=18;if(chance(.3)){s.sick=2;s.hp-=6;lg('生のまま食った。腹が鳴っている。','bad')}else lg('生の魚を噛んだ。')},
+  coco  :s=>{s.food+=22;s.water+=26;lg('椰子の実を割った。汁が顎を伝う。')},
+  fish  :s=>{s.food+=22;if(chance(.3)){s.sick=2;s.hp-=6;lg('生のまま食った。腹が鳴っている。','bad')}else lg('生の魚を噛んだ。')},
   meat  :s=>{s.food+=22;if(chance(.45)){s.sick=2;s.hp-=8;lg('生肉。喉を通らない。','bad')}else lg('生肉を噛みちぎった。')},
-  cooked:s=>{s.food+=30;s.san+=4;lg('焼いた身を食った。生き返る心地がする。','good')},
-  dried :s=>{s.food+=26;lg('干物を齧った。塩気が舌に刺さる。')},
-  egg   :s=>{s.food+=14;lg('卵を啜った。')},
-  tin   :s=>{s.food+=32;s.san+=5;lg('缶詰。人の作ったものの味がする。','good')},
-  shell :s=>{s.food+=8;s.water+=4;lg('貝の身を吸った。')},
+  cooked:s=>{s.food+=34;s.san+=4;lg('焼いた身を食った。生き返る心地がする。','good')},
+  dried :s=>{s.food+=30;lg('干物を齧った。塩気が舌に刺さる。')},
+  egg   :s=>{s.food+=18;lg('卵を啜った。')},
+  tin   :s=>{s.food+=36;s.san+=5;lg('缶詰。人の作ったものの味がする。','good')},
+  shell :s=>{s.food+=12;s.water+=5;lg('貝の身を吸った。')},
   herb  :s=>{s.hp+=10;s.sick=0;s.san+=5;lg('薬草を噛む。苦味のあとに、頭が晴れる。','good')},
   water :s=>{s.water+=45;lg('水を飲んだ。')},
   salt  :s=>{s.water-=8;s.food+=2;lg('塩を舐めた。喉が渇く。')}
@@ -1537,9 +1892,9 @@ function useItem(id){
   if(EAT[id]){
     delItem(id,1); advance(10); EAT[id](S);
     S.food=clamp(S.food,0,100); S.water=clamp(S.water,0,100); S.san=clamp(S.san,0,100); S.hp=clamp(S.hp,0,100);
-    hit('eat'); drawHUD(); openPack(); return;
+    hit('eat'); drawHUD(); if(uiOpen) openPack(); return;
   }
-  if(id==='torch'||id==='lamp'){ useLight(); openPack(); return }
+  if(id==='torch'||id==='lamp'){ useLight(); if(uiOpen) openPack(); return }
   lg('いまは、使いどころがない。');
 }
 function useLight(){
@@ -1559,7 +1914,7 @@ function eatUnknown(id){
     if(!META.effects[eff]){ META.effects[eff]=1; saveMeta(); toast('図鑑に載った ― '+E.n) }
     else toast('わかった ― '+itemName(id)+'は「'+E.n+'」');
   }
-  gain('gather',1); drawHUD(); openPack();
+  gain('gather',1); drawHUD(); if(uiOpen) openPack();
   if(S.hp<=0) death();
 }
 
@@ -1584,6 +1939,7 @@ const ENDINGS={
   undecided  :{n:'決められぬまま',k:'嵐', t:'嵐が来た。組みかけのいかだも、建てかけの小屋も、ひと晩で均された。翌朝、あなたは何もない浜に立っていた。決めなかった、という決断だけが残った。'},
   swallowed  :{n:'波に呑まれる',k:'嵐',   t:'高潮は夜半に来た。浜のものは、あなたを含めて何ひとつ残らなかった。'},
   madness    :{n:'還らぬ心',    k:'嵐',   t:'いつからか、島じゅうに人の気配があった。あなたは彼らに話しかけ、彼らは決して答えなかった。それでも、寂しくはなかった。'},
+  notanisland:{n:'島ではなかった',k:'徒歩', t:'八日ぶん歩いても、海に出なかった。やがて木立の向こうに直線が現れる ── 舗装された路だった。\n\n路肩を歩いて三時間、軽トラックが停まってくれた。運転手は、こんなところで何をしていたのかと訊いた。漂着したのだと答えたら、笑われた。\n\nここは半島の先だった。地図を見せられて、あなたは長いこと黙っていた。四十日ぶんの薪と、干した魚と、名前をつけた場所のことを考えていた。'},
   inheritor  :{n:'継承者',      k:'隠し', t:'三本の石柱すべてに触れ、あなたは島の役目を理解した。ここは、待つ者が待つ者へ引き継ぐ場所だ。あなたは四本目の石を立て、最初の一行を彫った。「わたしは、ここにいた」'}
 };
 const DEATHS={
@@ -1591,7 +1947,8 @@ const DEATHS={
   beast:'獣に食われた', poison:'毒にあたって死んだ', fall:'落ちて死んだ', sick:'病んで死んだ', sea:'海に消えた'
 };
 function confirmEnd(kind){
-  const txt={raft:'いかだで海へ出る。戻ることはできない。',
+  const txt={walk:'舗装路をたどって、歩いて出る。',
+             raft:'いかだで海へ出る。戻ることはできない。',
              smoke:'狼煙を上げ、ここで待つ。',
              settle:'脱出を諦め、この島で暮らす。',
              radio:'無線で助けを呼ぶ。'}[kind];
@@ -1604,7 +1961,7 @@ function pickEnding(kind){
   const e=escapeScore(), s=settleScore(), san=S.san, R2=S.built.raft;
   if(kind==='sanity') return 'madness';
   if(kind==='raft'){
-    if(R2>=3&&san>=55&&(has('chart')||sk('sail')>=3)){
+    if(R2>=3&&san>=55&&(stockOf('chart')||sk('sail')>=3)){
       if(has('relic')&&S.ruins>=2) return 'witness';
       return 'homecoming';
     }
@@ -1616,6 +1973,7 @@ function pickEnding(kind){
     if(S.weather==='storm'||S.weather==='rain') return 'smoke_gone';
     return 'rescue';
   }
+  if(kind==='walk') return 'notanisland';
   if(kind==='radio') return 'transmission';
   if(kind==='settle'){
     if(S.ruins>=3&&S.buried>0) return 'inheritor';
@@ -1635,11 +1993,11 @@ function pickEnding(kind){
   }
   return 'undecided';
 }
-function forcedEnding(){ ending(pickEnding('storm')) }
 function death(cause){
   if(S.over) return;
   S.over=true;
   const c = cause || (S.water<=0?'thirst':S.food<=0?'starve':S.warm<=0?'cold':S.sick?'sick':'beast');
+  S._cause=c;
   META.deaths=(META.deaths||0)+1; META.runs=(META.runs||0)+1;
   META.best=Math.max(META.best||0,S.day); saveMeta(); clearRun();
   curtainEnd({n:DEATHS[c],k:'漂流記録',t:S.day+'日目。'+DEATHS[c]+'。\n\n島は、何も変わらずそこにあった。'},true);
@@ -1744,6 +2102,9 @@ panel.addEventListener('click',e=>{
     closePanel(); CHOICE=null; o.f(); drawHUD(); return;
   }
   if(b.dataset.use){ useItem(b.dataset.use); return }
+  if(b.dataset.put){ toStore(b.dataset.put,1); drawHUD(); openStore(); return }
+  if(b.dataset.take){ fromStore(b.dataset.take,1); drawHUD(); openStore(); return }
+  if(b.dataset.camp){ moveCamp(b.dataset.camp); return }
   if(b.dataset.craft){ doCraft(b.dataset.craft); return }
   if(b.dataset.p){ ({pack:openPack,craft:openCraft,diary:openDiary,menu:openMenu,codex:openCodex})[b.dataset.p](); }
 });
@@ -1751,7 +2112,11 @@ panel.addEventListener('click',e=>{
 /* ───────── 持ち物 ───────── */
 function openPack(){
   const ks=Object.keys(S.inv);
-  let h='<h2>持ち物<span>'+packCount()+'　点</span></h2>';
+  const ov=load()>=capacity();
+  let h='<h2>持ち物<span'+(ov?' style="color:#e28a5a"':'')+'>荷 '+load()+' / '+capacity()+'</span></h2>';
+  h+='<p class="memo">持てる重さには限りがある。'+
+     (has('frame')?'':has('basket')?'背負子があれば、もっと運べる。':'籠を編めば、もっと運べる。')+
+     (atCamp()?'　使わないものは<b>置き場</b>へ。':'')+'</p>';
   if(!ks.length) h+='<p class="memo">何も持っていない。</p>';
   h+='<div class="grid">';
   ks.forEach(id=>{
@@ -1777,35 +2142,44 @@ function openPack(){
 }
 /* ───────── こしらえる ───────── */
 function openCraft(){
-  const atFire=nearFire()&&S.fire>0;
+  const atFire=fireHere();
   let h='<h2>こしらえる<span>'+(atFire?'火のそば':'火がないと作れないものがある')+'</span></h2><div class="grid">';
   RECIPE.forEach(r=>{
-    const okS=sk(r.sk)>=r.lv, okC=canPay(r.c), okF=!r.fire||atFire, okE=!r.sea||(!S.zone&&S.x<900);
+    const okS=sk(r.sk)>=r.lv, okC=canPay(r.c), okF=!r.fire||atFire, okE=!r.shore||hasAt(here(),'shore');
     const ok=okS&&okC&&okF&&okE;
-    h+='<button class="cell" '+(ok?'data-craft="'+r.id+'"':'disabled')+'><u>'+(ITEM[r.id]?ITEM[r.id].i:'🔨')+'</u>'+
+    h+='<button class="cell" '+(ok?'data-craft="'+r.id+'"':'disabled')+'><u>'+
+       (ITEM[r.makes||r.id]?ITEM[r.makes||r.id].i:'🔨')+'</u>'+
        '<span class="nm">'+r.n+'<br><span class="sub">'+costStr(r.c)+'</span>'+
        '<span class="sub rec">'+(okS?'':SKILL[r.sk]+' Lv'+(r.lv+1)+'／')+(r.fire&&!atFire?'火が要る／':'')+
-       (r.sea&&!okE?'海のそばで／':'')+r.d+'</span></span></button>';
+       (r.shore&&!okE?'海のそばで／':'')+r.d+'</span></span></button>';
   });
-  h+='</div><h3>建てる</h3><p class="memo">いかだ・寝床・狼煙台は、その場所へ行って建てる。'+
-     '（浜の左端＝いかだ、焚き火の隣＝寝床、高台＝狼煙台）</p>'+
+  h+='</div><h3>建てる</h3><p class="memo">いかだ・寝床・狼煙台は<b>野営地でそれぞれの場所に立って</b>建てる。'+
+     'いかだは<b>浜</b>のある地点、狼煙は<b>眺望</b>のある地点でないと建てられない。</p>'+
      '<button class="close" data-x="1">とじる</button>';
   openPanel(h);
 }
 function doCraft(id){
   const r=RECIPE.find(x=>x.id===id); if(!r) return;
   if(!canPay(r.c)) return;
-  for(const k in r.c) delItem(k,r.c[k]);
+  payFrom(r.c);
   advance(r.t); gain(r.sk,3);
-  addItem(r.id, r.out||1);
+  addItem(r.makes||r.id, r.out||1);
   lg(r.n+'をこしらえた。'+r.d+'。','good');
   hit('build'); drawHUD(); openCraft();
 }
 /* ───────── 日誌 ───────── */
 function openDiary(){
   let h='<h2>日誌<span>'+S.day+'日目 / '+MAX_DAY+'</span></h2>';
-  h+='<p class="memo">シード <b>'+S.seed+'</b>　／　歩いた距離 <b>'+Math.round(S.walked/100)/10+'km</b>'+
-     '　／　見つけた遺構 <b>'+S.ruins+'/3</b></p><h3>手記</h3>';
+  const vis=knownHexes().filter(l=>l.visited).length;
+  h+='<p class="memo">シード <b>'+S.seed+'</b>　／　踏んだ升 <b>'+vis+'</b>'+
+     '　／　いちばん遠く <b>'+S.reached+'升</b>　／　遺構 <b>'+S.ruins+'/3</b>'+
+     '　／　野営地 <b>'+campLoc().name+'</b></p>';
+  h+='<h3>島の覚え書き</h3><div class="grid">';
+  knownHexes().filter(l=>l.visited).sort((a,b)=>hexDist(a.q,a.r,0,0)-hexDist(b.q,b.r,0,0)).forEach(l=>{
+    h+='<div class="cell" style="cursor:default"><u>'+(l.id===S.camp?'⛺':'・')+'</u><span class="nm">'+l.name+
+       '<br><span class="sub">'+attrLine(l)+'／'+richWord(l)+'</span></span></div>';
+  });
+  h+='</div><h3>手記</h3>';
   const d=S.diary.slice(-40);
   if(!d.length) h+='<p class="memo">まだ何も書いていない。</p>';
   d.forEach(e=>{ h+='<p class="diaryline"><b>'+(e.d?e.d+'日':'漂着')+'</b>'+e.t+'</p>' });
@@ -1836,7 +2210,8 @@ function openCodex(){
 }
 /* ───────── メニュー ───────── */
 function openMenu(){
-  const canR=S.built.raft>=1, canS=S.built.tower>=3, canRadio=has('radio'), canSet=settleScore()>=45;
+  const canR=S.built.raft>=1, canS=S.built.tower>=3, canRadio=stockOf('radio')>0, canSet=settleScore()>=45;
+  const canWalk=!!S.flags.mainland3;
   let h='<h2>手を止める<span>'+S.day+'日目　'+clockStr()+'</span></h2>';
   h+='<h3>決断</h3><div class="grid" style="grid-template-columns:1fr">';
   h+='<button class="cell" '+(canR?'data-c="0"':'disabled')+'><span class="nm">いかだで海へ出る<br><span class="sub">'+
@@ -1847,6 +2222,8 @@ function openMenu(){
      (canRadio?'雑音の向こうに、誰かがいるかもしれない':'無線機がない')+'</span></span></button>';
   h+='<button class="cell" '+(canSet?'data-c="3"':'disabled')+'><span class="nm">この島で暮らす<br><span class="sub">'+
      (canSet?'脱出を諦める。ここが、住処になる':'暮らしの支度がまだ足りない')+'</span></span></button>';
+  if(canWalk) h+='<button class="cell" data-c="6"><span class="nm">路をたどって歩いて出る<br>'+
+    '<span class="sub">舗装路が、島の外へ続いている</span></span></button>';
   h+='</div><h3>そのほか</h3><div class="grid">';
   h+='<button class="cell" data-p="codex"><u>📖</u><span class="nm">図鑑</span></button>';
   h+='<button class="cell" data-c="4"><u>'+(AU.on?'🔊':'🔇')+'</u><span class="nm">音 '+(AU.on?'入':'切')+'</span></button>';
@@ -1858,7 +2235,8 @@ function openMenu(){
     {t:'',ok:canRadio,f:()=>confirmEnd('radio')},
     {t:'',ok:canSet,f:()=>confirmEnd('settle')},
     {t:'',ok:1,f:()=>{AU.on=!AU.on; audioUpdate(); openMenu()}},
-    {t:'',ok:1,f:()=>{saveRun(); showTitle()}}
+    {t:'',ok:1,f:()=>{saveRun(); showTitle()}},
+    {t:'',ok:canWalk,f:()=>confirmEnd('walk')}
   ];
   openPanel(h);
 }
@@ -1869,7 +2247,9 @@ function drawHUD(){
   if(!S) return;
   $('uiDay').textContent=S.day+'日目';
   $('uiClock').textContent=clockStr();
-  $('uiWx').textContent=WX[S.weather].n+(S.zone?'　'+S.zone.name:'　'+areaName(S.x));
+  $('uiWx').textContent=WX[S.weather].n+'　'+here().name+(atCamp()?' ⛺':'');
+  const ld=load(), cp=capacity(), le=$('uiLoad');
+  le.textContent='荷 '+ld+'/'+cp; le.className='load'+(ld>=cp?' over':'');
   $('uiVit').innerHTML=
     '<b class="'+vitClass(S.hp,25,50)+'" title="からだ">❤</b>'+
     '<b class="'+vitClass(S.food,15,38)+'" title="腹">🍖</b>'+
@@ -1894,30 +2274,35 @@ function updatePrompt(){
   else e.classList.remove('on');
 }
 
+
 /* =========================================================================
    入力とループ
    ========================================================================= */
 const keys={};
 addEventListener('keydown',e=>{
   audioInit();
-  if(e.key==='Escape'){ uiOpen?closePanel():openMenu(); e.preventDefault(); return }
+  if(e.key==='Escape'){ uiOpen?closePanel(): S.view==='map'?closeMap():openMenu(); e.preventDefault(); return }
   if(uiOpen) return;
-  keys[e.key]=1;
   const k=e.key.toLowerCase();
+  if(S&&S.view==='map'){
+    if(k==='m'||e.key===' '){ closeMap(); e.preventDefault() }
+    return;
+  }
+  keys[e.key]=1;
   if(k==='e'||e.key===' '){ interact(); e.preventDefault() }
+  if(k==='m') openMap();
   if(k==='i') openPack();
   if(k==='c') openCraft();
   if(k==='j') openDiary();
   if(e.key.startsWith('Arrow')) e.preventDefault();
 });
 addEventListener('keyup',e=>keys[e.key]=0);
-/* 押しっぱなしで歩く。指がずれても離すまで続き、長押ししても選択や
-   コンテキストメニューが割り込まないようにする */
+
 function noSelect(el,hard){
   el.addEventListener('contextmenu',e=>e.preventDefault());
   el.addEventListener('selectstart',e=>e.preventDefault());
   el.addEventListener('dragstart',e=>e.preventDefault());
-  if(hard){                       // 自前でpointerdownを拾うボタンだけ、touchも殺す
+  if(hard){
     el.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
     el.addEventListener('touchmove', e=>e.preventDefault(),{passive:false});
   }
@@ -1929,11 +2314,7 @@ function bindHold(el){
     try{ el.setPointerCapture(e.pointerId) }catch(_){}
     e.preventDefault();
   });
-  const up=e=>{
-    if(pid===null) return;
-    try{ el.releasePointerCapture(pid) }catch(_){}
-    pid=null;
-  };
+  const up=()=>{ if(pid===null)return; try{ el.releasePointerCapture(pid) }catch(_){} pid=null };
   el.addEventListener('pointerup',up);
   el.addEventListener('pointercancel',up);
   el.addEventListener('lostpointercapture',up);
@@ -1942,41 +2323,48 @@ function bindHold(el){
 }
 const holdL=bindHold($('bL')), holdR=bindHold($('bR'));
 const bAct=$('bE');
-bAct.addEventListener('pointerdown',e=>{ e.preventDefault(); audioInit(); if(!uiOpen) interact() });
+bAct.addEventListener('pointerdown',e=>{ e.preventDefault(); audioInit(); if(!uiOpen&&S.view!=='map') interact() });
 noSelect(bAct,1);
-['bInv','bCraft','bDiary','bMenu'].forEach(id=>noSelect($(id)));
-document.getElementById('app').addEventListener('contextmenu',e=>{
-  if(e.target.closest('.panel')) return;      // パネル内はふつうに扱う
-  e.preventDefault();
-});
-$('bInv').onclick=()=>{audioInit(); openPack()};
+['bMap','bInv','bCraft','bDiary','bMenu'].forEach(id=>noSelect($(id)));
+$('bMap').onclick  =()=>{audioInit(); S.view==='map'?closeMap():openMap()};
+$('bInv').onclick  =()=>{audioInit(); openPack()};
 $('bCraft').onclick=()=>{audioInit(); openCraft()};
 $('bDiary').onclick=()=>{audioInit(); openDiary()};
-$('bMenu').onclick=()=>{audioInit(); openMenu()};
+$('bMenu').onclick =()=>{audioInit(); openMenu()};
+document.getElementById('app').addEventListener('contextmenu',e=>{
+  if(e.target.closest('.panel')) return;
+  e.preventDefault();
+});
+/* 地図はクリックで選ぶ */
+cv.addEventListener('pointerdown',e=>{
+  audioInit();
+  if(!S||S.over||uiOpen||S.view!=='map') return;
+  const r=cv.getBoundingClientRect();
+  mapClick(e.clientX-r.left, e.clientY-r.top);
+});
 
-let acc=0, lastT=performance.now();
+let hudT=0, lastT=performance.now();
 function step(){
   const now=performance.now(), dt=Math.min(50,now-lastT); lastT=now;
-  if(!S||S.over||uiOpen){ if(S) S.vx=0; return }
+  if(!S||S.over||uiOpen||S.view==='map'){ if(S) S.vx=0; return }
   const slow=(S.warm<25||S.food<12||S.water<12)?.62:1;
-  const spd=2.5*slow*(dt/16.7);
+  const heavy=load()>capacity()*.8?.78:1;
+  const spd=2.5*slow*heavy*(dt/16.7);
   let dx=0;
   if(keys.ArrowRight||keys.d||keys.D||holdR()) dx=spd;
   else if(keys.ArrowLeft||keys.a||keys.A||holdL()) dx=-spd;
   S.vx=dx;
   if(dx){
     S.face=dx>0?1:-1;
-    const lim=passLimit();
-    const nx=clamp(S.x+dx,6,Math.min(worldLen()-14,lim));
-    if(nx===lim && S.x<lim && dx>0) blocked(lim);
-    S.walked+=Math.abs(nx-S.x); acc+=Math.abs(nx-S.x); S.x=nx;
-    while(acc>=WALK_PER_H/60){ acc-=WALK_PER_H/60; advance(1); if(!S||S.over) return }
+    S.x=clamp(S.x+dx,6,worldLen()-14);
+    S.walked+=Math.abs(dx);
+    S.acc=(S.acc||0)+Math.abs(dx);
+    while(S.acc>=26){ S.acc-=26; advance(1); if(!S||S.over) return }   // 地点のなかは歩いても時間はゆるやか
   }
-  if(S.phantom===undefined||T%420===0) S.phantom=S.x+(chance(.5)?-1:1)*(80+Q()*160);
+  if(S.phantom===undefined||T%420===0) S.phantom=clamp(S.x+(chance(.5)?-1:1)*(80+Q()*160),20,worldLen()-20);
   updatePrompt();
   if(++hudT%12===0) drawHUD();
 }
-let hudT=0;
 setInterval(step,16);
 setInterval(()=>{ if(S&&!S.over) audioUpdate() },1500);
 
@@ -1987,7 +2375,7 @@ function saveRun(){
   if(!S||S.over) return;
   try{
     const o=Object.assign({},S);
-    o.world={nodes:S.world.nodes,gates:S.world.gates};
+    o.hex={}; for(const k in S.hex){ const c=Object.assign({},S.hex[k]); delete c._deco; o.hex[k]=c }
     localStorage.setItem(SAVE_KEY,JSON.stringify(o));
   }catch(e){}
 }
@@ -1996,10 +2384,9 @@ function loadRun(){
   try{
     const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
     const o=JSON.parse(raw);
-    const w=genIsland(o.seed);
-    w.nodes=o.world.nodes; w.gates=o.world.gates;
-    o.world=w; S=o; S.vx=0;
-    clearRun();                       // 再開したら中断データは消える
+    if(!o.hex||!o.hex['0,0']) return false;
+    S=o; S.vx=0; S.view='scene';
+    clearRun();
     return true;
   }catch(e){ return false }
 }
@@ -2009,13 +2396,14 @@ function loadRun(){
    ========================================================================= */
 function showTitle(){
   scrim.classList.remove('on'); uiOpen=false;
+  document.body.classList.remove('mapmode');
   const has_save=!!localStorage.getItem(SAVE_KEY);
   const got=Object.keys(ENDINGS).filter(k=>META.endings[k]).length;
   curtain.innerHTML=
     '<h1>漂流</h1><div class="sub">H Y O R Y U</div>'+
     '<div class="desc">気がつくと、名も知らぬ島の砂の上にいた。<br>'+
     '四十日後、嵐が来る。それまでに <b>海へ出る</b> か、<b>ここで暮らす</b> かを決めなければならない。<br>'+
-    '島は毎回ちがう。実の毒も、毎回ちがう。</div>'+
+    '<b>島の広さは毎回ちがう</b>。踏んだところしか地図にならないから、どこまで続くのかは歩いてみるまでわからない。</div>'+
     (has_save?'<button class="btn" data-t="resume">つ づ き か ら</button>':'')+
     '<button class="btn" data-t="new">は じ め る</button>'+
     '<button class="btn sm" data-t="codex">図鑑　結末 '+got+' / '+Object.keys(ENDINGS).length+'</button>'+
@@ -2026,40 +2414,49 @@ curtain.addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   audioInit();
   const t=b.dataset.t;
-  if(t==='new'){ startRun() }
+  if(t==='new') startRun();
   if(t==='resume'){ if(loadRun()){ curtain.classList.remove('on'); resize(); drawHUD(); drawLog() } else startRun() }
-  if(t==='codex'){ openCodex() }
-  if(t==='help'){ helpScreen() }
-  if(t==='again'){ startRun() }
-  if(t==='title'){ showTitle() }
+  if(t==='codex') openCodex();
+  if(t==='help') helpScreen();
+  if(t==='again') startRun();
+  if(t==='title') showTitle();
 });
 function helpScreen(){
   openPanel('<h2>遊びかた</h2>'+
-   '<p class="memo"><b>歩く</b>　← → キー／画面左下のボタン。島は横に一本、左端が波打ち際、右へ行くほど奥地。</p>'+
-   '<p class="memo"><b>調べる</b>　E キー／✋ボタン。光る印のものに近づくと出る。</p>'+
-   '<p class="memo"><b>時間</b>　歩いても、何かをしても進む。日が暮れると冷え、正気が削れる。灯りがあれば夜も動ける。</p>'+
-   '<p class="memo"><b>枝</b>　獣道・洞窟・涸れ沢などは<b>毎日ちがう場所が開き、中身は毎回生成される</b>。一度出ると閉じる。</p>'+
-   '<p class="memo"><b>ゲージはない</b>　いかだや小屋が建っていく風景が、そのまま進み具合。体の具合は上のアイコンで、心の具合は<b>画面の色</b>で分かる。</p>'+
-   '<p class="memo"><b>四十日</b>　嵐が来る前に決断を。決めなければ、海が決める。</p>'+
-   '<p class="memo"><b>死ねば終わり</b>　持ち越せるのは図鑑の知識だけ。</p>'+
+   '<p class="memo"><b>地図（地／M）</b>　島は六角の升でできていて、<b>踏んだところしか地図にならない</b>。'+
+   '升を選び、もう一度おすと発つ。隣に立てば、その先が陸か海かだけは見える。<b>海が出たら、その方角はそこで打ち止め</b>。'+
+   '島の広さも升の数も、最後までわからない ― 毎回ちがうからだ。</p>'+
+   '<p class="memo"><b>さがす（E／✋）</b>　地点のなかを歩き、光る印のところで探す。'+
+   '<b>何が出るかは毎回ちがい、空振りもある</b>。探すほどその場所は荒れて、出にくくなる（日が経てば少し戻る）。</p>'+
+   '<p class="memo"><b>荷</b>　持てる重さに限りがある。持ちきれないものは置いてくることになる。'+
+   '野営地の<b>置き場</b>に積めるが、嵐や獣に荒らされることがある。籠と背負子で増やせる。</p>'+
+   '<p class="memo"><b>野営地</b>　最初は漂着した浜。<b>どこへでも移せる</b>。'+
+   'いかだは<b>浜</b>のある地点、狼煙は<b>眺望</b>のある地点、井戸は<b>水場</b>でないと作れない。移すと建てたものは失う。</p>'+
+   '<p class="memo"><b>ゲージはない</b>　いかだや小屋が建っていく風景が、そのまま進み具合。'+
+   '体の具合は上のアイコン、心の具合は<b>画面の色</b>で分かる。</p>'+
+   '<p class="memo"><b>四十日</b>　嵐が来る前に決断を。決めなければ、海が決める。'+
+   '<b>死ねば終わり</b>。持ち越せるのは図鑑の知識だけ。</p>'+
+   '<p class="memo">…ときどき、<b>いくら歩いても海に出ない</b>ことがある。そのときは、歩き続けてみるといい。</p>'+
    '<button class="close" data-x="1">とじる</button>');
 }
 function startRun(){
   newRun();
   curtain.classList.remove('on'); scrim.classList.remove('on'); uiOpen=false;
+  document.body.classList.remove('mapmode');
   resize(); drawHUD(); drawLog(); audioInit(); audioUpdate();
   $('fade').classList.remove('on');
 }
 function curtainEnd(E,isDeath){
+  document.body.classList.remove('mapmode');
   $('fade').classList.add('on');
   setTimeout(()=>{
-    const kind=isDeath?'#8d8378':'#e2c98a';
+    const vis=knownHexes().filter(l=>l.visited).length;
     curtain.innerHTML=
-      '<div class="endkind" style="color:'+kind+'">'+E.k+'</div>'+
+      '<div class="endkind" style="color:'+(isDeath?'#8d8378':'#e2c98a')+'">'+E.k+'</div>'+
       '<div class="endtitle">'+E.n+'</div>'+
       '<div class="desc" style="margin-top:22px;white-space:pre-line">'+E.t+'</div>'+
       '<div class="desc" style="font-size:11.5px;color:#6f6a5e;letter-spacing:.1em">'+
-        S.day+'日目　／　歩いた距離 '+Math.round(S.walked/100)/10+'km　／　遺構 '+S.ruins+'/3'+
+        S.day+'日目　／　踏んだ升 '+vis+'　／　いちばん遠く '+S.reached+'升　／　遺構 '+S.ruins+'/3'+
         (S.helped?'　／　助けた人 '+S.helped:'')+'</div>'+
       '<button class="btn" data-t="again">も う 一 度 漂 着 す る</button>'+
       '<button class="btn sm" data-t="codex">図鑑</button>'+
