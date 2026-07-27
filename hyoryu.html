@@ -284,7 +284,8 @@ const ITEM={
   rod   :{n:'釣竿',   i:'🎣',w:2,t:1}, rope :{n:'綱',   i:'🪢',w:2,t:1}, torch:{n:'松明',i:'🔥',w:1},
   pot   :{n:'土器',   i:'🏺',w:2,t:1}, still:{n:'蒸留器',i:'⚗️',w:3,t:1}, lamp:{n:'角灯',i:'🏮',w:2,t:1},
   radio :{n:'無線機', i:'📡',w:3,t:1}, basket:{n:'編み籠',i:'🧺',w:1,t:1}, frame:{n:'背負子',i:'🎒',w:2,t:1},
-  knife :{n:'貝の刃', i:'🔪',w:1,t:1}
+  knife :{n:'貝の刃', i:'🔪',w:1,t:1}, coat:{n:'毛皮の外套',i:'🧥',w:3,t:1},
+  hook  :{n:'骨の釣針', i:'🪝',w:1,t:1}
 };
 /* 未鑑定：見た目と効き目の対応は毎周シャッフルされる */
 const UNK=[
@@ -314,6 +315,8 @@ const RECIPE=[
   {id:'torch', n:'松明',   c:{wood:1,fiber:1,resin:1},     sk:'craft', lv:0, t:30, d:'暗がりと夜を照らす'},
   {id:'spear', n:'銛',     c:{wood:2,stone:1,fiber:1},     sk:'craft', lv:1, t:60, d:'獣と魚に届く'},
   {id:'rod',   n:'釣竿',   c:{wood:1,fiber:2},             sk:'fish',  lv:0, t:40, d:'魚が釣れるようになる'},
+  {id:'hook',  n:'骨の釣針', c:{bone:1,fiber:1},            sk:'fish',  lv:1, t:35, d:'魚のかかりが良くなる'},
+  {id:'coat',  n:'毛皮の外套',c:{hide:2,fiber:3},           sk:'craft', lv:1, t:90, d:'夜の冷えを、ずいぶん防いでくれる'},
   {id:'frame', n:'背負子', c:{timber:2,rope:1,fiber:3},    sk:'craft', lv:2, t:80, d:'荷を10ぶん多く持てる'},
   {id:'machete',n:'山刀',  c:{metal:1,wood:1,fiber:1},     sk:'craft', lv:2, t:80, d:'藪を斬り開ける'},
   {id:'pot',   n:'土器',   c:{clay:3},                     sk:'craft', lv:1, t:80, d:'水を運び、煮炊きできる', fire:1},
@@ -493,7 +496,7 @@ function newRun(seed){
     built:{hut:0,raft:0,tower:0}, fire:0, lit:0,
     at:'0,0', camp:'0,0', x:260, face:1, view:'scene', sel:null, cq:0, cr:0,
     isleR:2.0+mulberry32(seed^0x9e37)()*2.9, mainDir:-1, ruinPlaced:0, waterNear:0, reached:0,
-    log:[], diary:[], drift:[], ruins:0, lore:[], met:0, helped:0, cruel:0, buried:0,
+    log:[], diary:[], ruins:0, lore:[], met:0, helped:0, cruel:0, buried:0,
     weather:'clear', stormed:0, moved:0, searches:0, walked:0,
     flags:{}, kills:0, nights:0, ended:null
   };
@@ -513,6 +516,7 @@ function newRun(seed){
   S.diary.push({d:0,t:'波が退いたあと、砂の上で目を覚ました。船の名も、流された日付も思い出せない。'});
   lg('波の音で目が覚めた。ここがどこなのかは、わからない。');
   lg('とりあえず、この浜を野営地にする。まず水を探さないと。');
+  lg('［地］で見取図をひらける。隣の升へ行けば、その先が陸か海かも見えてくる。');
 }
 
 /* ───────── 持ち物と重さ ───────── */
@@ -596,13 +600,9 @@ function dailyReset(first){
     l.rich=Math.min(100,l.rich+6);
     l.spots.forEach(sp=>{ if(sp.left<sp.max && chance(.55)) sp.left++ });
   });
-  // 漂着物は「浜のある地点」にだけ流れ着く
-  S.drift=[];
-  const c=campLoc();
-  if(hasAt(c,'shore')){
-    const n=(S.stormed?ri(Q,2,4):0)+ri(Q,1,3);
-    for(let i=0;i<n;i++) S.drift.push({x:Math.round(140+Q()*(c.len-260)), got:0, k:Math.floor(Q()*3)});
-  }
+  // 漂着物はどの浜にも流れ着く（その升に着いた日に生まれる）
+  knownHexes().forEach(l=>{ if(l.drift) l.driftDay=-1 });
+  ensureDrift(campLoc());
   if(S.weather==='rain'||S.weather==='storm'){
     S.water=clamp(S.water+16,0,100);
     if(stockOf('pot')&&(S.store.water||0)<3){ S.store.water=(S.store.water||0)+1; }
@@ -641,7 +641,7 @@ function advance(m,noWrap){
     if(fireHere()&&S.wet&&Q()<per*2) S.wet=0;
     if(S.wet&&!night&&(S.weather==='clear'||S.weather==='cloud')&&Q()<per*0.6) S.wet=0;   // 陽に乾く
     let cold=(night?4:-6)+WX[S.weather].c+(S.wet?4:0)
-            -(fireHere()?22:0)-shelter*4.5-(hasAt(L,'shelter')?5:0);
+            -(fireHere()?22:0)-shelter*4.5-(hasAt(L,'shelter')?5:0)-(has('coat')?6.5:0);
     S.warm=clamp(S.warm-cold*per*1.1,0,100);
     let san=0.12+(night&&!fireHere()?0.3:0)+(hasAt(L,'dark')&&!S.lit?1.0:0)
            +(S.weather==='storm'?0.35:0)+(S.food<15||S.water<15?0.5:0);
@@ -660,9 +660,28 @@ function advance(m,noWrap){
     if(S.san<=0){ ending('madness'); return }
     if(!noWrap && S.min>=24*60){ collapse(); return }
   }
-  warnVitals(); hintProgress();
+  warnVitals(); hintProgress(); firstNightHint();
 }
 const fireHere=()=>atCamp()&&S.fire>0;
+/* その升のその日の漂着物 */
+function ensureDrift(L){
+  if(!L||L.sea||!hasAt(L,'shore')) return;
+  if(L.driftDay===S.day) return;
+  L.driftDay=S.day; L.drift=[];
+  const home=L.key===S.camp;
+  const n=(S.stormed?ri(Q,1,3):0)+ri(Q,home?1:0,home?3:2);
+  for(let i=0;i<n;i++) L.drift.push({x:Math.round(140+Q()*(L.len-260)), got:0, k:Math.floor(Q()*3)});
+}
+/* はじめの数日は、島のほうから少しだけ教えてくれる */
+function firstNightHint(){
+  const f=S.flags, h=hourOf();
+  if(S.day<=3&&h>=17.5&&h<18&&!f.n1&&S.fire<=0){
+    f.n1=1; lg('日が落ちる。火がないと、夜は長い。流木を集めて、焚き火をおこしておきたい。','bad');
+  }
+  if(S.day===2&&h>=7&&h<7.5&&!f.n2){
+    f.n2=1; lg('喉が渇く前に、水場を見つけておきたい。見取図（地）で隣の升へ。','bad');
+  }
+}
 function warnVitals(){
   const f=S.flags, w=(k,v,lo,hi,t)=>{ if(v<lo&&!f[k]){f[k]=1;lg(t,'bad')} else if(v>hi) f[k]=0 };
   w('w1',S.water,32,55,'喉が張りついている。水を探さないと。');
@@ -723,11 +742,16 @@ addEventListener('resize',resize);
 const seaSide=()=>hasAt(here(),'shore');
 const darkHere=()=>hasAt(here(),'dark');
 const SEA=150;
+const brinkX=()=>{ const L=here(); return (L.kind==='cliff'||L.kind==='cape') ? L.len*.74 : Infinity };
 function groundY(x){
   const L=here(), y=VH*(darkHere()?0.78:GY);
   let v=y+Math.sin(x*0.005+L.sd)*4+Math.sin(x*0.013)*2.5;
   if(seaSide()&&x<SEA) v+=(SEA-x)*0.16;
-  if(L.kind==='cliff'||L.kind==='cape') v-=Math.min(70,Math.max(0,(x-L.len*.45))*0.09);
+  if(L.kind==='cliff'||L.kind==='cape'){
+    v-=Math.min(64,Math.max(0,(x-L.len*.30))*0.10);
+    const b=brinkX();
+    if(x>b) v=Math.min(VH*1.15, v+(x-b)*2.6);      // 縁の先は、はるか下
+  }
   return v;
 }
 const worldLen=()=>here().len;
@@ -1113,6 +1137,254 @@ function ceiling(c,sk){
     c.beginPath(); c.moveTo(sx-5,top); c.lineTo(sx,top+13+((i*37)%17)); c.lineTo(sx+5,top); c.fill();
   }
 }
+/* ───────── 升ごとの見どころ ─────────
+   同じ「地面と木」ではなく、その場所にしかない景色を一枚ずつ描く */
+function featureBack(c,sk){          // 地面より奥（空の手前）
+  const L=here(), d=sk.dark, sd=L.sd;
+  switch(L.kind){
+    case 'fall': {                    // 滝 ― 岩壁を裂いて落ちる水
+      const fx=L.len*.56-cam, top=VH*.10, base=groundY(L.len*.56);
+      if(fx>-160&&fx<VW+160){
+        c.fillStyle=mixc('#6b6459','#1b1d26',d);           // 岩壁
+        c.beginPath(); c.moveTo(fx-96,base+12); c.lineTo(fx-74,top);
+        c.lineTo(fx+78,top); c.lineTo(fx+102,base+12); c.closePath(); c.fill();
+        c.fillStyle=mixc('#585349','#15171f',d);           // 層（壁の傾きに沿わせる）
+        for(let i=0;i<6;i++){
+          const t2=(i+.5)/6, y=top+18+i*(base-top-24)/6;
+          const lx=(-74)+(-96+74)*t2, rx2=78+(102-78)*t2;
+          c.fillRect(fx+lx+3+((i*13)%8), y, (rx2-lx)-8-((i*17)%14), 3);
+        }
+        c.fillStyle=mixc('#463f38','#0f1118',d);           // 水の抉った溝
+        c.beginPath(); c.moveTo(fx-24,top); c.lineTo(fx+24,top);
+        c.lineTo(fx+30,base); c.lineTo(fx-30,base); c.closePath(); c.fill();
+        const g=c.createLinearGradient(0,top,0,base);      // 水の帯
+        g.addColorStop(0,`rgba(232,244,250,${.80-d*.5})`);
+        g.addColorStop(.55,`rgba(206,230,242,${.68-d*.44})`);
+        g.addColorStop(1,`rgba(255,255,255,${.42-d*.26})`);
+        c.fillStyle=g;
+        c.beginPath(); c.moveTo(fx-19,top); c.lineTo(fx+19,top);
+        c.lineTo(fx+25,base); c.lineTo(fx-25,base); c.closePath(); c.fill();
+        c.strokeStyle=`rgba(255,255,255,${.34-d*.22})`; c.lineWidth=1.1;  // 筋
+        for(let i=0;i<11;i++){
+          const ph=(i*89+T*7)%(base-top+60)-30, x0=fx-17+((i*31)%34);
+          c.beginPath(); c.moveTo(x0,top+Math.max(0,ph));
+          c.lineTo(x0+1.5,Math.min(base,top+ph+34)); c.stroke();
+        }
+        c.fillStyle=mixc('#3f7f8c','#0f2230',d);           // 滝壺
+        c.beginPath(); c.ellipse(fx,base+3,52,10,0,0,7); c.fill();
+        for(let i=0;i<30;i++){                             // 飛沫
+          const a=(i*1.7+T*.05)%6.283, rr=8+((i*13)%40)+Math.sin(T*.04+i)*6;
+          c.fillStyle=`rgba(255,255,255,${(.34-d*.24)*(1-rr/52)})`;
+          c.beginPath(); c.arc(fx+Math.cos(a)*rr, base-4-Math.abs(Math.sin(a))*rr*.55, 1.5, 0, 7); c.fill();
+        }
+        const mg=c.createRadialGradient(fx,base-6,4,fx,base-6,74);   // 靄
+        mg.addColorStop(0,`rgba(226,240,246,${.26-d*.18})`); mg.addColorStop(1,'rgba(226,240,246,0)');
+        c.fillStyle=mg; c.beginPath(); c.arc(fx,base-6,74,0,7); c.fill();
+      }
+      break;
+    }
+    case 'cliff': case 'cape': {      // 縁の向こうは、はるか下の海
+      const ex=brinkX()-cam, hz=VH*GY-10;
+      if(ex<VW+60){
+        const g=c.createLinearGradient(0,hz,0,VH);
+        g.addColorStop(0,sk.sea[0]); g.addColorStop(.45,sk.sea[1]); g.addColorStop(1,sk.sea[2]);
+        c.fillStyle=g; c.fillRect(Math.max(0,ex-4),hz,VW-ex+30,VH-hz);
+        c.fillStyle=`rgba(255,255,255,${.14-d*.09})`;                 // うねり
+        for(let i=0;i<40;i++){
+          const x=Math.max(0,ex)+((i*47+T*.6)%Math.max(50,VW-ex+30)), y=hz+14+((i*29)%(VH-hz-16));
+          c.fillRect(x,y,6+((i*7)%12),1);
+        }
+        c.fillStyle=mixc('#6d6456','#1a1c26',d);                      // 沖の岩礁
+        for(let i=0;i<3;i++){ const x=ex+58+i*74, y=hz+52+i*22;
+          if(x>VW+30) break;
+          c.beginPath(); c.moveTo(x-13,y); c.lineTo(x,y-17-i*3); c.lineTo(x+13,y); c.fill();
+          c.fillStyle=`rgba(255,255,255,${.3-d*.2})`; c.fillRect(x-15,y-1,30,1.6);
+          c.fillStyle=mixc('#6d6456','#1a1c26',d);
+        }
+      }
+      break;
+    }
+    case 'wreck': {                   // 座礁船 ― 腹を見せた船体
+      const wx=L.len*.5-cam, wy=groundY(L.len*.5);
+      c.save(); c.translate(wx,wy); c.rotate(-.13);
+      c.fillStyle=mixc('#5c4b38','#181a22',d);
+      c.beginPath();
+      c.moveTo(-108,-4); c.quadraticCurveTo(-86,-58,-8,-62);
+      c.lineTo(86,-52); c.quadraticCurveTo(108,-30,99,-2);
+      c.quadraticCurveTo(14,19,-108,-4); c.fill();
+      c.fillStyle=mixc('#4a3c2c','#101219',d);
+      for(let i=0;i<8;i++) c.fillRect(-98+i*25,-52+((i*13)%14),4,48);
+      c.fillStyle=mixc('#2a2018','#0a0c12',d);
+      c.beginPath(); c.ellipse(-28,-34,19,12,-.15,0,7); c.fill();   // 破れ
+      c.fillStyle=mixc('#7d6a4e','#20222c',d);
+      c.fillRect(22,-104,5,50);                                      // 折れたマスト
+      c.restore();
+      break;
+    }
+    case 'ruins': {                   // 石柱
+      c.fillStyle=mixc('#8d8676','#26282f',d);
+      for(let i=0;i<5;i++){
+        const x=L.len*(.24+i*.12)-cam, h=52+((i*29)%40), lean=(i%2?1:-1)*(i*.6);
+        if(x<-40||x>VW+40) continue;
+        const y=groundY(L.len*(.24+i*.12));
+        c.save(); c.translate(x,y); c.rotate(lean*.012);
+        c.fillRect(-9,-h,18,h);
+        c.fillStyle=mixc('#9b9384','#2c2e36',d); c.fillRect(-12,-h-7,24,8);
+        c.restore(); c.fillStyle=mixc('#8d8676','#26282f',d);
+      }
+      break;
+    }
+    case 'ruinhut': {                 // 廃屋の骨組み
+      const hx=L.len*.5-cam, hy=groundY(L.len*.5);
+      c.strokeStyle=mixc('#4e4234','#141620',d); c.lineWidth=4; c.lineCap='round';
+      c.beginPath();
+      c.moveTo(hx-46,hy); c.lineTo(hx-38,hy-52); c.lineTo(hx+8,hy-64); c.lineTo(hx+44,hy-44); c.lineTo(hx+50,hy);
+      c.moveTo(hx-38,hy-52); c.lineTo(hx+44,hy-44);
+      c.moveTo(hx-10,hy); c.lineTo(hx-4,hy-58);
+      c.stroke();
+      c.fillStyle=mixc('#6a5a42','#1a1c24',d);
+      c.beginPath(); c.moveTo(hx-40,hy-50); c.lineTo(hx+6,hy-62); c.lineTo(hx-2,hy-40); c.closePath(); c.fill();
+      break;
+    }
+    case 'marsh': {                   // 沼 ― 靄と水たまり
+      const g=c.createLinearGradient(0,VH*GY-40,0,VH);
+      g.addColorStop(0,`rgba(190,200,190,${.16-d*.1})`); g.addColorStop(1,'rgba(190,200,190,0)');
+      c.fillStyle=g; c.fillRect(0,VH*GY-40,VW,VH);
+      break;
+    }
+  }
+}
+function featureFront(c,sk){         // 地面より手前
+  const L=here(), d=sk.dark, sd=L.sd;
+  switch(L.kind){
+    case 'cave': {                    // 鍾乳石と、落ちる雫
+      for(let i=0;i<14;i++){
+        const wx=sd*70+i*103, x=wx-cam; if(x<-30||x>VW+30) continue;
+        const y=groundY(wx), h=12+((i*23)%26);
+        c.fillStyle=mixc('#4d4756','#0e1016',d*.4+.5);
+        c.beginPath(); c.moveTo(x-6,y); c.lineTo(x,y-h); c.lineTo(x+6,y); c.fill();
+      }
+      for(let i=0;i<5;i++){           // 雫
+        const wx=sd*40+i*211, x=wx-cam; if(x<-20||x>VW+20) continue;
+        const top=26+Math.sin(wx*.009+sd)*13, y=top+((T*2.4+i*97)%(groundY(wx)-top));
+        c.fillStyle='rgba(190,215,235,.5)';
+        c.beginPath(); c.ellipse(x,y,1.2,3,0,0,7); c.fill();
+      }
+      break;
+    }
+    case 'fall': case 'spring': {     // 流れ
+      const bx=L.kind==='fall'?L.len*.62:L.len*.46;
+      for(let i=0;i<22;i++){
+        const x=bx-cam-60+((i*37+T*1.6)%160), y=groundY(bx)+3+((i*13)%7);
+        c.fillStyle=`rgba(180,220,235,${.3-d*.2})`; c.fillRect(x,y,9,1.1);
+      }
+      break;
+    }
+    case 'marsh': {                   // 葦
+      for(let i=0;i<40;i++){
+        const wx=sd*30+i*47, x=wx-cam; if(x<-14||x>VW+14) continue;
+        const y=groundY(wx), h=16+((i*29)%22), sw=Math.sin(T*.004+i)*3;
+        c.strokeStyle=mixc('#6f7a4a','#181d18',d); c.lineWidth=1.4;
+        c.beginPath(); c.moveTo(x,y+4); c.quadraticCurveTo(x+sw*.4,y-h*.6,x+sw,y-h); c.stroke();
+        c.fillStyle=mixc('#8a7a48','#20221c',d);
+        c.beginPath(); c.ellipse(x+sw,y-h-2,1.8,4,0,0,7); c.fill();
+      }
+      break;
+    }
+    case 'tidepool': case 'rocky': {  // 潮だまり
+      for(let i=0;i<6;i++){
+        const wx=sd*50+i*167, x=wx-cam; if(x<-50||x>VW+50) continue;
+        const y=groundY(wx)+8+((i*11)%10), w2=22+((i*19)%26);
+        c.fillStyle=mixc('#3f7f8c','#0f2230',d);
+        c.beginPath(); c.ellipse(x,y,w2,w2*.32,0,0,7); c.fill();
+        c.fillStyle=`rgba(255,255,255,${(.22-d*.14)+.08*Math.sin(T*.02+i)})`;
+        c.fillRect(x-w2*.6,y-1.5,w2*1.2,1.1);
+      }
+      break;
+    }
+    case 'trail': {                   // 獣の足跡と骨
+      for(let i=0;i<26;i++){
+        const wx=sd*20+i*61, x=wx-cam; if(x<-10||x>VW+10) continue;
+        const y=groundY(wx)+9+((i*7)%12);
+        c.fillStyle=`rgba(${d>.5?'10,12,18':'52,42,30'},${.5-d*.2})`;
+        c.beginPath(); c.ellipse(x,y,3.2,2.2,.3,0,7); c.fill();
+        c.beginPath(); c.ellipse(x+2,y-3.4,1.5,1.1,.3,0,7); c.fill();
+      }
+      break;
+    }
+    case 'dune': {                    // 風紋
+      for(let i=0;i<30;i++){
+        const wx=sd*25+i*53, x=wx-cam; if(x<-40||x>VW+40) continue;
+        const y=groundY(wx)+12+((i*17)%26);
+        c.strokeStyle=`rgba(255,246,222,${(.16-d*.1)})`; c.lineWidth=1;
+        c.beginPath(); c.moveTo(x-18,y); c.quadraticCurveTo(x,y-3,x+18,y); c.stroke();
+      }
+      break;
+    }
+  }
+}
+/* 生きもの ― その場所にいるものが、ときどき通る */
+function critters(c,sk){
+  const L=here(), d=sk.dark, night=isNight();
+  const K2=L.kind;
+  if(!S.fauna) S.fauna=[];
+  if(S.fauna.length<3 && chance(.006)){
+    const kinds={
+      cliff:'bird', cape:'bird', shore:'crab', rocky:'crab', tidepool:'crab', dune:'crab',
+      jungle:night?'moth':'bird', grove:night?'moth':'bird', thicket:'moth', bamboo:'moth',
+      marsh:'moth', fall:'bird', spring:'moth', trail:'boar', cave:'bat', ruins:'bird',
+      wreck:'crab', ruinhut:'moth'
+    }[K2]||'moth';
+    S.fauna.push({k:kinds, x:cam+(chance(.5)?-30:VW+30), y:0, t:0,
+      dir:0, sp:(chance(.5)?-1:1)*(0.5+Q()*1.2), ph:Q()*9});
+  }
+  S.fauna=S.fauna.filter(f=>{
+    f.t++; f.x+=f.sp*(f.k==='bird'?1.5:f.k==='bat'?2:.7);
+    const x=f.x-cam;
+    if(x<-90||x>VW+90||f.t>1400) return false;
+    const gy=groundY(f.x);
+    if(f.k==='bird'){
+      const y=VH*.3+Math.sin(f.t*.02+f.ph)*22;
+      c.fillStyle=mixc('#2a2a2e','#0a0c12',d);
+      const w2=Math.sin(f.t*.25+f.ph)*5;
+      c.beginPath(); c.moveTo(x-6,y+w2*.4); c.quadraticCurveTo(x,y-3,x+6,y+w2*.4);
+      c.quadraticCurveTo(x,y+1.5,x-6,y+w2*.4); c.fill();
+    }else if(f.k==='bat'){
+      const y=44+Math.sin(f.t*.06+f.ph)*20;
+      c.fillStyle='rgba(12,10,16,.85)';
+      const w2=Math.abs(Math.sin(f.t*.4+f.ph))*5;
+      c.beginPath(); c.moveTo(x-5,y); c.lineTo(x,y-w2); c.lineTo(x+5,y); c.lineTo(x,y+2); c.fill();
+    }else if(f.k==='crab'){
+      const y=gy-2;
+      c.fillStyle=mixc('#a4543c','#2a1c1e',d);
+      c.beginPath(); c.ellipse(x,y,3.4,2.4,0,0,7); c.fill();
+      c.strokeStyle=mixc('#a4543c','#2a1c1e',d); c.lineWidth=.9;
+      for(let i=-1;i<2;i+=2){ c.beginPath(); c.moveTo(x+i*3,y);
+        c.lineTo(x+i*5.5,y+2+Math.sin(f.t*.3)*.8); c.stroke() }
+    }else if(f.k==='boar'){
+      const y=gy;
+      c.fillStyle=mixc('#3b2f24','#0d0f16',d);
+      c.beginPath(); c.ellipse(x,y-8,11,6.5,0,0,7); c.fill();
+      c.beginPath(); c.ellipse(x+f.sp*9,y-11,5,4,0,0,7); c.fill();
+      for(let i=0;i<4;i++) c.fillRect(x-7+i*4.5,y-4,2,5);
+    }else{                          // 蛾・虫
+      const y=gy-30-Math.sin(f.t*.05+f.ph)*18;
+      c.fillStyle=`rgba(${night?'240,236,200':'220,215,190'},${night?.7:.45})`;
+      c.beginPath(); c.arc(x+Math.sin(f.t*.12)*4,y,1.4,0,7); c.fill();
+    }
+    return true;
+  });
+  // 夜の蛍・星屑（陸の升だけ）
+  if(night && !hasAt(L,'dark') && !hasAt(L,'shore')){
+    for(let i=0;i<10;i++){
+      const wx=L.sd*80+i*137, x=wx-cam; if(x<-10||x>VW+10) continue;
+      const a=.25+.25*Math.sin(T*.03+i*2.1);
+      c.fillStyle=`rgba(190,255,180,${a})`;
+      c.beginPath(); c.arc(x+Math.sin(T*.008+i)*9, groundY(wx)-24-((i*23)%40)+Math.cos(T*.01+i)*6, 1.3, 0, 7); c.fill();
+    }
+  }
+}
+
 /* 地点の草木（地点ごとに固定の見え方） */
 function decoOf(L){
   if(L._deco) return L._deco;
@@ -1151,6 +1423,53 @@ const HEXCOL={
   fall:'#6d8a86', spring:'#7e9184', cave:'#4e4a56', cliff:'#7d7364', trail:'#6f5f46',
   wreck:'#7d7260', ruinhut:'#847a6a', ruins:'#8d8a7a'
 };
+/* 升のなかに、その地形の目印を手で描いたように置く */
+function hexGlyph(c,x,y,R,kind){
+  const s2=R/30, ink='rgba(22,26,20,.55)', ink2='rgba(22,26,20,.34)';
+  c.save(); c.translate(x,y); c.scale(s2,s2);
+  c.strokeStyle=ink; c.fillStyle=ink; c.lineWidth=1.3; c.lineCap='round';
+  const tree=(tx,ty,h)=>{ c.beginPath(); c.moveTo(tx,ty); c.lineTo(tx,ty-h); c.stroke();
+    c.beginPath(); c.arc(tx,ty-h-2.5,3.4,0,7); c.fill() };
+  const palm=(tx,ty,h)=>{ c.beginPath(); c.moveTo(tx,ty); c.quadraticCurveTo(tx+1,ty-h*.6,tx+2.5,ty-h); c.stroke();
+    for(let i=0;i<4;i++){ const a=Math.PI+i*.9; c.beginPath(); c.moveTo(tx+2.5,ty-h);
+      c.quadraticCurveTo(tx+2.5+Math.cos(a)*5,ty-h+Math.sin(a)*3,tx+2.5+Math.cos(a)*8,ty-h+Math.sin(a)*5+2); c.stroke() } };
+  const wave=(wy)=>{ c.beginPath();
+    for(let i=-2;i<=2;i++){ c.moveTo(i*7-3,wy); c.quadraticCurveTo(i*7,wy-2,i*7+3,wy) } c.stroke() };
+  const rock=(rx,ry,r2)=>{ c.beginPath(); c.moveTo(rx-r2,ry); c.lineTo(rx-r2*.4,ry-r2); c.lineTo(rx+r2*.5,ry-r2*.8);
+    c.lineTo(rx+r2,ry); c.closePath(); c.fill() };
+  switch(kind){
+    case 'shore': case 'dune':
+      wave(6); c.fillStyle=ink2;
+      for(let i=0;i<8;i++) c.fillRect(-14+i*4,-2+((i*5)%6),1.6,1.6); break;
+    case 'rocky': rock(-7,5,5); rock(5,6,6); wave(9); break;
+    case 'tidepool': c.beginPath(); c.ellipse(-4,3,8,3.4,0,0,7); c.stroke();
+      c.beginPath(); c.ellipse(7,7,5,2.4,0,0,7); c.stroke(); wave(-4); break;
+    case 'cape': rock(0,6,7); wave(9); wave(-6); break;
+    case 'jungle': tree(-9,8,11); tree(2,9,14); tree(11,7,9); break;
+    case 'grove': palm(-8,8,12); palm(6,9,14); break;
+    case 'thicket': for(let i=0;i<5;i++){ c.beginPath(); c.arc(-10+i*5,6-((i*3)%4),3,Math.PI,0); c.stroke() } break;
+    case 'bamboo': for(let i=0;i<5;i++){ c.beginPath(); c.moveTo(-9+i*4.5,8); c.lineTo(-8+i*4.5,-6-((i*5)%5)); c.stroke() } break;
+    case 'marsh': for(let i=0;i<5;i++){ const rx=-10+i*5; c.beginPath(); c.moveTo(rx,8); c.lineTo(rx+1,-2); c.stroke();
+        c.beginPath(); c.ellipse(rx+1,-4,1.2,2.6,0,0,7); c.fill() } wave(9); break;
+    case 'fall': c.beginPath(); c.moveTo(-6,-9); c.lineTo(-4,6); c.moveTo(0,-9); c.lineTo(1,6);
+      c.moveTo(6,-9); c.lineTo(5,6); c.stroke(); wave(9); break;
+    case 'spring': c.beginPath(); c.arc(0,2,5,0,7); c.stroke(); wave(9);
+      c.beginPath(); c.moveTo(0,-8); c.quadraticCurveTo(2,-4,0,-2); c.stroke(); break;
+    case 'cave': c.beginPath(); c.moveTo(-9,8); c.lineTo(-7,-2); c.quadraticCurveTo(0,-9,7,-2); c.lineTo(9,8);
+      c.closePath(); c.fillStyle='rgba(16,18,24,.7)'; c.fill(); break;
+    case 'cliff': c.beginPath(); c.moveTo(-12,8); c.lineTo(-4,-8); c.lineTo(2,-1); c.lineTo(9,-10); c.lineTo(13,8);
+      c.stroke(); break;
+    case 'trail': for(let i=0;i<4;i++){ const px=-9+i*6, py=6-i*4;
+        c.beginPath(); c.ellipse(px,py,2,1.4,.3,0,7); c.fill();
+        c.beginPath(); c.ellipse(px+1.4,py-2.4,1,.8,.3,0,7); c.fill() } break;
+    case 'wreck': c.beginPath(); c.moveTo(-13,3); c.quadraticCurveTo(0,10,13,2);
+      c.quadraticCurveTo(2,-4,-13,3); c.stroke(); c.beginPath(); c.moveTo(2,-1); c.lineTo(4,-11); c.stroke(); break;
+    case 'ruinhut': c.beginPath(); c.moveTo(-10,7); c.lineTo(-8,-3); c.lineTo(1,-8); c.lineTo(9,-2); c.lineTo(10,7);
+      c.stroke(); break;
+    case 'ruins': for(let i=0;i<3;i++){ c.fillRect(-9+i*8,-9+((i*3)%4),3,17) } break;
+  }
+  c.restore();
+}
 function drawMap(c){
   const w=CW,h=CH;
   const g=c.createLinearGradient(0,0,0,h);
@@ -1185,9 +1504,8 @@ function drawMap(c){
     mapHit.push({key:l.key,x:p.x,y:p.y,r:R*.95});
     poly(p.x,p.y,R*.94);
     if(l.visited){
-      c.fillStyle=HEXCOL[l.kind]||'#6a6a5a'; c.fill();
-      c.globalAlpha=.22; c.fillStyle='#000'; c.fill(); c.globalAlpha=1;
-      c.fillStyle=HEXCOL[l.kind]||'#6a6a5a'; c.globalAlpha=.85; c.fill(); c.globalAlpha=1;
+      c.fillStyle=HEXCOL[l.kind]||'#6a6a5a'; c.globalAlpha=.86; c.fill(); c.globalAlpha=1;
+      hexGlyph(c,p.x,p.y-R*.06,R,l.kind);
     }else{
       c.fillStyle='#232a33'; c.fill();
       c.setLineDash([4,3]); c.strokeStyle='rgba(226,201,138,.45)'; c.lineWidth=1.2; c.stroke(); c.setLineDash([]);
@@ -1198,10 +1516,11 @@ function drawMap(c){
     poly(p.x,p.y,R*.94); c.stroke();
     if(sel){ c.strokeStyle='rgba(255,225,150,.95)'; c.lineWidth=2.2; poly(p.x,p.y,R*.86); c.stroke() }
     if(l.visited){
-      c.fillStyle='rgba(240,235,222,.95)'; c.font='500 '+(R<25?9:10)+'px "Hiragino Sans",sans-serif';
-      c.textAlign='center';
+      c.font='500 '+(R<25?9:10)+'px "Hiragino Sans",sans-serif'; c.textAlign='center';
       const nm=l.name.replace(/^(東|西|南|北|北東|北西|南東|南西)の/,'');
-      c.fillText(nm,p.x,p.y+R*.52);
+      const tw=c.measureText(nm).width;
+      c.fillStyle='rgba(10,14,18,.5)'; c.fillRect(p.x-tw/2-3,p.y+R*.34,tw+6,12);
+      c.fillStyle='rgba(244,240,228,.98)'; c.fillText(nm,p.x,p.y+R*.52);
       if(l.rich<35){ c.fillStyle='rgba(210,140,120,.95)'; c.fillText('荒',p.x+R*.55,p.y-R*.45) }
       const at=KIND[l.kind].attr;
       if(at.length){ c.fillStyle='rgba(255,255,255,.75)'; c.font='9px sans-serif';
@@ -1267,13 +1586,17 @@ function draw(){
 
   if(darkHere()){
     const g=c.createLinearGradient(0,0,0,VH);
-    g.addColorStop(0,'#07080d'); g.addColorStop(1,'#0d0f16');
+    g.addColorStop(0,'#0a0c13'); g.addColorStop(1,'#12141c');
     c.fillStyle=g; c.fillRect(0,0,VW,VH);
+    const eg=c.createRadialGradient(-40,VH*.55,10,-40,VH*.55,VW*.7);  // 入口からの残光
+    eg.addColorStop(0,'rgba(120,150,190,.16)'); eg.addColorStop(1,'rgba(120,150,190,0)');
+    c.fillStyle=eg; c.fillRect(0,0,VW,VH);
   }else{
     sky(c,sk);
     if(seaSide()) sea(c,sk);
     treeline(c,sk);
   }
+  featureBack(c,sk);
   ground(c,sk);
   if(seaSide()) shore(c,sk);
   ceiling(c,sk);
@@ -1287,6 +1610,7 @@ function draw(){
       c.beginPath(); c.ellipse(sx,y-o.r*.35,o.r,o.r*.7,0,0,7); c.fill() }
   });
 
+  featureFront(c,sk);
   L.spots.forEach(sp=>{
     const sx=sp.x-cam; if(sx<-60||sx>VW+60) return;
     spotArt(c,sp,sx,groundY(sp.x),sk);
@@ -1302,8 +1626,8 @@ function draw(){
       marker(c,wx,wy,'rgba(150,220,255,A)');
     }
   }
+  if(L.drift) L.drift.forEach(d=>{ const sx=d.x-cam; if(sx>-60&&sx<VW+60) driftArt(c,d,sx,groundY(d.x),sk) });
   if(atCamp()){
-    S.drift.forEach(d=>{ const sx=d.x-cam; if(sx>-60&&sx<VW+60) driftArt(c,d,sx,groundY(d.x),sk) });
     const cxp=campSpots();
     hutArt(c,cxp.hut-cam,groundY(cxp.hut),S.built.hut,sk);
     fireArt(c,cxp.fire-cam,groundY(cxp.fire),S.fire>0,sk);
@@ -1312,6 +1636,7 @@ function draw(){
     storeArt(c,cxp.store-cam,groundY(cxp.store),sk);
   }
   playerArt(c,S.x-cam,groundY(S.x),sk);
+  critters(c,sk);
 
   deco.g.forEach(o=>{
     const sx=o.x-cam*1.3; if(sx<-14||sx>VW+14) return;
@@ -1333,7 +1658,7 @@ function draw(){
       glow(c,fx,groundY(campSpots().fire)-12,150+Math.sin(T*.02)*6,`rgba(255,168,80,${.4*dk})`);
       c.globalCompositeOperation='source-over';
     }
-    const r=S.lit>0?VH*.62:VH*(darkHere()?.20:.34);
+    const r=S.lit>0?VH*.66:VH*(darkHere()?.30:.34);
     const v=c.createRadialGradient(S.x-cam,groundY(S.x)-18,r*.35,S.x-cam,groundY(S.x)-18,r*2.5);
     v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,`rgba(2,3,7,${.55+.42*dk})`);
     c.fillStyle=v; c.fillRect(0,0,VW,VH);
@@ -1429,7 +1754,7 @@ function travelTo(key){
   const L=S.hex[key], first=!L.visited;
   L.visited=1;
   const [q,rr]=unK(key);
-  S.at=key; S.x=Math.round(L.len*.2); S.face=1; S.moved++;
+  S.at=key; S.x=Math.round(L.len*.2); S.face=1; S.moved++; S.fauna=[]; ensureDrift(L);
   revealAround(q,rr);
   const d=hexDist(q,rr,0,0);
   S.reached=Math.max(S.reached,d);
@@ -1566,6 +1891,7 @@ function searchSpot(sp){
   if(hasAt(L,'dark')&&!S.lit) useLight();
 
   const t=clamp(58+ri(Q,-14,20)-sk('gather')*3,25,90);
+  hit('search');
   advance(t); if(S.over) return;
   sp.left--; L.rich=Math.max(0,L.rich-6); S.searches++;
   gain('gather',1);
@@ -1584,9 +1910,10 @@ function searchSpot(sp){
   }
   // 何が出るか
   let key=wpick(Q,K.res);
-  if(key==='fish'&&!has('rod')&&!has('spear')){
+  if(key==='fish'&&!has('rod')&&!has('spear')&&!has('hook')){
     if(chance(.6)){ lg('魚影は見えたが、素手では届かない。'); return }
   }
+  if(key==='fish'&&has('hook')&&chance(.3)&&addItem('fish',1)) lg('針にもう一尾かかっていた。');
   if(key==='meat'&&!has('spear')){
     if(chance(.75)){ lg('獣の気配。追ったが、追いつけるはずもなかった。'); gain('hunt',1); return }
   }
@@ -1601,6 +1928,7 @@ function searchSpot(sp){
   if(got>0){
     lg(pick(Q,['見つけた。','手に入れた。','拾いあげた。'])+itemName(id)+(got>1?'×'+got:'')+'。');
     if(key==='fish') gain('fish',2); if(key==='meat') gain('hunt',2);
+    if(key==='meat'&&chance(.45+sk('hunt')*.08)&&addItem('hide',1)) lg('毛皮も剥いだ。');
   }
   hit('get');
   if(chance(.07)){
@@ -1658,8 +1986,8 @@ function nearProps(){
   const a=[], L=here();
   L.spots.forEach(sp=>a.push({type:'spot',x:sp.x,o:sp}));
   if(hasAt(L,'water')) a.push({type:'water',x:Math.round(L.len*.46),o:{}});
+  if(L.drift) L.drift.forEach(d=>{ if(!d.got) a.push({type:'drift',x:d.x,o:d}) });
   if(atCamp()){
-    S.drift.forEach(d=>{ if(!d.got) a.push({type:'drift',x:d.x,o:d}) });
     const c=campSpots();
     a.push({type:'camp',x:c.fire,o:{k:'fire'}});
     a.push({type:'camp',x:c.hut,o:{k:'hut'}});
@@ -2033,6 +2361,9 @@ function audioInit(){
   AU.n.wave=mk('lowpass',430,.6,0);
   AU.n.rain=mk('highpass',900,.5,0);
   AU.n.wind=mk('bandpass',260,1.2,0);
+  AU.n.fall=mk('bandpass',1400,.5,0);      // 滝
+  AU.n.cave=mk('lowpass',150,.9,0);        // 洞窟の低い唸り
+  AU.buf=buf;
   // 波のうねり
   const lfo=c.createOscillator(), lg2=c.createGain();
   lfo.frequency.value=.11; lg2.gain.value=.035;
@@ -2041,11 +2372,61 @@ function audioInit(){
 }
 function audioUpdate(){
   if(!AU.ctx||!S) return;
-  const c=AU.ctx, t=c.currentTime, set=(n,v)=>{ if(n) n.gn.gain.setTargetAtTime(AU.on?v:0,t,.6) };
-  const near = S.zone?0 : clamp(1-(S.x-SEA)/1400,0,1);
-  set(AU.n.wave, S.zone?0.004:0.02+near*0.05);
-  set(AU.n.rain, (S.weather==='rain'?0.035:S.weather==='storm'?0.075:0)*(S.zone?.3:1));
-  set(AU.n.wind, (S.weather==='storm'?0.05:S.weather==='fog'?0.012:0.008)+(S.zone&&S.zone.dark?0.02:0));
+  const c=AU.ctx, t=c.currentTime, set=(n,v)=>{ if(n) n.gn.gain.setTargetAtTime(AU.on?v:0,t,.7) };
+  const L=here(), k=L?L.kind:'shore', dark=hasAt(L,'dark');
+  const shoreNear = hasAt(L,'shore') ? clamp(1-(S.x-SEA)/900,.25,1) : 0;
+  set(AU.n.wave, dark?0.003 : 0.012+shoreNear*0.055);
+  set(AU.n.rain, (S.weather==='rain'?0.035:S.weather==='storm'?0.075:0)*(dark?.25:1));
+  set(AU.n.wind, (S.weather==='storm'?0.05:S.weather==='fog'?0.012:0.008)
+                 +({cliff:.022,cape:.02,dune:.014,bamboo:.012}[k]||0)+(dark?0.014:0));
+  set(AU.n.fall, k==='fall'?0.075 : k==='spring'?0.016 : k==='marsh'?0.006 : 0);
+  set(AU.n.cave, dark?0.05:0);
+  AU.amb=k; AU.dark=dark;
+}
+/* 生きものの声。升と時刻でちがう */
+function ambientVoice(){
+  if(!AU.ctx||!AU.on||!S||S.over||uiOpen) return;
+  const k=AU.amb||'shore', night=isNight(), c=AU.ctx, t=c.currentTime;
+  const P={jungle:.5,thicket:.45,grove:.35,bamboo:.3,marsh:.5,trail:.3,ruins:.15,fall:.2}[k]||.12;
+  if(Q()>P*0.5) return;
+  const o=c.createOscillator(), g=c.createGain(), f=c.createBiquadFilter();
+  f.type='bandpass'; f.Q.value=6;
+  if(hasAt(here(),'dark')){                        // 雫
+    o.type='sine'; o.frequency.setValueAtTime(900+Q()*700,t);
+    o.frequency.exponentialRampToValueAtTime(300,t+.12);
+    g.gain.setValueAtTime(.03,t); g.gain.exponentialRampToValueAtTime(.0001,t+.16);
+    f.frequency.value=1200;
+  }else if(night){                                  // 虫
+    o.type='square'; o.frequency.setValueAtTime(2400+Q()*900,t);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.008,t+.03);
+    g.gain.exponentialRampToValueAtTime(.0001,t+.30);
+    f.frequency.value=3000;
+  }else{                                            // 鳥
+    const f0=1100+Q()*900;
+    o.type='sine'; o.frequency.setValueAtTime(f0,t);
+    o.frequency.exponentialRampToValueAtTime(f0*(1+Q()*.7),t+.09);
+    o.frequency.exponentialRampToValueAtTime(f0*.8,t+.2);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.014,t+.02);
+    g.gain.exponentialRampToValueAtTime(.0001,t+.26);
+    f.frequency.value=f0;
+  }
+  o.connect(f); f.connect(g); g.connect(c.destination); o.start(t); o.stop(t+.4);
+}
+/* 足音 */
+function stepSound(){
+  if(!AU.ctx||!AU.on||!AU.buf) return;
+  const c=AU.ctx, t=c.currentTime, k=AU.amb||'shore';
+  const src=c.createBufferSource(); src.buffer=AU.buf;
+  src.playbackRate.value=.7+Q()*.5;
+  const f=c.createBiquadFilter();
+  f.type='bandpass';
+  f.frequency.value={shore:900,dune:800,rocky:2200,tidepool:1600,cave:1500,marsh:600,
+                     fall:1200,spring:1100}[k]||1300;
+  f.Q.value=1.1;
+  const g=c.createGain();
+  g.gain.setValueAtTime(.035,t); g.gain.exponentialRampToValueAtTime(.0001,t+.09);
+  src.connect(f); f.connect(g); g.connect(c.destination);
+  src.start(t, Q()*1.5, .1);
 }
 function hit(k){
   if(!AU.ctx||!AU.on) return;
@@ -2061,6 +2442,8 @@ function hit(k){
   if(k==='eat')   { beep(300,.12,'sine',.05) }
   if(k==='water') { beep(880,.14,'sine',.04); beep(1180,.1,'sine',.02) }
   if(k==='fire')  { beep(180,.3,'sawtooth',.03) }
+  if(k==='crackle'){ beep(120+Q()*260,.05,'sawtooth',.018) }
+  if(k==='search'){ beep(160+Q()*80,.14,'triangle',.022) }
   if(k==='build') { beep(220,.16,'square',.04); setTimeout(()=>beep(330,.2,'square',.035),110) }
   if(k==='enter') { beep(150,.4,'sine',.05) }
   if(k==='ruin')  { beep(520,.9,'sine',.035); beep(780,1.1,'sine',.02) }
@@ -2163,8 +2546,12 @@ function doCraft(id){
   if(!canPay(r.c)) return;
   payFrom(r.c);
   advance(r.t); gain(r.sk,3);
-  addItem(r.makes||r.id, r.out||1);
-  lg(r.n+'をこしらえた。'+r.d+'。','good');
+  const key=r.makes||r.id, n=r.out||1, got=addItem(key,n);
+  if(got<n){
+    if(atCamp()){ S.store[key]=(S.store[key]||0)+(n-got); lg(r.n+'をこしらえ、置き場に積んだ。','good') }
+    else lg(r.n+'をこしらえたが、持ちきれずその場に置いた。','bad');
+  }
+  lg(got>=n?(r.n+'をこしらえた。'+r.d+'。'):(r.d+'。'),'good');
   hit('build'); drawHUD(); openCraft();
 }
 /* ───────── 日誌 ───────── */
@@ -2356,10 +2743,12 @@ function step(){
   S.vx=dx;
   if(dx){
     S.face=dx>0?1:-1;
-    S.x=clamp(S.x+dx,6,worldLen()-14);
+    S.x=clamp(S.x+dx,6,Math.min(worldLen()-14, brinkX()-18));
     S.walked+=Math.abs(dx);
     S.acc=(S.acc||0)+Math.abs(dx);
-    while(S.acc>=26){ S.acc-=26; advance(1); if(!S||S.over) return }   // 地点のなかは歩いても時間はゆるやか
+    while(S.acc>=26){ S.acc-=26; advance(1); if(!S||S.over) return }   // 升のなかは歩いても時間はゆるやか
+    S.sacc=(S.sacc||0)+Math.abs(dx);
+    if(S.sacc>=17){ S.sacc=0; stepSound() }
   }
   if(S.phantom===undefined||T%420===0) S.phantom=clamp(S.x+(chance(.5)?-1:1)*(80+Q()*160),20,worldLen()-20);
   updatePrompt();
@@ -2367,6 +2756,7 @@ function step(){
 }
 setInterval(step,16);
 setInterval(()=>{ if(S&&!S.over) audioUpdate() },1500);
+setInterval(()=>{ ambientVoice(); if(S&&!S.over&&atCamp()&&S.fire>0&&chance(.35)) hit('crackle') },1100);
 
 /* =========================================================================
    保存
@@ -2455,6 +2845,7 @@ function curtainEnd(E,isDeath){
       '<div class="endkind" style="color:'+(isDeath?'#8d8378':'#e2c98a')+'">'+E.k+'</div>'+
       '<div class="endtitle">'+E.n+'</div>'+
       '<div class="desc" style="margin-top:22px;white-space:pre-line">'+E.t+'</div>'+
+      '<div class="desc" style="font-size:12px;line-height:2.1;color:#9a9384;max-width:520px">'+runRecord()+'</div>'+
       '<div class="desc" style="font-size:11.5px;color:#6f6a5e;letter-spacing:.1em">'+
         S.day+'日目　／　踏んだ升 '+vis+'　／　いちばん遠く '+S.reached+'升　／　遺構 '+S.ruins+'/3'+
         (S.helped?'　／　助けた人 '+S.helped:'')+'</div>'+
@@ -2464,6 +2855,27 @@ function curtainEnd(E,isDeath){
     curtain.classList.add('on');
     $('fade').classList.remove('on');
   },1200);
+}
+
+/* この漂流がどんなものだったか、二三行にまとめる */
+function runRecord(){
+  const L=[], vis=knownHexes().filter(l=>l.visited);
+  const kinds={}; vis.forEach(l=>kinds[l.kind]=(kinds[l.kind]||0)+1);
+  const top=Object.entries(kinds).sort((a,b)=>b[1]-a[1])[0];
+  L.push('野営地は'+campLoc().name+'。'+(top?'いちばんよく歩いたのは'+KIND[top[0]].n+'だった。':''));
+  const b=[];
+  if(S.built.hut>=3) b.push('井戸と畑'); else if(S.built.hut>=2) b.push('小屋'); else if(S.built.hut) b.push('風よけ');
+  if(S.built.raft>=3) b.push('帆を張ったいかだ'); else if(S.built.raft) b.push('組みかけのいかだ');
+  if(S.built.tower>=3) b.push('燃える狼煙'); else if(S.built.tower>=2) b.push('狼煙台');
+  L.push(b.length?'遺したもの ― '+b.join('、')+'。':'形あるものは、何も遺さなかった。');
+  const know=UNK.filter(u=>S.hint[u.id]).length;
+  if(know) L.push(know+'種の実と茸の正体を、身をもって知った。');
+  if(S.kills) L.push('獣を'+S.kills+'頭仕留めた。');
+  if(S.helped) L.push('見知らぬ誰かに、'+S.helped+'度手を差しのべた。');
+  else if(S.cruel) L.push('助けを求める声を、'+S.cruel+'度置き去りにした。');
+  if(S.buried) L.push('名前も知らない誰かを埋めた。');
+  if(S.lore.length===3) L.push('石柱の文を、最後まで読んだ。');
+  return L.join('<br>');
 }
 
 /* ───────── 起動 ───────── */
