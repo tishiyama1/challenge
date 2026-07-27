@@ -660,7 +660,7 @@ function advance(m,noWrap){
     if(S.san<=0){ ending('madness'); return }
     if(!noWrap && S.min>=24*60){ collapse(); return }
   }
-  warnVitals(); hintProgress();
+  warnVitals(); hintProgress(); firstNightHint();
 }
 const fireHere=()=>atCamp()&&S.fire>0;
 /* その升のその日の漂着物 */
@@ -671,6 +671,16 @@ function ensureDrift(L){
   const home=L.key===S.camp;
   const n=(S.stormed?ri(Q,1,3):0)+ri(Q,home?1:0,home?3:2);
   for(let i=0;i<n;i++) L.drift.push({x:Math.round(140+Q()*(L.len-260)), got:0, k:Math.floor(Q()*3)});
+}
+/* はじめの数日は、島のほうから少しだけ教えてくれる */
+function firstNightHint(){
+  const f=S.flags, h=hourOf();
+  if(S.day<=3&&h>=17.5&&h<18&&!f.n1&&S.fire<=0){
+    f.n1=1; lg('日が落ちる。火がないと、夜は長い。流木を集めて、焚き火をおこしておきたい。','bad');
+  }
+  if(S.day===2&&h>=7&&h<7.5&&!f.n2){
+    f.n2=1; lg('喉が渇く前に、水場を見つけておきたい。見取図（地）で隣の升へ。','bad');
+  }
 }
 function warnVitals(){
   const f=S.flags, w=(k,v,lo,hi,t)=>{ if(v<lo&&!f[k]){f[k]=1;lg(t,'bad')} else if(v>hi) f[k]=0 };
