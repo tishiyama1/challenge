@@ -14,6 +14,14 @@
     --panel: rgba(8, 22, 16, 0.55);
   }
   html, body { width: 100%; min-height: 100%; }
+  /* ダブルタップ拡大を止める（ピンチでの拡大は残す） */
+  html { touch-action: manipulation; }
+  button, label.chk, nav.tabs a {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none; -webkit-user-select: none;
+  }
   body {
     font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
     color: var(--tx);
@@ -50,7 +58,6 @@
     padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line);
     background: rgba(255,255,255,0.03); transition: 0.2s;
   }
-  nav.tabs a:hover { color: var(--tx); border-color: rgba(227,192,118,0.4); }
   nav.tabs a.on { color: #0d1f16; background: linear-gradient(100deg,#e8d4a0,#d8b96b); border-color: transparent; font-weight: 700; }
 
   /* ---------- layout ---------- */
@@ -78,11 +85,9 @@
     padding: 0; overflow: hidden;
   }
   .tile svg { display: block; width: 100%; height: 100%; }
-  .tile:hover { transform: translateY(-4px); box-shadow: 0 6px 0 #b9b09a, 0 10px 16px rgba(0,0,0,0.5), inset 0 1px 0 #fff; }
   .tile.dead { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
   .tile.sm { width: 32px; height: 44px; border-radius: 5px; }
   .tile.xs { width: 26px; height: 36px; border-radius: 4px; box-shadow: 0 1px 0 #b9b09a, 0 2px 4px rgba(0,0,0,0.4); }
-  .tile.xs:hover, .tile.static:hover { transform: none; box-shadow: 0 1px 0 #b9b09a, 0 2px 4px rgba(0,0,0,0.4); }
   .tile.static { cursor: default; pointer-events: none; }
   .tile .cnt {
     position: absolute; right: 2px; top: 2px; font-size: 9px; line-height: 1;
@@ -113,7 +118,6 @@
   .count.wintile > span { margin-right: 4px; letter-spacing: 0.1em; }
   .count.wintile .tile { opacity: 0.55; }
   .count.wintile .tile.win { opacity: 1; }
-  .count.wintile .tile:hover { opacity: 1; }
   .count b { color: var(--tx); font-size: 19px; font-variant-numeric: tabular-nums; }
   .count.full b { color: #8fe3a0; }
   .btns { display: flex; gap: 7px; flex-wrap: wrap; }
@@ -121,7 +125,6 @@
     font: inherit; font-size: 12px; color: var(--tx); background: rgba(255,255,255,0.06);
     border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; transition: 0.15s;
   }
-  button.b:hover { background: rgba(255,255,255,0.13); border-color: rgba(227,192,118,0.4); }
 
   /* ---------- conditions ---------- */
   .field { margin-bottom: 13px; }
@@ -158,7 +161,6 @@
     text-align: left; border-radius: 12px; padding: 11px 13px; cursor: pointer;
     border: 1px solid var(--line); background: rgba(255,255,255,0.035); transition: 0.16s; font: inherit; color: inherit;
   }
-  .cell:hover { border-color: rgba(227,192,118,0.45); }
   .cell.on { border-color: var(--gold); background: rgba(227,192,118,0.12); box-shadow: 0 0 0 1px rgba(227,192,118,0.35) inset; }
   .cell .who { font-size: 11px; color: var(--dim); letter-spacing: 0.12em; }
   .cell .pt { font-size: clamp(21px, 3.4vw, 28px); font-weight: 800; font-variant-numeric: tabular-nums; margin: 3px 0 1px; }
@@ -173,7 +175,6 @@
     border: 1px solid var(--line); border-radius: 12px; padding: 10px 11px;
     background: rgba(255,255,255,0.035); transition: 0.16s;
   }
-  .wcard:hover { border-color: rgba(227,192,118,0.5); background: rgba(227,192,118,0.09); }
   .wcard.nul { opacity: 0.62; }
   .wcard.gone { opacity: 0.42; }
   .wtop { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
@@ -221,6 +222,21 @@
   footer.ft { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); line-height: 2; }
   footer.ft a { color: var(--gold); }
   .hide { display: none !important; }
+
+  /* ---------- マウスなど、ホバーできる環境だけの装飾 ---------- */
+  /* タッチ環境では :hover がタップ後も残り、牌が浮いたままになるため分離する */
+  @media (hover: hover) {
+    nav.tabs a:hover { color: var(--tx); border-color: rgba(227,192,118,0.4); }
+    .tile:hover { transform: translateY(-4px); box-shadow: 0 6px 0 #b9b09a, 0 10px 16px rgba(0,0,0,0.5), inset 0 1px 0 #fff; }
+    .tile.xs:hover, .tile.static:hover, .tile.dead:hover { transform: none; box-shadow: 0 1px 0 #b9b09a, 0 2px 4px rgba(0,0,0,0.4); }
+    .count.wintile .tile:hover { opacity: 1; }
+    button.b:hover { background: rgba(255,255,255,0.13); border-color: rgba(227,192,118,0.4); }
+    .cell:hover { border-color: rgba(227,192,118,0.45); }
+    .wcard:hover { border-color: rgba(227,192,118,0.5); background: rgba(227,192,118,0.09); }
+  }
+  /* タッチでは押した瞬間だけ沈ませる */
+  .tile:active { transform: translateY(1px); }
+  .cell:active, .wcard:active, button.b:active { border-color: rgba(227,192,118,0.6); }
 
   /* ---------- narrow screens: 1色9牌が必ず1行に収まるように ---------- */
   @media (max-width: 560px) {
