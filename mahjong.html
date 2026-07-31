@@ -167,6 +167,26 @@
   .cell .lim { color: var(--gold); font-weight: 700; }
   .cell.nul .pt { color: #7b8d81; font-size: 19px; }
 
+  .waits { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 215px), 1fr)); gap: 9px; }
+  .wcard {
+    font: inherit; color: inherit; text-align: left; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 11px;
+    background: rgba(255,255,255,0.035); transition: 0.16s;
+  }
+  .wcard:hover { border-color: rgba(227,192,118,0.5); background: rgba(227,192,118,0.09); }
+  .wcard.nul { opacity: 0.62; }
+  .wcard.gone { opacity: 0.42; }
+  .wtop { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+  .wleft { font-size: 12px; color: var(--dim); }
+  .wleft b { color: var(--tx); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .wleft .wsub { color: var(--gold); margin-left: 7px; }
+  .wyaku { font-size: 11px; color: var(--dim); line-height: 1.5; margin-top: 2px;
+           overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .wpts { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
+  .wpts div { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+  .wpts span { font-size: 10px; color: var(--dim); letter-spacing: 0.06em; }
+  .wpts b { font-size: 13px; font-variant-numeric: tabular-nums; }
+
   table.yk { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.yk td { padding: 6px 2px; border-bottom: 1px dashed rgba(255,255,255,0.08); }
   table.yk td.h { text-align: right; white-space: nowrap; color: var(--gold); font-variant-numeric: tabular-nums; }
@@ -243,7 +263,7 @@
       <div>
         <section class="panel">
           <h2>手牌 <span id="hcount" class="count"><b>0</b> / 14</span></h2>
-          <div class="handbox" id="hand"><div class="ph">下の牌を14枚えらんでください（手牌の牌をクリックすると戻せます）</div></div>
+          <div class="handbox" id="hand"><div class="ph">下の牌をえらんでください。13枚で待ち判定、14枚で点数計算になります（手牌の牌をクリックすると戻せます）</div></div>
           <div class="handbar" style="margin-top:12px">
             <div class="count wintile" id="wininfo"></div>
             <div class="btns">
@@ -252,7 +272,7 @@
               <button class="b" id="btn-sample">例を入れる</button>
             </div>
           </div>
-          <div class="note">最後に選んだ牌が<b style="color:var(--gold)">和了牌</b>になります（上の「和了牌」の列で変更できます）。待ちの形が変わると符が変わります。</div>
+          <div class="note"><b style="color:var(--gold)">13枚</b>なら待ち牌と、その牌で和了ったときの点数を一覧します。<b style="color:var(--gold)">14枚</b>なら最後に選んだ牌が和了牌になり、上の「和了牌」の列で変更できます（待ちの形が変わると符が変わります）。</div>
         </section>
 
         <section class="panel">
@@ -406,6 +426,49 @@ function decomposeAll(counts){
     }
   }
   return results;
+}
+
+/* ---------- 13牌からの待ち判定 ---------- */
+/* 役の有無は問わず「和了の形になっているか」だけを見る */
+function isCompleteShape(counts, menzen){
+  var i, v;
+  if (menzen){
+    var pairs = 0, chiitoi = true;
+    for (i = 0; i < 34; i++){
+      if (counts[i] === 0) continue;
+      if (counts[i] === 2) pairs++;
+      else { chiitoi = false; break; }
+    }
+    if (chiitoi && pairs === 7) return true;
+
+    var kokushi = true, kpair = 0;
+    for (i = 0; i < 34; i++) if (counts[i] > 0 && YAOCHU_IDX.indexOf(i) < 0){ kokushi = false; break; }
+    if (kokushi){
+      for (i = 0; i < YAOCHU_IDX.length; i++){
+        v = counts[YAOCHU_IDX[i]];
+        if (v === 0 || v > 2){ kokushi = false; break; }
+        if (v === 2) kpair++;
+      }
+      if (kokushi && kpair === 1) return true;
+    }
+  }
+  return decomposeAll(counts).length > 0;
+}
+
+/* 13牌 → 和了牌（待ち牌）の一覧。テンパイでなければ空配列 */
+function winningTiles(tiles, opts){
+  opts = opts || {};
+  var menzen = opts.menzen !== false;
+  if (tiles.length !== 13) return null;
+  var counts = countsOf(tiles), i, out = [];
+  for (i = 0; i < 34; i++) if (counts[i] > 4) return null;
+  for (i = 0; i < 34; i++){
+    if (counts[i] >= 4) continue;      /* 4枚使いきっている牌では和了れない */
+    counts[i]++;
+    if (isCompleteShape(counts, menzen)) out.push(i);
+    counts[i]--;
+  }
+  return out;
 }
 
 /* ---------- 待ちの形 ---------- */
@@ -751,7 +814,10 @@ function evaluate(tiles, winTile, ctx){
   return best;
 }
 
-if (typeof module !== 'undefined') module.exports = { evaluate: evaluate, parseTiles: parseTiles, tileJa: tileJa, doraOf: doraOf, decomposeAll: decomposeAll };
+if (typeof module !== 'undefined') module.exports = {
+  evaluate: evaluate, parseTiles: parseTiles, tileJa: tileJa, doraOf: doraOf,
+  decomposeAll: decomposeAll, winningTiles: winningTiles
+};
 </script>
 
 <!-- ============================================================ -->
@@ -921,7 +987,7 @@ function renderHand(){
   var box = $('#hand');
   box.innerHTML = '';
   if (!st.hand.length){
-    box.innerHTML = '<div class="ph">下の牌を14枚えらんでください（手牌の牌をクリックすると戻せます）</div>';
+    box.innerHTML = '<div class="ph">下の牌をえらんでください。13枚で待ち判定、14枚で点数計算になります（手牌の牌をクリックすると戻せます）</div>';
   } else {
     var sorted = st.hand.slice().sort(function(a, b){ return a - b; });
     sorted.forEach(function(t, i){
@@ -938,13 +1004,15 @@ function renderHand(){
     });
   }
   var c = $('#hcount');
-  c.innerHTML = '<b>' + st.hand.length + '</b> / 14';
-  c.className = 'count' + (st.hand.length === 14 ? ' full' : '');
+  c.innerHTML = '<b>' + st.hand.length + '</b> / 14' +
+    (st.hand.length === 13 ? '<span style="color:var(--gold);margin-left:8px">待ち判定</span>' : '') +
+    (st.hand.length === 14 ? '<span style="color:#8fe3a0;margin-left:8px">点数計算</span>' : '');
+  c.className = 'count' + (st.hand.length >= 13 ? ' full' : '');
 
   /* 和了牌の選択列（手牌に含まれる種類だけ並べる） */
   var wi = $('#wininfo');
   wi.innerHTML = '';
-  if (st.hand.length){
+  if (st.hand.length === 14){
     var lab = document.createElement('span');
     lab.textContent = '和了牌';
     wi.appendChild(lab);
@@ -1085,11 +1153,79 @@ function ctxFor(c){
   };
 }
 
+/* ---------- 13牌：待ち判定 ---------- */
+function renderWaits(box){
+  var waits = winningTiles(st.hand.slice(), { menzen: st.menzen });
+  if (!waits || !waits.length){
+    box.innerHTML = '<div class="msg">この13枚は<b style="color:#ffb1a8">テンパイしていません</b>。' +
+      '（どの牌を引いても4面子1雀頭・七対子・国士無双になりません）</div>';
+    return;
+  }
+  /* 場に見えている牌＝手牌＋ドラ表示牌 を引いた残り枚数 */
+  var seen = countsOf(st.hand.concat(st.doraIndicators));
+  var total = 0;
+  waits.forEach(function(t){ total += Math.max(0, 4 - seen[t]); });
+
+  var head = document.createElement('div');
+  head.className = 'msg';
+  head.style.padding = '0 0 12px';
+  head.innerHTML = '待ちは <b style="color:var(--gold)">' + waits.length + '種 ' + total + '枚</b>' +
+    '<span style="font-size:11px"> ／ 残り枚数は手牌とドラ表示牌を除いた数です。カードを押すとその牌で和了った点数計算に進みます。</span>';
+  box.appendChild(head);
+
+  var grid = document.createElement('div');
+  grid.className = 'waits';
+  waits.forEach(function(t){
+    var hand14 = st.hand.concat([t]);
+    var rs = {};
+    CELLS.forEach(function(c){ rs[c.k] = evaluate(hand14, t, ctxFor(c)); });
+    var rep = rs['ko-ron'].ok ? rs['ko-ron'] : (rs['ko-tsumo'].ok ? rs['ko-tsumo'] : rs['ko-ron']);
+    var left = Math.max(0, 4 - seen[t]);
+
+    var card = document.createElement('button');
+    card.className = 'wcard' + (rep.ok ? '' : ' nul') + (left === 0 ? ' gone' : '');
+    var top = document.createElement('div');
+    top.className = 'wtop';
+    top.appendChild(tileStatic(t, 'sm'));
+    var info = document.createElement('div');
+    info.style.minWidth = '0';
+    var names = rep.ok
+      ? (rep.yakumanList.length ? rep.yakumanList : rep.yaku).map(function(y){ return y.name; }).join('・')
+      : '役なし（形式テンパイ）';
+    info.innerHTML = '<div class="wleft">残り <b>' + left + '</b> 枚' +
+      (rep.ok ? '<span class="wsub">' + (rep.yakuman ? (rep.score.limit || '役満') : rep.han + '翻 ' + rep.fu + '符') + '</span>' : '') +
+      '</div><div class="wyaku">' + names + '</div>';
+    top.appendChild(info);
+    card.appendChild(top);
+
+    var tbl = document.createElement('div');
+    tbl.className = 'wpts';
+    CELLS.forEach(function(c){
+      var r = rs[c.k];
+      tbl.innerHTML += '<div><span>' + (c.dealer ? '親' : '子') + c.how + '</span><b>' +
+        (r.ok ? r.score.total.toLocaleString() : '—') + '</b></div>';
+    });
+    card.appendChild(tbl);
+
+    card.onclick = function(){
+      st.hand = hand14;
+      st.winTile = t;
+      st.cell = 'ko-ron';
+      render();
+    };
+    grid.appendChild(card);
+  });
+  box.appendChild(grid);
+}
+
 function renderResult(){
   var box = $('#result');
   box.innerHTML = '';
+  if (st.hand.length === 13){ renderWaits(box); return; }
   if (st.hand.length !== 14){
-    box.innerHTML = '<div class="msg">手牌を14枚そろえると、成立役と点数（親・子 × ロン・ツモ）を表示します。<br>あと <b style="color:var(--gold)">' + (14 - st.hand.length) + '</b> 枚。</div>';
+    box.innerHTML = '<div class="msg"><b style="color:var(--gold)">13枚</b>で待ち（テンパイ）判定、' +
+      '<b style="color:var(--gold)">14枚</b>で成立役と点数（親・子 × ロン・ツモ）を表示します。<br>' +
+      '13枚まであと <b style="color:var(--gold)">' + (13 - st.hand.length) + '</b> 枚。</div>';
     return;
   }
   var results = {};
