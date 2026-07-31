@@ -149,6 +149,10 @@
   .card.doubutsu h2 { color: #fff2df; }
   .card.doubutsu .en, .card.doubutsu .go { color: #ffb84a; }
   /* hyoryu (漂流) theming */
+  .card.jan .tag { background: rgba(143, 227, 168, 0.14); color: #a9e8c0; border: 1px solid rgba(143,227,168,0.30); }
+  .card.jan:hover { box-shadow: 0 26px 60px rgba(20, 90, 55, 0.5); }
+  .card.jan h2 { color: #eafff2; letter-spacing: 0.18em; }
+  .card.jan .en, .card.jan .go { color: #8fe3a8; }
   .card.hyo .tag { background: rgba(226,201,138,0.14); color: #e8d6a4; border: 1px solid rgba(226,201,138,0.30); }
   .card.hyo:hover { box-shadow: 0 26px 60px rgba(120, 70, 30, 0.45); }
   .card.hyo h2 { color: #f4ead6; letter-spacing: 0.3em; }
@@ -183,8 +187,8 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">INTERACTIVE WORLDS</div>
-    <h1>8つの、小さな世界。</h1>
-    <p>ブラウザだけで動く、8つの体験。<br>宇宙のいちばん大きなものから、深海、大地、形と空(くう)のあわい、小さないきもの、こどものまなび、チャートに潜むかたち、そして 光が砂に落ちる庭まで。</p>
+    <h1>10の、小さな世界。</h1>
+    <p>ブラウザだけで動く、10の体験。<br>宇宙のいちばん大きなものから、深海、大地、形と空(くう)のあわい、小さないきもの、こどものまなび、チャートに潜むかたち、そして 光が砂に落ちる庭まで。</p>
   </header>
 
   <div class="cards">
@@ -295,10 +299,22 @@
         <div class="go"><span>漂着する</span><span class="arrow">→</span></div>
       </div>
     </a>
+
+    <a class="card jan" href="mahjong.html">
+      <div class="art"><canvas id="art-jan"></canvas></div>
+      <div class="body">
+        <span class="tag">TOOL · 麻雀</span>
+        <h2>雀算</h2>
+        <div class="en">MAHJONG SCORING ― 役判定と点数計算</div>
+        <div class="desc">牌を並べて選ぶだけで、成立した役・翻・符を割り出し、親と子・ロンとツモの4通りの点数を同時に出す。13枚なら待ち牌と、その牌で和了ったときの点数を並べて高目安目が見える。符の内訳まで表示。役一覧つき。</div>
+        <div class="feat"><span>🀄 34種から選択</span><span>🔍 13牌で待ち判定</span><span>🧮 符の内訳表示</span><span>📋 役一覧</span></div>
+        <div class="go"><span>点数を数える</span><span class="arrow">→</span></div>
+      </div>
+    </a>
   </div>
 
   <footer>
-    Canvas / WebGL &amp; Web Audio でつくった、依存ライブラリなしの8作品。<br>
+    Canvas / WebGL &amp; Web Audio でつくった、依存ライブラリなしの10作品。<br>
     <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a>
     <div class="hint">カードをクリックで起動 ・ どれもフルスクリーン推奨</div>
   </footer>
@@ -339,6 +355,9 @@
   const HY = setup("art-hyo");
   const hyPalms = [];
   for (let i = 0; i < 5; i++) hyPalms.push({ x: 0.56 + Math.random() * 0.42, s: rand(0.7, 1.15), ph: rand(0, TAU) });
+
+  // mahjong preview: tiles laid on green felt, a gold sweep reading the hand
+  const J = setup("art-jan");
 
   // galaxy preview: spiral of orbiting stars around a dark core
   const G = setup("art-galaxy");
@@ -781,6 +800,50 @@
         c.strokeStyle = "rgba(255,191,77,0.55)"; c.lineWidth = 1.2;
         for (const pi of [2, 5, 8]) { const x = m + (pi + 0.5) * (plotW / n); c.beginPath(); c.arc(x, yOf(kaShape[pi]) - 6, 3.2, 0, TAU); c.stroke(); }
       }
+    }
+
+    // ---- mahjong card: a hand on the felt, scanned by a gold sweep ----
+    {
+      const { c, w, h } = J;
+      const felt = c.createLinearGradient(0, 0, 0, h);
+      felt.addColorStop(0, "#12352a"); felt.addColorStop(1, "#08201a");
+      c.fillStyle = felt; c.fillRect(0, 0, w, h);
+      const n = 7, tw = Math.min(30, w / (n + 2.4)), th = tw * 1.36, gap = tw * 0.14;
+      const x0 = (w - (n * tw + (n - 1) * gap)) / 2, y0 = h * 0.5 - th * 0.5;
+      const sweep = ((t * 0.34) % 1.7) * (w + 120) / 1.7 - 60;
+      for (let i = 0; i < n; i++) {
+        const lit = Math.max(0, 1 - Math.abs(x0 + i * (tw + gap) + tw / 2 - sweep) / (tw * 2.2));
+        const x = x0 + i * (tw + gap), y = y0 - lit * 7;
+        c.fillStyle = "rgba(0,0,0,0.35)";
+        roundRectP(c, x + 1.5, y + th - 2, tw, 5, 2); c.fill();
+        const g = c.createLinearGradient(0, y, 0, y + th);
+        g.addColorStop(0, "#fffdf4"); g.addColorStop(1, "#ddd5bf");
+        c.fillStyle = g; roundRectP(c, x, y, tw, th, 3); c.fill();
+        c.strokeStyle = `rgba(227,192,118,${0.15 + lit * 0.85})`; c.lineWidth = 1 + lit; c.stroke();
+        c.save(); c.translate(x + tw / 2, y + th * 0.52);
+        const kind = i % 3;
+        if (kind === 0) {                                   // 筒子
+          for (let d = 0; d < 3; d++) {
+            c.fillStyle = ["#2a5fae", "#1c7a4c", "#b02a34"][d];
+            c.beginPath(); c.arc(0, (d - 1) * tw * 0.3, tw * 0.11, 0, TAU); c.fill();
+          }
+        } else if (kind === 1) {                             // 索子
+          c.fillStyle = "#1c7a4c";
+          for (let d = 0; d < 3; d++) c.fillRect(-tw * 0.3 + d * tw * 0.28, -tw * 0.22, tw * 0.14, tw * 0.44);
+        } else {                                             // 中
+          c.fillStyle = "#a8262f"; c.font = `600 ${tw * 0.62}px "Hiragino Mincho ProN", serif`;
+          c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("中", 0, 1);
+        }
+        c.restore();
+      }
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.9);
+      c.textAlign = "center"; c.textBaseline = "alphabetic";
+      c.fillStyle = `rgba(255,233,176,${0.35 + pulse * 0.45})`;
+      c.font = `700 ${Math.round(h * 0.13)}px system-ui, sans-serif`;
+      c.fillText("8000", w / 2, y0 + th + h * 0.2);
+      c.fillStyle = "rgba(143,227,168,0.5)";
+      c.font = `${Math.round(h * 0.062)}px system-ui, sans-serif`;
+      c.fillText("満貫 ・ 4翻40符", w / 2, y0 - h * 0.09);
     }
   }
   function roundRectP(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
