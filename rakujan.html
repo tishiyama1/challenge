@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>落雀 — 落ちもの麻雀パズル</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --tx: #eef3ee;
+    --dim: #9db3a4;
+    --gold: #e3c076;
+    --line: rgba(255,255,255,0.10);
+    --panel: rgba(8, 22, 16, 0.55);
+  }
+  html, body { width: 100%; min-height: 100%; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+    color: var(--tx);
+    background: #04120c;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overscroll-behavior: none;
+  }
+  #bg {
+    position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(1000px 600px at 80% -10%, rgba(120, 200, 150, 0.13), transparent 60%),
+      radial-gradient(800px 520px at 10% 10%, rgba(227, 192, 118, 0.08), transparent 60%),
+      linear-gradient(180deg, #0a2418 0%, #081e14 45%, #05140e 100%);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 14px 60px; }
+
+  /* ---------- header ---------- */
+  header.top {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 14px; flex-wrap: wrap;
+    padding-bottom: 12px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand h1 {
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-size: clamp(24px, 4.2vw, 38px); font-weight: 700; letter-spacing: 0.16em;
+    background: linear-gradient(100deg, #f2e3bd 0%, #e3c076 55%, #b7e2c0 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .brand .sub { font-size: 11.5px; color: var(--dim); letter-spacing: 0.22em; margin-top: 5px; }
+  nav.tabs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  nav.tabs a, nav.tabs button {
+    font-size: 12.5px; letter-spacing: 0.08em; text-decoration: none; color: var(--dim);
+    padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.03); transition: 0.2s; cursor: pointer;
+    font-family: inherit;
+  }
+  nav.tabs a:hover, nav.tabs button:hover { color: var(--tx); border-color: rgba(227,192,118,0.4); }
+
+  /* ---------- layout ---------- */
+  .game { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .game { grid-template-columns: 1fr; } }
+  .left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+  .boardbox {
+    position: relative;
+    height: min(78vh, 820px);
+    min-height: 400px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  @media (max-width: 900px) { .boardbox { height: min(60vh, 560px); min-height: 320px; } }
+  #board {
+    display: block; border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.55), 0 0 0 1px rgba(227,192,118,0.16);
+    touch-action: none;
+  }
+
+  /* board overlays */
+  .veil {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: var(--bw, 100%); height: var(--bh, 100%); display: none;
+    align-items: center; justify-content: center; flex-direction: column;
+    background: rgba(3, 12, 8, 0.82); backdrop-filter: blur(3px);
+    border-radius: 12px; text-align: center; padding: 20px; z-index: 5;
+  }
+  .veil.on { display: flex; }
+  .veil h3 {
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-size: clamp(26px, 5vw, 44px); letter-spacing: 0.18em; color: var(--gold); margin-bottom: 8px;
+  }
+  .veil p { font-size: 13px; color: var(--dim); line-height: 2; letter-spacing: 0.06em; }
+  .veil .big { font-size: clamp(30px, 7vw, 54px); font-weight: 800; color: #fff3d6; letter-spacing: 0.04em; margin: 10px 0 2px; }
+  .veil .btns { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    font-family: inherit; font-size: 13px; letter-spacing: 0.1em; cursor: pointer;
+    padding: 11px 22px; border-radius: 999px; border: 1px solid transparent;
+    background: linear-gradient(100deg,#e8d4a0,#d8b96b); color: #0d1f16; font-weight: 700;
+    transition: 0.2s;
+  }
+  .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn.ghost { background: rgba(255,255,255,0.05); color: var(--tx); border-color: var(--line); font-weight: 400; }
+
+  /* ---------- side panels ---------- */
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  @media (max-width: 900px) {
+    .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .side .score-panel { grid-column: 1 / -1; }
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 14px 14px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .panel > h2 {
+    font-size: 10.5px; letter-spacing: 0.24em; color: var(--gold);
+    font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 9px;
+  }
+  .panel > h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .score-panel .val {
+    font-size: clamp(26px, 4.6vw, 38px); font-weight: 800; letter-spacing: 0.02em;
+    color: #fff6e0; line-height: 1.1; font-variant-numeric: tabular-nums;
+    transition: color 0.2s;
+  }
+  .score-panel .val.pop { color: var(--gold); }
+  .score-panel .best { font-size: 11.5px; color: var(--dim); margin-top: 6px; letter-spacing: 0.1em; }
+  .chainline { margin-top: 8px; height: 20px; font-size: 13px; letter-spacing: 0.12em; color: #ffd98a; opacity: 0; transition: opacity 0.25s; }
+  .chainline.on { opacity: 1; }
+
+  .rows { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .row .k { color: var(--dim); letter-spacing: 0.1em; }
+  .row .v { color: var(--tx); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+
+  .tilerow { display: flex; gap: 5px; align-items: flex-end; flex-wrap: nowrap; min-height: 46px; }
+  .mini { width: 32px; height: 44px; border-radius: 5px; display: block; flex: 0 0 auto; }
+  .mini.slot { border: 1px dashed rgba(255,255,255,0.16); background: rgba(255,255,255,0.02); }
+  .mini.dim { opacity: 0.55; transform: scale(0.86); transform-origin: bottom left; }
+  #dora { flex-wrap: wrap; }
+  .tilecap { font-size: 10px; color: var(--dim); letter-spacing: 0.16em; margin-bottom: 5px; }
+
+  .log { display: flex; flex-direction: column; gap: 5px; max-height: 190px; overflow: hidden; }
+  .log .ent {
+    display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
+    font-size: 11.5px; padding: 5px 7px; border-radius: 7px;
+    background: rgba(255,255,255,0.035); border-left: 2px solid rgba(227,192,118,0.5);
+    animation: slide 0.35s ease both;
+  }
+  .log .ent .y { color: #dfeee2; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log .ent .p { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
+  .log .ent.ym { border-left-color: #ff9c4a; background: rgba(255,156,74,0.10); }
+  .log .ent.ym .p { color: #ffb86a; }
+  @keyframes slide { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  .log .empty { font-size: 11.5px; color: var(--dim); letter-spacing: 0.08em; }
+
+  /* ---------- touch pad ---------- */
+  .pad { display: none; gap: 8px; }
+  .pad button {
+    flex: 1; font-family: inherit; font-size: 13px; letter-spacing: 0.08em;
+    padding: 15px 2px; border-radius: 12px; border: 1px solid var(--line);
+    white-space: nowrap;
+    background: rgba(255,255,255,0.05); color: var(--tx); cursor: pointer;
+    -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  }
+  .pad button:active { background: rgba(227,192,118,0.22); }
+  .pad button.wide { flex: 1.4; }
+  body.touch .pad { display: flex; }
+
+  /* ---------- docs ---------- */
+  .docs { margin-top: 30px; }
+  .docs .panel { padding: 18px 20px 20px; }
+  .docs h3 {
+    font-size: 12px; letter-spacing: 0.22em; color: var(--gold); margin: 22px 0 10px; font-weight: 700;
+  }
+  .docs h3:first-child { margin-top: 0; }
+  .docs p, .docs li { font-size: 13px; line-height: 2; color: #cfe0d4; letter-spacing: 0.03em; }
+  .docs ul { padding-left: 1.2em; }
+  .docs b { color: #fff2d4; }
+  .docs table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+  .docs th, .docs td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  .docs th { color: var(--gold); font-weight: 600; letter-spacing: 0.1em; font-size: 11px; }
+  .docs td { color: #cfe0d4; }
+  .docs td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kbd {
+    display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11.5px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: #e6f0e8;
+    margin: 0 2px; font-family: ui-monospace, monospace;
+  }
+  .scroller { overflow-x: auto; }
+  footer.foot {
+    margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 11.5px; color: var(--dim); line-height: 2; letter-spacing: 0.06em;
+  }
+  footer.foot a { color: var(--gold); text-decoration: none; }
+  footer.foot a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>落雀</h1>
+      <div class="sub">RAKUJAN ― 落ちもの麻雀パズル</div>
+    </div>
+    <nav class="tabs">
+      <button id="btn-pause" type="button">一時停止</button>
+      <button id="btn-sound" type="button">♪ 音 ON</button>
+      <button id="btn-restart" type="button">やり直す</button>
+      <a href="mahjong.html">雀算</a>
+      <a href="index.html">他の作品</a>
+    </nav>
+  </header>
+
+  <div class="game">
+    <div class="left">
+      <div class="boardbox" id="boardbox">
+        <canvas id="board"></canvas>
+
+        <div class="veil on" id="veil-start">
+          <h3>落雀</h3>
+          <p>
+            上から牌がひとつずつ降ってくる。<br>
+            横一列・縦一列・隣り合った塊で<b>役</b>が出来ると消える。<br>
+            消えて落ちて、また役ができれば <b>連鎖（天和）</b>。
+          </p>
+          <div class="btns">
+            <button class="btn" id="btn-start" type="button">牌を積む</button>
+            <button class="btn ghost" id="btn-help" type="button">遊び方を読む</button>
+          </div>
+        </div>
+
+        <div class="veil" id="veil-pause">
+          <h3>一時停止</h3>
+          <p><span class="kbd">P</span> または下のボタンで再開</p>
+          <div class="btns"><button class="btn" id="btn-resume" type="button">再開する</button></div>
+        </div>
+
+        <div class="veil" id="veil-over">
+          <h3 id="over-title">終局</h3>
+          <p id="over-reason">牌山が天井に届いた。</p>
+          <div class="big" id="over-score">0</div>
+          <p id="over-detail"></p>
+          <div class="btns"><button class="btn" id="btn-again" type="button">もう一度</button></div>
+        </div>
+      </div>
+
+      <div class="pad">
+        <button id="p-left" type="button">◀</button>
+        <button id="p-rot" type="button">回す</button>
+        <button id="p-hold" type="button">ホールド</button>
+        <button id="p-drop" class="wide" type="button">落とす</button>
+        <button id="p-right" type="button">▶</button>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="panel score-panel">
+        <h2>SCORE</h2>
+        <div class="val" id="score">0</div>
+        <div class="best">最高 <span id="best">0</span></div>
+        <div class="chainline" id="chainline"></div>
+      </div>
+
+      <div class="panel">
+        <h2>NEXT / HOLD</h2>
+        <div style="display:flex; gap:16px; align-items:flex-start;">
+          <div>
+            <div class="tilecap">NEXT</div>
+            <div class="tilerow" id="next"></div>
+          </div>
+          <div>
+            <div class="tilecap">HOLD</div>
+            <div class="tilerow" id="hold"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>ドラ表示牌</h2>
+        <div class="tilerow" id="dora"></div>
+        <div class="row" style="margin-top:8px;"><span class="k">ドラ</span><span class="v" id="dora-txt">—</span></div>
+      </div>
+
+      <div class="panel">
+        <h2>場</h2>
+        <div class="rows">
+          <div class="row"><span class="k">局</span><span class="v" id="kyoku">東一局</span></div>
+          <div class="row"><span class="k">牌山</span><span class="v" id="wall">136</span></div>
+          <div class="row"><span class="k">速さ</span><span class="v" id="level">Lv.1</span></div>
+          <div class="row"><span class="k">最大連鎖</span><span class="v" id="maxchain">0</span></div>
+          <div class="row"><span class="k">最高手</span><span class="v" id="besthand">—</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>あがり</h2>
+        <div class="log" id="log"><div class="empty">まだ何も消えていない</div></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ============================================================ -->
+  <section class="docs" id="help">
+    <div class="panel">
+      <h3>遊び方</h3>
+      <p>
+        盤面は<b>横14列</b>。麻雀の手牌がちょうど並ぶ幅です。縦の段数は画面の大きさから自動で決まります。
+        上から<b>配牌がひとつ</b>ずつ降ってくるので、左右に動かして積んでいきます。
+      </p>
+      <ul>
+        <li><b>横一列</b> ― 同じ段でつながっている3〜14牌のかたまり</li>
+        <li><b>縦一列</b> ― 同じ列でつながっている3牌以上のかたまり</li>
+        <li><b>隣接した塊</b> ― 上下左右でつながった3〜5牌のかたまり（L字や2×2など）</li>
+      </ul>
+      <p>
+        このいずれかが<b>役の形</b>（面子＋雀頭、七対子、国士無双）になった瞬間に消えます。
+        重なって成立したときは<b>いちばん高い役</b>が優先されます。消えたら上に積んでいた牌が落ちてきて、
+        それでまた役ができれば<b>連鎖（天和）</b>。連鎖が伸びるほど倍率が跳ね上がります。
+      </p>
+
+      <h3>操作</h3>
+      <p>
+        <span class="kbd">←</span><span class="kbd">→</span> 移動 ／
+        <span class="kbd">↓</span> 早く落とす ／
+        <span class="kbd">Space</span> 一気に落とす ／
+        <span class="kbd">↑</span><span class="kbd">Z</span> 180°回転 ／
+        <span class="kbd">C</span><span class="kbd">Shift</span> ホールド ／
+        <span class="kbd">P</span> 一時停止 ／
+        <span class="kbd">R</span> やり直す
+      </p>
+      <p>
+        <b>回転は180°だけできます。</b>牌はひっくり返しても同じ牌なので、当然なにも起こりません。
+        絵柄が逆さまになるだけです。それでも回したい時のためにあります。
+      </p>
+      <p>
+        <b>ホールドは1牌</b>。いま降ってくる牌を1つ預けておけます。次に押すと預けた牌と入れ替わります
+        （1牌置くまで連続では使えません）。
+      </p>
+
+      <h3>牌はワンセット136牌</h3>
+      <p>
+        萬子 9種×4 ＝ 36、筒子 36、索子 36、字牌 7種×4 ＝ 28。
+        <b>36＋36＋36＋28 ＝ 136</b> ― 合っています。この136牌ぴったりを1セットとして回しています。
+        盤面の牌・ネクスト・ホールド・ドラ表示牌・山に残っている牌をぜんぶ足すと、いつでも136牌。
+        だから<b>同じ牌は世界に4枚しかありません</b>。山を引き切ると、それまでに消えた牌を洗牌して次局へ進みます。
+      </p>
+
+      <h3>ドラ</h3>
+      <p>
+        ドラ表示牌の<b>次の牌</b>がドラです（九萬→一萬、北→東、中→白と輪になります）。
+        消えたかたまりにドラが含まれていると<b>1牌につき+1翻</b>。局が進むごとに表示牌が1枚ずつ増えて、最大5枚になります。
+        盤面ではドラの牌の右上に金色の印がつきます。
+      </p>
+
+      <h3>点数</h3>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>形</th><th>役の例</th><th class="n">翻</th></tr></thead>
+          <tbody>
+            <tr><td>3牌</td><td>順子 ／ 刻子</td><td class="n">1</td></tr>
+            <tr><td>4牌</td><td>槓子</td><td class="n">2</td></tr>
+            <tr><td>—</td><td>役牌（白發中・場風）</td><td class="n">+1</td></tr>
+            <tr><td>—</td><td>断幺九 ／ 一盃口</td><td class="n">+1</td></tr>
+            <tr><td>3面子〜</td><td>三色同順 ／ 一気通貫 ／ 対々和 ／ 三暗刻 ／ 混老頭 ／ 小三元 ／ 混全帯幺九</td><td class="n">+2</td></tr>
+            <tr><td>3面子〜</td><td>混一色 ／ 純全帯幺九 ／ 二盃口</td><td class="n">+3</td></tr>
+            <tr><td>3面子〜</td><td>清一色</td><td class="n">+6</td></tr>
+            <tr><td>14牌</td><td>七対子</td><td class="n">6</td></tr>
+            <tr><td>14牌</td><td>国士無双 ／ 大車輪 ／ 字一色 ／ 四暗刻 ／ 大三元 ほか</td><td class="n">役満</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        翻は麻雀の点数表（子のロン相当）に置き換えます。1翻1000点、満貫8000点、跳満12000点、倍満16000点、
+        三倍満24000点、役満32000点。そこに<b>牌数ボーナス</b>（大きいかたまりほど高い）と
+        <b>連鎖倍率</b>、同時消しの倍率を掛けます。
+      </p>
+
+      <h3>大物手の作りかた</h3>
+      <p>
+        3牌そろえば消えてしまうので、面子で組む大物手はまず作れません。
+        逆に言うと、<b>どこを切っても3牌の役にならない手</b>だけが14牌そのまま残せます。
+        つまり<b>国士無双</b>と<b>七対子</b>。横一列14牌をこの形で埋め切ったときだけ、盤面はひと息に吹き飛びます。
+        七対子は並び順が勝負で、たとえば一萬・一萬・二萬・二萬…と並べると途中で順子ができて崩れます。
+        <b>一萬 一萬 三萬 三萬 二萬 二萬</b>のように、隣り合う3牌が役にならないよう置いていくのがコツ。
+        縦や塊でも成立してしまう点にも注意。
+      </p>
+
+      <h3>終わりかた</h3>
+      <p>
+        ゴールはありません。<b>牌が最上段まで積み上がったら終局</b>。それまでにどれだけ稼げるかだけのゲームです。
+        連鎖で天井を掘り崩せば生き延びられます。
+      </p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    麻雀から着想を得た落ちものパズル。牌はすべてSVG、音はWeb Audioで合成。外部ライブラリなし・通信なし・保存はハイスコアのみ。<br>
+    <a href="index.html">他の作品を見る →</a>
+  </footer>
+</div>
+
+<!-- ============================================================ -->
+<!-- 牌の定義と役判定エンジン（DOM非依存）                          -->
+<!-- ============================================================ -->
+<script id="engine">
+"use strict";
+/* 牌番号: 0-8=1m..9m / 9-17=1p..9p / 18-26=1s..9s / 27-30=東南西北 / 31-33=白發中 */
+var KANJI_NUM = ['一','二','三','四','五','六','七','八','九'];
+var HONORS = ['東','南','西','北','白','發','中'];
+var SUIT_JA = ['萬','筒','索'];
+var YAOCHU = [0,8,9,17,18,26,27,28,29,30,31,32,33];
+var GREEN = [19,20,21,23,25,32]; /* 2s3s4s6s8s發 */
+
+function isHonor(t){ return t >= 27; }
+function isTerminal(t){ return t < 27 && (t % 9 === 0 || t % 9 === 8); }
+function isYaochu(t){ return isHonor(t) || isTerminal(t); }
+function suitOf(t){ return t < 27 ? Math.floor(t / 9) : 3; }
+function numOf(t){ return t < 27 ? (t % 9) + 1 : 0; }
+function tileJa(t){ return t < 27 ? KANJI_NUM[t % 9] + SUIT_JA[Math.floor(t / 9)] : HONORS[t - 27]; }
+/* ドラ表示牌 → ドラ */
+function doraOf(ind){
+  if (ind < 27) { var n = ind % 9, s = Math.floor(ind / 9); return s * 9 + ((n + 1) % 9); }
+  if (ind <= 30) return 27 + ((ind - 27 + 1) % 4);
+  return 31 + ((ind - 31 + 1) % 3);
+}
+
+/* ---------- 面子＋雀頭への分解（全通り） ---------- */
+function decompose(counts){
+  var res = [], melds = [], pair = -1;
+  function rec(i){
+    while (i < 34 && counts[i] === 0) i++;
+    if (i >= 34){ res.push({ melds: melds.slice(), pair: pair }); return; }
+    if (counts[i] >= 3){
+      counts[i] -= 3; melds.push({ k: 'kou', t: i }); rec(i); melds.pop(); counts[i] += 3;
+    }
+    if (counts[i] >= 4){
+      counts[i] -= 4; melds.push({ k: 'kan', t: i }); rec(i); melds.pop(); counts[i] += 4;
+    }
+    if (pair < 0 && counts[i] >= 2){
+      counts[i] -= 2; pair = i; rec(i); pair = -1; counts[i] += 2;
+    }
+    if (i < 27 && i % 9 <= 6 && counts[i+1] > 0 && counts[i+2] > 0){
+      counts[i]--; counts[i+1]--; counts[i+2]--;
+      melds.push({ k: 'shun', t: i }); rec(i); melds.pop();
+      counts[i]++; counts[i+1]++; counts[i+2]++;
+    }
+  }
+  rec(0);
+  return res;
+}
+
+/* ---------- 国士無双 ---------- */
+function evalKokushi(counts){
+  var pair = -1, i, k;
+  for (i = 0; i < 34; i++) if (counts[i] && YAOCHU.indexOf(i) < 0) return null;
+  for (k = 0; k < YAOCHU.length; k++){
+    var c = counts[YAOCHU[k]];
+    if (c === 0) return null;
+    if (c === 2){ if (pair >= 0) return null; pair = YAOCHU[k]; }
+    else if (c !== 1) return null;
+  }
+  if (pair < 0) return null;
+  return { yaku: [{ name: '国士無双', han: 13, ym: 1 }], han: 13, yakuman: 1 };
+}
+
+/* ---------- 七対子 ---------- */
+function evalChiitoi(counts){
+  var pairs = 0, tiles = [], i;
+  for (i = 0; i < 34; i++){
+    if (counts[i] === 0) continue;
+    if (counts[i] !== 2) return null;
+    pairs++; tiles.push(i);
+  }
+  if (pairs !== 7) return null;
+
+  /* 大車輪（筒子2〜8の七対子）・字一色七対子は役満 */
+  var dai = true;
+  for (i = 10; i <= 16; i++) if (counts[i] !== 2) dai = false;
+  if (dai) return { yaku: [{ name: '大車輪', han: 13, ym: 1 }], han: 13, yakuman: 1 };
+  if (tiles.every(isHonor)) return { yaku: [{ name: '字一色', han: 26, ym: 2 }], han: 26, yakuman: 2 };
+
+  var yaku = [{ name: '七対子', han: 6 }], han = 6;
+  var suits = {}, honor = false;
+  tiles.forEach(function(t){ if (isHonor(t)) honor = true; else suits[suitOf(t)] = 1; });
+  var ns = Object.keys(suits).length;
+  if (ns === 1 && !honor){ yaku.push({ name: '清一色', han: 6 }); han += 6; }
+  else if (ns === 1 && honor){ yaku.push({ name: '混一色', han: 3 }); han += 3; }
+  if (tiles.every(function(t){ return !isYaochu(t); })){ yaku.push({ name: '断幺九', han: 1 }); han += 1; }
+  if (tiles.every(isYaochu)){ yaku.push({ name: '混老頭', han: 2 }); han += 2; }
+  return { yaku: yaku, han: han, yakuman: 0 };
+}
+
+/* ---------- 九蓮宝燈（14牌・単一数牌） ---------- */
+function isChuuren(counts, suit){
+  var base = [3,1,1,1,1,1,1,1,3], extra = 0, i, c;
+  for (i = 0; i < 9; i++){
+    c = counts[suit * 9 + i] - base[i];
+    if (c < 0) return false;
+    extra += c;
+  }
+  return extra === 1;
+}
+
+/* ---------- 通常形（面子＋雀頭） ---------- */
+function evalStandard(d, ctx){
+  var melds = d.melds, pair = d.pair, hasPair = pair >= 0, m = melds.length;
+  if (m === 0) return null;
+
+  var tiles = [], i, j;
+  for (i = 0; i < m; i++){
+    var x = melds[i];
+    if (x.k === 'shun') tiles.push(x.t, x.t + 1, x.t + 2);
+    else { var c = x.k === 'kan' ? 4 : 3; for (j = 0; j < c; j++) tiles.push(x.t); }
+  }
+  if (hasPair) tiles.push(pair, pair);
+
+  var complete = (m >= 4 && hasPair);        /* 4面子1雀頭 = 和了形 */
+  var kouT = [], shunT = [], kanN = 0;
+  melds.forEach(function(x){
+    if (x.k === 'shun') shunT.push(x.t);
+    else { kouT.push(x.t); if (x.k === 'kan') kanN++; }
+  });
+  var suits = {}, honor = false;
+  tiles.forEach(function(t){ if (isHonor(t)) honor = true; else suits[suitOf(t)] = 1; });
+  var nSuits = Object.keys(suits).length;
+  var allYao = tiles.every(isYaochu);
+  var noYao = tiles.every(function(t){ return !isYaochu(t); });
+
+  var yaku = [], han = 0, yakuman = 0;
+  function add(name, h){ yaku.push({ name: name, han: h }); han += h; }
+  function addYM(name, mult){ yaku.push({ name: name, han: 13 * mult, ym: mult }); yakuman += mult; }
+
+  /* ---- 役満（4面子1雀頭が要る） ---- */
+  if (complete){
+    if (kouT.length === 4) addYM('四暗刻', 1);
+    if (tiles.every(isHonor)) addYM('字一色', 1);
+    if (tiles.every(isTerminal)) addYM('清老頭', 1);
+    if (tiles.every(function(t){ return GREEN.indexOf(t) >= 0; })) addYM('緑一色', 1);
+    var winds = kouT.filter(function(t){ return t >= 27 && t <= 30; }).length;
+    if (winds === 4) addYM('大四喜', 2);
+    else if (winds === 3 && pair >= 27 && pair <= 30) addYM('小四喜', 1);
+    if (kouT.filter(function(t){ return t >= 31; }).length === 3) addYM('大三元', 1);
+    if (kanN === 4) addYM('四槓子', 1);
+    if (nSuits === 1 && !honor && tiles.length === 14 && isChuuren(countsOf(tiles), suitOf(tiles[0]))) addYM('九蓮宝燈', 1);
+    if (yakuman > 0) return { yaku: yaku, han: 13 * yakuman, yakuman: yakuman };
+  }
+
+  /* ---- 面子そのものの基礎翻 ---- */
+  var base = 0;
+  melds.forEach(function(x){ base += (x.k === 'kan' ? 2 : 1); });
+  if (m === 1){
+    add(melds[0].k === 'shun' ? '順子' : (melds[0].k === 'kan' ? '槓子' : '刻子'), base);
+  } else {
+    add(m + '面子' + (hasPair ? '1雀頭' : ''), base);
+  }
+
+  /* ---- 役牌 ---- */
+  kouT.forEach(function(t){
+    if (t >= 31) add('役牌 ' + HONORS[t - 27], 1);
+    else if (t >= 27 && t === ctx.bakaze) add('場風 ' + HONORS[t - 27], 1);
+  });
+  if (kouT.filter(function(t){ return t >= 31; }).length === 2 && pair >= 31) add('小三元', 2);
+
+  /* ---- 一盃口・二盃口 ---- */
+  var dup = 0, seen = {};
+  shunT.forEach(function(t){ seen[t] = (seen[t] || 0) + 1; });
+  Object.keys(seen).forEach(function(k){ dup += Math.floor(seen[k] / 2); });
+  if (dup >= 2 && m >= 4) add('二盃口', 3);
+  else if (dup >= 1) add('一盃口', 1);
+
+  /* ---- 断幺九 ---- */
+  if (noYao && m >= 2) add('断幺九', 1);
+
+  /* ---- 3面子以上で成立する役 ---- */
+  if (m >= 3){
+    /* 三色同順 */
+    for (i = 0; i < shunT.length; i++){
+      var n0 = shunT[i] % 9, s0 = suitOf(shunT[i]);
+      if (s0 > 2) continue;
+      var got = {}; got[s0] = 1;
+      for (j = 0; j < shunT.length; j++) if (shunT[j] % 9 === n0 && suitOf(shunT[j]) < 3) got[suitOf(shunT[j])] = 1;
+      if (Object.keys(got).length === 3){ add('三色同順', 2); break; }
+    }
+    /* 一気通貫 */
+    for (var s = 0; s < 3; s++){
+      if (shunT.indexOf(s * 9) >= 0 && shunT.indexOf(s * 9 + 3) >= 0 && shunT.indexOf(s * 9 + 6) >= 0){ add('一気通貫', 2); break; }
+    }
+    /* 三色同刻 */
+    for (i = 0; i < kouT.length; i++){
+      if (suitOf(kouT[i]) > 2) continue;
+      var kn = kouT[i] % 9, kg = {};
+      for (j = 0; j < kouT.length; j++) if (suitOf(kouT[j]) < 3 && kouT[j] % 9 === kn) kg[suitOf(kouT[j])] = 1;
+      if (Object.keys(kg).length === 3){ add('三色同刻', 2); break; }
+    }
+    if (shunT.length === 0) add('対々和', 2);
+    if (kouT.length >= 3) add('三暗刻', 2);
+    if (kanN >= 3) add('三槓子', 2);
+
+    if (allYao && shunT.length === 0) add('混老頭', 2);
+    else if (hasPair && isYaochu(pair) && melds.every(function(x){
+      return x.k === 'shun' ? (x.t % 9 === 0 || x.t % 9 === 6) : isYaochu(x.t);
+    })){
+      add(allYao ? '純全帯幺九' : '混全帯幺九', allYao ? 3 : 2);
+    }
+
+    if (nSuits <= 1 && !honor) add('清一色', 6);
+    else if (nSuits <= 1 && honor) add('混一色', 3);
+  }
+
+  return { yaku: yaku, han: han, yakuman: 0 };
+}
+
+function countsOf(tiles){
+  var c = new Array(34).fill(0), i;
+  for (i = 0; i < tiles.length; i++) c[tiles[i]]++;
+  return c;
+}
+
+/* ---------- 翻 → 点数（子のロン相当） ---------- */
+var HAN_PTS = [0, 1000, 2000, 3900, 7700, 8000, 12000, 12000, 16000, 16000, 16000, 24000, 24000];
+function ptsOf(han, yakuman){
+  if (yakuman > 0) return 32000 * yakuman;
+  if (han <= 0) return 0;
+  return HAN_PTS[Math.min(han, 12)];
+}
+function sizeFactor(n){ return 1 + 0.12 * (n - 3); }
+
+/* ---------- かたまりの評価（本体） ---------- */
+var evalMemo = new Map();
+var _cnt = new Array(34).fill(0);
+
+/* 明らかに面子にならない牌が混じっていれば即座に捨てる（必要条件だけの粗い篩）。
+   14牌は国士無双がありうるので篩にかけない。 */
+function sift(tiles, enforce){
+  var n = tiles.length, i, t, ok = true;
+  for (i = 0; i < n; i++) _cnt[tiles[i]]++;
+  for (i = 0; enforce && i < n; i++){
+    t = tiles[i];
+    if (_cnt[t] >= 2) continue;          /* 対子・刻子の芽がある */
+    if (t >= 27){ ok = false; break; }   /* 1枚だけの字牌はどうにもならない */
+    var p = t % 9;
+    var a = p >= 2 && _cnt[t-2] && _cnt[t-1];
+    var b = p >= 1 && p <= 7 && _cnt[t-1] && _cnt[t+1];
+    var c = p <= 6 && _cnt[t+1] && _cnt[t+2];
+    if (!a && !b && !c){ ok = false; break; }
+  }
+  var counts = ok ? _cnt.slice() : null;
+  for (i = 0; i < n; i++) _cnt[tiles[i]] = 0;
+  return counts;
+}
+
+function analyze(tiles, ctx){
+  var n = tiles.length;
+  if (n < 3 || n > 14) return null;
+  var counts = sift(tiles, n < 14);
+  if (!counts) return null;
+
+  var key = tiles.slice().sort(function(a,b){ return a-b; }).join(',') + '|' + ctx.bakaze;
+  var best = evalMemo.get(key);
+  if (best === undefined){
+    var cand = [], r, i;
+    if (n === 14){
+      r = evalKokushi(counts); if (r) cand.push(r);
+      r = evalChiitoi(counts); if (r) cand.push(r);
+    }
+    var ds = decompose(counts.slice());
+    for (i = 0; i < ds.length; i++){
+      r = evalStandard(ds[i], ctx);
+      if (r) cand.push(r);
+    }
+    best = null;
+    for (i = 0; i < cand.length; i++){
+      var c = cand[i];
+      if (!best || c.yakuman > best.yakuman || (c.yakuman === best.yakuman && c.han > best.han)) best = c;
+    }
+    if (best) best = { yaku: best.yaku, han: best.han, yakuman: best.yakuman };
+    if (evalMemo.size > 60000) evalMemo.clear();
+    evalMemo.set(key, best || null);
+  }
+  if (!best) return null;
+
+  /* ドラは分解によらず一定なので後乗せ */
+  var yaku = best.yaku.slice(), han = best.han, ym = best.yakuman, dora = 0;
+  if (ym === 0 && ctx.dora && ctx.dora.length){
+    for (var k = 0; k < tiles.length; k++) if (ctx.dora.indexOf(tiles[k]) >= 0) dora++;
+    if (dora > 0){ yaku = yaku.concat([{ name: 'ドラ' + dora, han: dora, dora: true }]); han += dora; }
+  }
+  var pts = Math.round(ptsOf(han, ym) * sizeFactor(n));
+  return { yaku: yaku, han: han, yakuman: ym, dora: dora, pts: pts, n: n, label: labelOf(yaku, ym) };
+}
+
+function labelOf(yaku, ym){
+  /* ドラは名前としては後回し、それ以外は翻の高い順 */
+  var sorted = yaku.slice().sort(function(a,b){
+    if (!!a.dora !== !!b.dora) return a.dora ? 1 : -1;
+    return b.han - a.han;
+  });
+  if (ym > 0){
+    var big = sorted.filter(function(y){ return y.ym; }).map(function(y){ return y.name; });
+    if (big.length) return big.join('・');
+  }
+  return sorted.slice(0, 2).map(function(y){ return y.name; }).join('・');
+}
+
+/* ---------- 牌の絵（SVG） ---------- */
+var PIN_POS = {
+  1: [[22,30]],
+  2: [[22,18],[22,42]],
+  3: [[12,15],[22,30],[32,45]],
+  4: [[14,18],[30,18],[14,42],[30,42]],
+  5: [[13,17],[31,17],[22,30],[13,43],[31,43]],
+  6: [[14,14],[30,14],[14,30],[30,30],[14,46],[30,46]],
+  7: [[12,13],[22,18],[32,23],[14,38],[30,38],[14,50],[30,50]],
+  8: [[15,12],[29,12],[15,24],[29,24],[15,36],[29,36],[15,48],[29,48]],
+  9: [[12,15],[22,15],[32,15],[12,30],[22,30],[32,30],[12,45],[22,45],[32,45]]
+};
+var GC = '#1c7a4c', BC = '#2a5fae', RC = '#b02a34';
+var PIN_COL = {
+  1: [BC], 2: [GC,BC], 3: [GC,BC,RC],
+  4: [BC,GC,GC,BC], 5: [BC,GC,RC,GC,BC],
+  6: [GC,GC,RC,RC,RC,RC], 7: [GC,GC,GC,RC,RC,RC,RC],
+  8: [BC,BC,BC,BC,BC,BC,BC,BC], 9: [RC,RC,RC,GC,GC,GC,BC,BC,BC]
+};
+var SOU_POS = {
+  2: [[22,17],[22,43]],
+  3: [[22,15],[14,44],[30,44]],
+  4: [[14,17],[30,17],[14,43],[30,43]],
+  5: [[13,15],[31,15],[22,30],[13,45],[31,45]],
+  6: [[13,16],[22,16],[31,16],[13,44],[22,44],[31,44]],
+  7: [[22,12],[13,32],[22,32],[31,32],[13,48],[22,48],[31,48]],
+  8: [[11,16],[18,16],[26,16],[33,16],[11,44],[18,44],[26,44],[33,44]],
+  9: [[12,14],[22,14],[32,14],[12,30],[22,30],[32,30],[12,46],[22,46],[32,46]]
+};
+var SOU_RED = { 5:[2], 7:[0] };
+
+function svgDot(x, y, r, col){
+  return '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + col + '"/>' +
+         '<circle cx="' + x + '" cy="' + y + '" r="' + (r * 0.42) + '" fill="#fdfaf0"/>';
+}
+function svgStick(x, y, col){
+  var w = 5.4, h = 13;
+  return '<rect x="' + (x - w/2) + '" y="' + (y - h/2) + '" width="' + w + '" height="' + h + '" rx="2.4" fill="' + col + '"/>' +
+         '<rect x="' + (x - w/2) + '" y="' + (y - 1) + '" width="' + w + '" height="2" fill="rgba(255,255,255,0.55)"/>';
+}
+function faceSVG(t){
+  var body = '', n, s, i, pos, col;
+  if (t < 27){
+    n = numOf(t); s = suitOf(t);
+    if (s === 0){
+      body = '<text x="22" y="27" text-anchor="middle" font-size="23" fill="#20303c" font-family="serif" font-weight="600">' + KANJI_NUM[n-1] + '</text>' +
+             '<text x="22" y="52" text-anchor="middle" font-size="19" fill="#a8262f" font-family="serif" font-weight="600">萬</text>';
+    } else if (s === 1){
+      pos = PIN_POS[n]; col = PIN_COL[n];
+      if (n === 1){
+        body = '<circle cx="22" cy="30" r="12" fill="' + BC + '"/><circle cx="22" cy="30" r="8" fill="#fdfaf0"/>' +
+               '<circle cx="22" cy="30" r="5" fill="' + RC + '"/><circle cx="22" cy="30" r="2" fill="#fdfaf0"/>';
+      } else {
+        var r = n >= 7 ? 4.3 : (n >= 4 ? 5 : 5.8);
+        for (i = 0; i < pos.length; i++) body += svgDot(pos[i][0], pos[i][1], r, col[i]);
+      }
+    } else {
+      if (n === 1){
+        body = '<ellipse cx="22" cy="34" rx="8.5" ry="11" fill="' + GC + '"/>' +
+               '<circle cx="22" cy="20" r="6" fill="' + GC + '"/>' +
+               '<circle cx="24" cy="19" r="1.5" fill="#fff"/>' +
+               '<path d="M27 21 L34 24 L27 25 Z" fill="' + RC + '"/>' +
+               '<path d="M17 34 q5 6 10 0" stroke="#fdfaf0" stroke-width="1.6" fill="none"/>' +
+               '<path d="M22 45 L15 53 M22 45 L29 53" stroke="' + RC + '" stroke-width="2" stroke-linecap="round"/>';
+      } else {
+        pos = SOU_POS[n];
+        var reds = SOU_RED[n] || [];
+        for (i = 0; i < pos.length; i++) body += svgStick(pos[i][0], pos[i][1], reds.indexOf(i) >= 0 ? RC : GC);
+      }
+    }
+    if (s !== 0) body += '<text x="4" y="11" font-size="8.5" fill="#a49b84" font-family="sans-serif">' + n + (s === 1 ? 'p' : 's') + '</text>';
+  } else {
+    var h = t - 27;
+    if (h === 4){
+      body = '<rect x="9" y="10" width="26" height="40" rx="3" fill="none" stroke="#3a5a86" stroke-width="2.2"/>' +
+             '<rect x="13" y="14" width="18" height="32" rx="2" fill="none" stroke="#c9d6e6" stroke-width="1"/>';
+    } else {
+      var c = h === 5 ? '#1c7a4c' : (h === 6 ? '#a8262f' : '#20303c');
+      body = '<text x="22" y="41" text-anchor="middle" font-size="27" fill="' + c + '" font-family="serif" font-weight="600">' + HONORS[h] + '</text>';
+    }
+  }
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="60" viewBox="0 0 44 60">' + body + '</svg>';
+}
+</script>
+
+<!-- ============================================================ -->
+<!-- ゲーム本体                                                    -->
+<!-- ============================================================ -->
+<script id="game">
+"use strict";
+(function(){
+
+var $ = function(s){ return document.querySelector(s); };
+var clamp = function(v, a, b){ return v < a ? a : (v > b ? b : v); };
+
+/* ---------------- 定数 ---------------- */
+var COLS = 14;
+var TILE_AR = 1.16;              /* セルの縦横比（牌の絵柄はこの中で 44:60 を保つ） */
+var MAX_CLUSTER = 5;             /* 隣接塊として見る最大牌数 */
+var CHAIN_MULT = [1, 1, 1.6, 2.4, 3.5, 5, 7, 10, 14, 20, 28, 40];
+var KYOKU_NAME = ['一局','二局','三局','四局'];
+var WIND_NAME = ['東','南','西','北'];
+var BEST_KEY = 'rakujan.best';
+
+/* ---------------- 状態 ---------------- */
+var ROWS = 16, CW = 40, CH = 52, DPR = 1;
+var grid = [];                   /* ROWS*COLS の配列。要素は {t, flip, fy, flash} か null */
+var wall = [], discard = [], doraInd = [], doraTiles = [];
+var nextQ = [], hold = null, holdUsed = false;
+var piece = null;                /* {t, col, y, flip, rot} */
+var state = 'idle';              /* idle | play | flash | fall | pause | over */
+var timer = 0, pendingActive = [], pendingClear = [];
+var score = 0, best = 0, chain = 0, maxChain = 0, locks = 0, cleared = 0, spins = 0;
+var bestHand = null;
+var round = 0, level = 1;
+var effects = [], sparks = [], shake = 0;
+var lastT = 0, dropAcc = 0;
+var spinHinted = false;
+
+/* ---------------- キャンバス ---------------- */
+var cv = $('#board'), ctx = cv.getContext('2d');
+var faceImgs = new Array(34), sprites = new Array(34), spritesFlip = new Array(34);
+
+/* ---------------- 音 ---------------- */
+var Sound = (function(){
+  var ac = null, on = true;
+  function ensure(){
+    if (!ac){
+      try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; }
+    }
+    if (ac && ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function tone(freq, dur, type, gain, when, sweep){
+    var a = ensure(); if (!a || !on) return;
+    var t0 = a.currentTime + (when || 0);
+    var o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t0);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40, sweep), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain || 0.12, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  }
+  function noise(dur, gain, when, freq){
+    var a = ensure(); if (!a || !on) return;
+    var t0 = a.currentTime + (when || 0);
+    var len = Math.floor(a.sampleRate * dur);
+    var buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+    var src = a.createBufferSource(); src.buffer = buf;
+    var f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 900; f.Q.value = 1.1;
+    var g = a.createGain(); g.gain.value = gain || 0.2;
+    src.connect(f); f.connect(g); g.connect(a.destination);
+    src.start(t0);
+  }
+  var PENTA = [523.25, 587.33, 698.46, 783.99, 880, 1046.5, 1174.7, 1396.9, 1568, 1760];
+  return {
+    isOn: function(){ return on; },
+    toggle: function(){ on = !on; if (on) ensure(); return on; },
+    move: function(){ tone(320, 0.04, 'square', 0.035); },
+    land: function(){ noise(0.10, 0.24, 0, 1500); tone(150, 0.10, 'triangle', 0.10, 0, 90); },
+    spin: function(){ tone(700, 0.06, 'sine', 0.05, 0, 520); },
+    hold: function(){ tone(520, 0.09, 'triangle', 0.07, 0, 700); },
+    clear: function(ch, n){
+      var k = Math.min(PENTA.length - 1, ch - 1);
+      for (var i = 0; i < Math.min(4, Math.max(2, Math.floor(n / 3))); i++)
+        tone(PENTA[Math.min(PENTA.length - 1, k + i)], 0.30, 'triangle', 0.10, i * 0.045);
+      noise(0.16, 0.14, 0, 2400);
+    },
+    yakuman: function(){
+      var seq = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+      for (var i = 0; i < seq.length; i++){
+        tone(seq[i], 0.55, 'triangle', 0.13, i * 0.10);
+        tone(seq[i] / 2, 0.55, 'sine', 0.08, i * 0.10);
+      }
+    },
+    over: function(){
+      var seq = [440, 392, 330, 262];
+      for (var i = 0; i < seq.length; i++) tone(seq[i], 0.45, 'sine', 0.11, i * 0.16, seq[i] * 0.85);
+    }
+  };
+})();
+
+/* ---------------- 牌スプライトの用意 ---------------- */
+function loadFaces(){
+  var jobs = [];
+  for (var t = 0; t < 34; t++){
+    (function(t){
+      jobs.push(new Promise(function(res){
+        var img = new Image();
+        img.onload = function(){ faceImgs[t] = img; res(); };
+        img.onerror = function(){ res(); };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(faceSVG(t));
+      }));
+    })(t);
+  }
+  return Promise.all(jobs);
+}
+
+function roundRect(c, x, y, w, h, r){
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+/* セル寸法が変わるたびに34種を焼き直す */
+function buildSprites(){
+  var w = Math.round(CW * DPR), h = Math.round(CH * DPR);
+  if (w < 4 || h < 4) return;
+  for (var t = 0; t < 34; t++){
+    for (var f = 0; f < 2; f++){
+      var cn = document.createElement('canvas');
+      cn.width = w; cn.height = h;
+      var c = cn.getContext('2d');
+      var pad = Math.max(1, Math.round(1.2 * DPR));
+      var bw = w - pad * 2, bh = h - pad * 2, r = Math.max(2, bw * 0.11);
+      c.save();
+      if (f){ c.translate(w / 2, h / 2); c.rotate(Math.PI); c.translate(-w / 2, -h / 2); }
+      /* 牌の胴体 */
+      c.fillStyle = 'rgba(0,0,0,0.34)';
+      roundRect(c, pad + 1, pad + bh * 0.06, bw, bh, r); c.fill();
+      var g = c.createLinearGradient(0, pad, 0, pad + bh);
+      g.addColorStop(0, '#fffdf6'); g.addColorStop(0.62, '#f4efe0'); g.addColorStop(1, '#ded6c1');
+      c.fillStyle = g;
+      roundRect(c, pad, pad, bw, bh, r); c.fill();
+      c.strokeStyle = '#c4bba2'; c.lineWidth = Math.max(1, DPR * 0.9); c.stroke();
+      c.save(); c.clip();
+      c.fillStyle = 'rgba(255,255,255,0.75)';
+      c.fillRect(pad, pad, bw, Math.max(1, bh * 0.06));
+      c.restore();
+      /* 絵柄 */
+      var img = faceImgs[t];
+      if (img){
+        var fw = bw * 0.90, fh = fw * (60 / 44);
+        if (fh > bh * 0.92){ fh = bh * 0.92; fw = fh * (44 / 60); }
+        c.drawImage(img, pad + (bw - fw) / 2, pad + (bh - fh) / 2, fw, fh);
+      }
+      c.restore();
+      if (f) spritesFlip[t] = cn; else sprites[t] = cn;
+    }
+  }
+}
+
+/* ---------------- 盤面ヘルパ ---------------- */
+function at(r, c){ return grid[r * COLS + c]; }
+function landRow(c){
+  for (var r = ROWS - 1; r >= 0; r--) if (!grid[r * COLS + c]) return r;
+  return -1;
+}
+function colFull(c){ return !!grid[c]; }
+
+/* ---------------- 山と配牌 ---------------- */
+function shuffle(a){
+  for (var i = a.length - 1; i > 0; i--){
+    var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+function freshWall(){
+  var a = [];
+  for (var t = 0; t < 34; t++) for (var k = 0; k < 4; k++) a.push(t);  /* 36+36+36+28 = 136 */
+  return shuffle(a);
+}
+function refreshDora(){
+  doraTiles = doraInd.map(doraOf);
+}
+function nextRound(){
+  /* 山を引き切った → これまでに消えた牌とドラ表示牌を洗牌して次局へ */
+  discard = discard.concat(doraInd);
+  doraInd = [];
+  if (discard.length === 0){ refreshDora(); return false; }
+  wall = shuffle(discard);
+  discard = [];
+  round++;
+  var k = Math.min(5, 1 + Math.floor(round / 2));
+  for (var i = 0; i < k && wall.length; i++) doraInd.push(wall.pop());
+  refreshDora();
+  pushLog('― ' + kyokuName() + ' ―', 0, false);
+  return true;
+}
+function kyokuName(){
+  return WIND_NAME[Math.floor(round / 4) % 4] + KYOKU_NAME[round % 4];
+}
+function bakaze(){ return 27 + (Math.floor(round / 4) % 4); }
+function drawWall(){
+  if (wall.length === 0 && !nextRound()) return null;
+  if (wall.length === 0) return null;
+  return wall.pop();
+}
+function fillQueue(){
+  while (nextQ.length < 3){
+    var t = drawWall();
+    if (t === null) break;
+    nextQ.push(t);
+  }
+}
+
+/* ---------------- ゲーム進行 ---------------- */
+function layout(newGame){
+  var box = $('#boardbox').getBoundingClientRect();
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  var maxW = box.width, maxH = box.height;
+  if (newGame){
+    var cw0 = maxW / COLS;
+    ROWS = clamp(Math.floor(maxH / (cw0 * TILE_AR)), 12, 20);
+  }
+  var ch = Math.min(maxH / ROWS, (maxW / COLS) * TILE_AR);
+  CH = ch; CW = ch / TILE_AR;
+  cv.style.width = (CW * COLS) + 'px';
+  cv.style.height = (CH * ROWS) + 'px';
+  cv.width = Math.round(CW * COLS * DPR);
+  cv.height = Math.round(CH * ROWS * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  var bb = $('#boardbox');
+  bb.style.setProperty('--bw', (CW * COLS) + 'px');
+  bb.style.setProperty('--bh', (CH * ROWS) + 'px');
+  buildSprites();
+}
+
+function newGame(){
+  layout(true);
+  grid = new Array(ROWS * COLS).fill(null);
+  wall = freshWall(); discard = []; doraInd = [wall.pop()];
+  refreshDora();
+  nextQ = []; hold = null; holdUsed = false;
+  score = 0; chain = 0; maxChain = 0; locks = 0; cleared = 0; spins = 0;
+  bestHand = null; round = 0; level = 1;
+  effects = []; sparks = []; shake = 0;
+  piece = null; pendingActive = []; pendingClear = [];
+  $('#log').innerHTML = '<div class="empty">まだ何も消えていない</div>';
+  fillQueue();
+  spawn();
+  state = 'play';
+  hideVeils();
+  syncUI();
+}
+
+function spawn(){
+  fillQueue();
+  if (nextQ.length === 0){ gameOver('牌が尽きた', '山も河も空になった。'); return; }
+  var t = nextQ.shift();
+  fillQueue();
+  piece = { t: t, col: Math.floor(COLS / 2) - 1, y: -1, flip: false, rot: 0 };
+  holdUsed = false;
+  /* 落とし場所がどこにもなければ終局 */
+  var any = false;
+  for (var c = 0; c < COLS; c++) if (!colFull(c)) any = true;
+  if (!any){ gameOver('積み切り', '牌を置ける列がなくなった。'); return; }
+  if (colFull(piece.col)){
+    for (var d = 1; d < COLS; d++){
+      if (piece.col - d >= 0 && !colFull(piece.col - d)){ piece.col -= d; break; }
+      if (piece.col + d < COLS && !colFull(piece.col + d)){ piece.col += d; break; }
+    }
+  }
+  syncSide();
+}
+
+function fallSpeed(){
+  return Math.min(11, 1.15 * Math.pow(1.14, level - 1));
+}
+
+function movePiece(d){
+  if (state !== 'play' || !piece) return;
+  var nc = piece.col + d;
+  while (nc >= 0 && nc < COLS && colFull(nc)) nc += d;
+  if (nc < 0 || nc >= COLS) return;
+  piece.col = nc;
+  var lr = landRow(nc);
+  if (piece.y > lr) piece.y = lr;
+  Sound.move();
+}
+function rotatePiece(){
+  if (state !== 'play' || !piece) return;
+  piece.flip = !piece.flip;
+  piece.rot = 1;
+  spins++;
+  Sound.spin();
+  if (!spinHinted && spins >= 3){
+    spinHinted = true;
+    addEffect(cv.width / DPR / 2, CH * 2.2, '牌は回しても同じ牌', '', '#9db3a4', 1.6, 15);
+  }
+}
+function doHold(){
+  if (state !== 'play' || !piece || holdUsed) return;
+  var t = piece.t;
+  if (hold === null){
+    hold = t;
+    fillQueue();
+    if (nextQ.length === 0){ gameOver('牌が尽きた', '山も河も空になった。'); return; }
+    piece.t = nextQ.shift();
+    fillQueue();
+  } else {
+    piece.t = hold;
+    hold = t;
+  }
+  piece.y = Math.min(piece.y, -0.2);
+  holdUsed = true;
+  Sound.hold();
+  syncSide();
+}
+function hardDrop(){
+  if (state !== 'play' || !piece) return;
+  piece.y = landRow(piece.col);
+  lockPiece();
+}
+
+function lockPiece(){
+  var c = piece.col, r = landRow(c);
+  if (r < 0){ gameOver('積み切り', '牌を置く場所がなくなった。'); return; }
+  grid[r * COLS + c] = { t: piece.t, flip: piece.flip, fy: Math.min(piece.y, r), flash: 0 };
+  locks++;
+  level = 1 + Math.floor(locks / 35);
+  piece = null;
+  chain = 0;
+  Sound.land();
+  shake = Math.max(shake, 2.5);
+  resolveStep([r * COLS + c]);
+}
+
+/* ---- 消える組を探す ---- */
+function ctxNow(){ return { dora: doraTiles, bakaze: bakaze() }; }
+
+function findGroups(active){
+  var seen = new Set(), clusterSeen = new Set(), out = [], cx = ctxNow();
+  function tryCells(cells){
+    if (cells.length < 3 || cells.length > 14) return;
+    var sorted = cells.slice().sort(function(a,b){ return a-b; });
+    var key = sorted.join(',');
+    if (seen.has(key)) return;
+    seen.add(key);
+    var tiles = [], i;
+    for (i = 0; i < sorted.length; i++){
+      var o = grid[sorted[i]];
+      if (!o) return;
+      tiles.push(o.t);
+    }
+    var res = analyze(tiles, cx);
+    if (res) out.push({ cells: sorted, res: res });
+  }
+
+  for (var a = 0; a < active.length; a++){
+    var idx = active[a];
+    if (!grid[idx]) continue;
+    var r0 = Math.floor(idx / COLS), c0 = idx % COLS, i, j;
+
+    /* 横一列 */
+    var L = c0; while (L > 0 && grid[r0 * COLS + L - 1]) L--;
+    var R = c0; while (R < COLS - 1 && grid[r0 * COLS + R + 1]) R++;
+    for (i = L; i <= c0; i++) for (j = c0; j <= R; j++){
+      if (j - i + 1 < 3) continue;
+      var seg = [];
+      for (var k = i; k <= j; k++) seg.push(r0 * COLS + k);
+      tryCells(seg);
+    }
+    /* 縦一列 */
+    var U = r0; while (U > 0 && grid[(U - 1) * COLS + c0]) U--;
+    var D = r0; while (D < ROWS - 1 && grid[(D + 1) * COLS + c0]) D++;
+    for (i = U; i <= r0; i++) for (j = r0; j <= D; j++){
+      if (j - i + 1 < 3) continue;
+      var seg2 = [];
+      for (var k2 = i; k2 <= j; k2++) seg2.push(k2 * COLS + c0);
+      tryCells(seg2);
+    }
+    /* 隣接した塊（最大5牌） */
+    growCluster([idx], clusterSeen, tryCells);
+  }
+  return out;
+}
+
+function neighborsOf(idx){
+  var r = Math.floor(idx / COLS), c = idx % COLS, res = [];
+  if (r > 0 && grid[idx - COLS]) res.push(idx - COLS);
+  if (r < ROWS - 1 && grid[idx + COLS]) res.push(idx + COLS);
+  if (c > 0 && grid[idx - 1]) res.push(idx - 1);
+  if (c < COLS - 1 && grid[idx + 1]) res.push(idx + 1);
+  return res;
+}
+/* sub は常に昇順。同じ集合を二度展開しないよう枝を刈る */
+function growCluster(sub, seen, emit){
+  var key = sub.join(',');
+  if (seen.has(key)) return;
+  seen.add(key);
+  if (sub.length >= 3) emit(sub);
+  if (sub.length >= MAX_CLUSTER) return;
+  var cands = {}, i, j;
+  for (i = 0; i < sub.length; i++){
+    var nb = neighborsOf(sub[i]);
+    for (j = 0; j < nb.length; j++) if (sub.indexOf(nb[j]) < 0) cands[nb[j]] = 1;
+  }
+  var keys = Object.keys(cands);
+  for (i = 0; i < keys.length; i++){
+    var v = +keys[i], ns = sub.slice(), k = 0;
+    while (k < ns.length && ns[k] < v) k++;
+    ns.splice(k, 0, v);
+    growCluster(ns, seen, emit);
+  }
+}
+
+/* ---- 1ステップ解決 ---- */
+function resolveStep(active){
+  var groups = findGroups(active);
+  if (groups.length === 0){ finishChain(); return; }
+
+  /* 高い役から順に、重ならないように採用 */
+  groups.sort(function(a, b){
+    if (b.res.pts !== a.res.pts) return b.res.pts - a.res.pts;
+    return b.res.n - a.res.n;
+  });
+  var used = new Set(), picked = [];
+  for (var i = 0; i < groups.length; i++){
+    var g = groups[i], ok = true;
+    for (var j = 0; j < g.cells.length; j++) if (used.has(g.cells[j])) { ok = false; break; }
+    if (!ok) continue;
+    for (var k = 0; k < g.cells.length; k++) used.add(g.cells[k]);
+    picked.push(g);
+  }
+
+  chain++;
+  maxChain = Math.max(maxChain, chain);
+  var cmult = CHAIN_MULT[Math.min(chain, CHAIN_MULT.length - 1)];
+  var smult = 1 + 0.25 * (picked.length - 1);
+  var gained = 0, ym = false;
+
+  for (var p = 0; p < picked.length; p++){
+    var res = picked[p].res, cells = picked[p].cells;
+    var pts = Math.round(res.pts * cmult * smult);
+    gained += pts;
+    if (res.yakuman > 0) ym = true;
+    if (!bestHand || res.pts > bestHand.pts) bestHand = { label: res.label, han: res.han, yakuman: res.yakuman, pts: res.pts };
+    /* 表示 */
+    var sx = 0, sy = 0;
+    for (var q = 0; q < cells.length; q++){ sx += (cells[q] % COLS) + 0.5; sy += Math.floor(cells[q] / COLS) + 0.5; }
+    sx = sx / cells.length * CW; sy = sy / cells.length * CH;
+    addEffect(sx, sy, res.label, (res.yakuman ? '役満' : res.han + '翻') + '  ' + pts.toLocaleString(),
+              res.yakuman ? '#ffb86a' : '#ffe6a8', 1.1, res.yakuman ? 26 : 18);
+    pushLog((chain > 1 ? chain + '連鎖 ' : '') + res.label, pts, res.yakuman > 0);
+    if (res.yakuman > 0) burst(sx, sy, 46, '#ffcf7a');
+    for (var z = 0; z < cells.length; z++) grid[cells[z]].flash = 1;
+    cleared += cells.length;
+  }
+
+  score += gained;
+  shake = Math.max(shake, ym ? 14 : Math.min(10, 2 + chain * 1.6));
+  if (ym) Sound.yakuman(); else Sound.clear(chain, used.size);
+  if (chain > 1) showChain(chain);
+
+  pendingClear = picked;
+  state = 'flash';
+  timer = 0.30;
+  syncSide();
+  bumpScore();
+}
+
+function applyClear(){
+  var moved = [];
+  for (var p = 0; p < pendingClear.length; p++){
+    var cells = pendingClear[p].cells;
+    for (var i = 0; i < cells.length; i++){
+      var o = grid[cells[i]];
+      if (o){ discard.push(o.t); grid[cells[i]] = null; }
+    }
+  }
+  pendingClear = [];
+  /* 重力 */
+  for (var c = 0; c < COLS; c++){
+    var w = ROWS - 1;
+    for (var r = ROWS - 1; r >= 0; r--){
+      var o2 = grid[r * COLS + c];
+      if (!o2) continue;
+      if (r !== w){ grid[w * COLS + c] = o2; grid[r * COLS + c] = null; moved.push(w * COLS + c); }
+      w--;
+    }
+  }
+  pendingActive = moved;
+  state = 'fall';
+  timer = 0.20;
+}
+
+function finishChain(){
+  chain = 0;
+  hideChain();
+  /* 最上段に届いていたら終局 */
+  for (var c = 0; c < COLS; c++){
+    if (grid[c]){ gameOver('積み切り', '牌が天井まで届いた。'); return; }
+  }
+  state = 'play';
+  spawn();
+  syncUI();
+}
+
+function gameOver(title, reason){
+  state = 'over';
+  piece = null;
+  Sound.over();
+  if (score > best){ best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {} }
+  $('#over-title').textContent = title;
+  $('#over-reason').textContent = reason;
+  $('#over-score').textContent = score.toLocaleString();
+  $('#over-detail').innerHTML =
+    kyokuName() + ' ／ 最大' + maxChain + '連鎖 ／ ' + cleared + '牌を消した' +
+    (bestHand ? '<br>最高手 ' + bestHand.label + '（' + (bestHand.yakuman ? '役満' : bestHand.han + '翻') + '）' : '') +
+    (spins ? '<br>無駄回し ' + spins + '回' : '');
+  $('#veil-over').classList.add('on');
+  syncUI();
+}
+
+/* ---------------- 演出 ---------------- */
+function addEffect(x, y, text, sub, color, life, size){
+  effects.push({ x: x, y: y, text: text, sub: sub, color: color, t: 0, life: life, size: size });
+}
+function burst(x, y, n, color){
+  for (var i = 0; i < n; i++){
+    var a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 220;
+    sparks.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, t: 0, life: 0.7 + Math.random() * 0.6, c: color, r: 1 + Math.random() * 2.4 });
+  }
+}
+
+/* ---------------- 描画 ---------------- */
+function render(){
+  var W = CW * COLS, H = CH * ROWS;
+  ctx.save();
+  if (shake > 0.05){
+    ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+  }
+  /* 卓 */
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0f3226'); g.addColorStop(0.55, '#0c2a20'); g.addColorStop(1, '#081d16');
+  ctx.fillStyle = g; ctx.fillRect(-20, -20, W + 40, H + 40);
+
+  /* 目地 */
+  ctx.strokeStyle = 'rgba(255,255,255,0.035)'; ctx.lineWidth = 1;
+  for (var c = 1; c < COLS; c++){ ctx.beginPath(); ctx.moveTo(c * CW, 0); ctx.lineTo(c * CW, H); ctx.stroke(); }
+  for (var r = 1; r < ROWS; r++){ ctx.beginPath(); ctx.moveTo(0, r * CH); ctx.lineTo(W, r * CH); ctx.stroke(); }
+
+  /* 危険帯 */
+  var dg = ctx.createLinearGradient(0, 0, 0, CH * 2.4);
+  dg.addColorStop(0, 'rgba(200,60,50,0.20)'); dg.addColorStop(1, 'rgba(200,60,50,0)');
+  ctx.fillStyle = dg; ctx.fillRect(0, 0, W, CH * 2.4);
+  ctx.strokeStyle = 'rgba(220,90,70,0.35)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, CH); ctx.lineTo(W, CH); ctx.stroke(); ctx.setLineDash([]);
+
+  /* ゴースト */
+  if (piece && state === 'play'){
+    var lr = landRow(piece.col);
+    if (lr >= 0){
+      ctx.fillStyle = 'rgba(227,192,118,0.10)';
+      roundRect(ctx, piece.col * CW + 2, lr * CH + 2, CW - 4, CH - 4, CW * 0.11); ctx.fill();
+      ctx.strokeStyle = 'rgba(227,192,118,0.34)'; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.fillStyle = 'rgba(227,192,118,0.07)';
+      ctx.fillRect(piece.col * CW + 1, 0, CW - 2, lr * CH);
+    }
+  }
+
+  /* 盤上の牌 */
+  for (var i = 0; i < grid.length; i++){
+    var o = grid[i];
+    if (!o) continue;
+    drawTile(o.t, (i % COLS) * CW, o.fy * CH, o.flip, o.flash, 0);
+  }
+
+  /* 落下中の牌 */
+  if (piece){
+    drawTile(piece.t, piece.col * CW, piece.y * CH, piece.flip, 0, piece.rot);
+  }
+
+  /* 火花 */
+  for (var s = 0; s < sparks.length; s++){
+    var p = sparks[s], k = 1 - p.t / p.life;
+    ctx.globalAlpha = Math.max(0, k);
+    ctx.fillStyle = p.c;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * k, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  /* 文字演出 */
+  for (var e = 0; e < effects.length; e++){
+    var f = effects[e], u = f.t / f.life;
+    var alpha = u < 0.12 ? u / 0.12 : (u > 0.7 ? (1 - u) / 0.3 : 1);
+    var y = f.y - u * CH * 1.5;
+    ctx.globalAlpha = clamp(alpha, 0, 1);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(4,16,10,0.9)';
+    ctx.font = '700 ' + f.size + 'px "Hiragino Mincho ProN", "Yu Mincho", serif';
+    ctx.strokeText(f.text, f.x, y); ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, y);
+    if (f.sub){
+      ctx.font = '700 ' + Math.round(f.size * 0.72) + 'px system-ui, sans-serif';
+      ctx.strokeText(f.sub, f.x, y + f.size * 1.05);
+      ctx.fillStyle = '#fff6e0'; ctx.fillText(f.sub, f.x, y + f.size * 1.05);
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawTile(t, x, y, flip, flash, rot){
+  var sp = flip ? spritesFlip[t] : sprites[t];
+  if (!sp) return;
+  var ang = rot ? rot * Math.PI : 0;
+  ctx.save();
+  if (ang){
+    ctx.translate(x + CW / 2, y + CH / 2);
+    ctx.rotate(ang);
+    ctx.translate(-CW / 2, -CH / 2);
+    x = 0; y = 0;
+  }
+  ctx.drawImage(sp, x, y, CW, CH);
+  /* ドラの印 */
+  if (doraTiles.indexOf(t) >= 0){
+    ctx.fillStyle = '#e0a83c';
+    ctx.beginPath();
+    var mx = x + CW - CW * 0.17, my = y + CH * 0.13, s = CW * 0.09;
+    ctx.moveTo(mx, my - s); ctx.lineTo(mx + s, my); ctx.lineTo(mx, my + s); ctx.lineTo(mx - s, my);
+    ctx.closePath(); ctx.fill();
+  }
+  if (flash > 0){
+    ctx.globalAlpha = 0.25 + 0.75 * Math.abs(Math.sin(flash * 14));
+    ctx.fillStyle = '#fff3cf';
+    roundRect(ctx, x + 1, y + 1, CW - 2, CH - 2, CW * 0.11); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+/* ---------------- ループ ---------------- */
+function loop(now){
+  requestAnimationFrame(loop);
+  var dt = Math.min(0.05, (now - lastT) / 1000 || 0);
+  lastT = now;
+  if (shake > 0) shake = Math.max(0, shake - dt * 34);
+
+  /* 落下アニメ */
+  for (var i = 0; i < grid.length; i++){
+    var o = grid[i];
+    if (!o) continue;
+    var target = Math.floor(i / COLS);
+    if (Math.abs(o.fy - target) > 0.002) o.fy += (target - o.fy) * (1 - Math.exp(-dt * 22));
+    else o.fy = target;
+    if (o.flash > 0) o.flash += dt;
+  }
+  /* 演出の時間 */
+  for (var e = effects.length - 1; e >= 0; e--){ effects[e].t += dt; if (effects[e].t >= effects[e].life) effects.splice(e, 1); }
+  for (var s = sparks.length - 1; s >= 0; s--){
+    var p = sparks[s]; p.t += dt; p.vy += 620 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.t >= p.life) sparks.splice(s, 1);
+  }
+  if (piece && piece.rot > 0) piece.rot = Math.max(0, piece.rot - dt * 4.5);
+
+  if (state === 'play' && piece){
+    var sp = fallSpeed() * (keys.down ? 14 : 1);
+    piece.y += sp * dt;
+    var lr = landRow(piece.col);
+    if (lr < 0){ gameOver('積み切り', '牌を置く場所がなくなった。'); }
+    else if (piece.y >= lr){ piece.y = lr; lockPiece(); }
+  } else if (state === 'flash'){
+    timer -= dt;
+    if (timer <= 0) applyClear();
+  } else if (state === 'fall'){
+    timer -= dt;
+    var settled = true;
+    for (var k = 0; k < grid.length; k++){
+      var g2 = grid[k];
+      if (g2 && Math.abs(g2.fy - Math.floor(k / COLS)) > 0.03){ settled = false; break; }
+    }
+    if (timer <= 0 && settled) resolveStep(pendingActive);
+  }
+
+  render();
+}
+
+/* ---------------- UI ---------------- */
+function miniTile(t, cls){
+  var d = document.createElement('div');
+  d.className = 'mini ' + (cls || '');
+  if (t === null || t === undefined){ d.className += ' slot'; return d; }
+  d.style.background = 'url("data:image/svg+xml;charset=utf-8,' + encodeURIComponent(faceSVG(t)) + '") center/86% no-repeat, linear-gradient(175deg,#fffdf6,#efe9d8)';
+  d.style.border = '1px solid #cfc6ae';
+  d.style.boxShadow = '0 2px 0 #b9b09a, 0 3px 5px rgba(0,0,0,0.4)';
+  d.title = tileJa(t);
+  return d;
+}
+function syncSide(){
+  var nx = $('#next'); nx.innerHTML = '';
+  for (var i = 0; i < 3; i++) nx.appendChild(nextQ.length > i ? miniTile(nextQ[i], i ? 'dim' : '') : miniTile(null));
+  var hd = $('#hold'); hd.innerHTML = '';
+  hd.appendChild(hold === null ? miniTile(null) : miniTile(hold));
+  var dr = $('#dora'); dr.innerHTML = '';
+  for (var j = 0; j < doraInd.length; j++) dr.appendChild(miniTile(doraInd[j]));
+  $('#dora-txt').textContent = doraTiles.length ? doraTiles.map(tileJa).join('・') : '—';
+  $('#wall').textContent = wall.length;
+  $('#kyoku').textContent = kyokuName();
+  $('#level').textContent = 'Lv.' + level;
+  $('#maxchain').textContent = maxChain;
+  $('#besthand').textContent = bestHand ? bestHand.label : '—';
+}
+function syncUI(){
+  $('#score').textContent = score.toLocaleString();
+  $('#best').textContent = best.toLocaleString();
+  syncSide();
+}
+var popT = null;
+function bumpScore(){
+  var el = $('#score');
+  el.textContent = score.toLocaleString();
+  if (score > best){ best = score; $('#best').textContent = best.toLocaleString(); }
+  el.classList.add('pop');
+  clearTimeout(popT);
+  popT = setTimeout(function(){ el.classList.remove('pop'); }, 260);
+}
+function showChain(n){
+  var el = $('#chainline');
+  el.textContent = n + '連鎖　天和';
+  el.classList.add('on');
+}
+function hideChain(){ $('#chainline').classList.remove('on'); }
+
+function pushLog(text, pts, ym){
+  var box = $('#log');
+  var empty = box.querySelector('.empty');
+  if (empty) box.removeChild(empty);
+  var d = document.createElement('div');
+  d.className = 'ent' + (ym ? ' ym' : '');
+  d.innerHTML = '<span class="y"></span><span class="p"></span>';
+  d.children[0].textContent = text;
+  d.children[1].textContent = pts ? '+' + pts.toLocaleString() : '';
+  box.insertBefore(d, box.firstChild);
+  while (box.children.length > 8) box.removeChild(box.lastChild);
+}
+
+function hideVeils(){
+  ['#veil-start', '#veil-pause', '#veil-over'].forEach(function(s){ $(s).classList.remove('on'); });
+}
+
+/* ---------------- 入力 ---------------- */
+var keys = { down: false };
+var repeatT = null;
+
+function togglePause(force){
+  if (state === 'over' || state === 'idle') return;
+  if (state === 'pause'){
+    state = resumeState || 'play';
+    $('#veil-pause').classList.remove('on');
+    $('#btn-pause').textContent = '一時停止';
+  } else if (force !== false){
+    resumeState = state;
+    state = 'pause';
+    $('#veil-pause').classList.add('on');
+    $('#btn-pause').textContent = '再開';
+  }
+}
+var resumeState = 'play';
+
+document.addEventListener('keydown', function(e){
+  var k = e.key;
+  if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' ','Spacebar'].indexOf(k) >= 0) e.preventDefault();
+  if (state === 'idle' || state === 'over'){
+    if (k === ' ' || k === 'Enter' || k === 'r' || k === 'R') newGame();
+    return;
+  }
+  if (k === 'p' || k === 'P'){ togglePause(); return; }
+  if (k === 'r' || k === 'R'){ newGame(); return; }
+  if (state === 'pause') return;
+  if (k === 'ArrowLeft') movePiece(-1);
+  else if (k === 'ArrowRight') movePiece(1);
+  else if (k === 'ArrowDown') keys.down = true;
+  else if (k === 'ArrowUp' || k === 'z' || k === 'Z' || k === 'x' || k === 'X') rotatePiece();
+  else if (k === ' ' || k === 'Spacebar') hardDrop();
+  else if (k === 'c' || k === 'C' || k === 'Shift') doHold();
+});
+document.addEventListener('keyup', function(e){
+  if (e.key === 'ArrowDown') keys.down = false;
+});
+
+/* 盤面タップ：ちがう列なら移動、同じ列をもう一度叩くと落ちる */
+cv.addEventListener('pointerdown', function(e){
+  if (state !== 'play' || !piece) return;
+  var rect = cv.getBoundingClientRect();
+  var c = clamp(Math.floor((e.clientX - rect.left) / (rect.width / COLS)), 0, COLS - 1);
+  if (c === piece.col){ hardDrop(); return; }
+  while (c >= 0 && c < COLS && colFull(c)) c += (c < piece.col ? 1 : -1);
+  if (c >= 0 && c < COLS){ piece.col = c; piece.y = Math.min(piece.y, landRow(c)); Sound.move(); }
+});
+
+function bindRepeat(el, fn){
+  var iv = null, to = null;
+  var start = function(e){
+    e.preventDefault();
+    fn();
+    to = setTimeout(function(){ iv = setInterval(fn, 70); }, 220);
+  };
+  var stop = function(){ clearTimeout(to); clearInterval(iv); };
+  el.addEventListener('pointerdown', start);
+  el.addEventListener('pointerup', stop);
+  el.addEventListener('pointercancel', stop);
+  el.addEventListener('pointerleave', stop);
+}
+bindRepeat($('#p-left'), function(){ movePiece(-1); });
+bindRepeat($('#p-right'), function(){ movePiece(1); });
+
+/* ボタンにフォーカスが残ると Space が押し直しになるので必ず外す */
+function onTap(sel, fn){
+  var el = $(sel);
+  el.addEventListener('click', function(e){ el.blur(); fn.call(el, e); });
+}
+onTap('#btn-start', newGame);
+onTap('#btn-again', newGame);
+onTap('#btn-restart', function(){
+  if (state === 'play' || state === 'flash' || state === 'fall'){
+    if (!confirm('いまの局を捨てて最初からやり直しますか？')) return;
+  }
+  newGame();
+});
+onTap('#btn-resume', function(){ togglePause(); });
+onTap('#btn-pause', function(){ togglePause(); });
+onTap('#btn-help', function(){
+  document.getElementById('help').scrollIntoView({ behavior: 'smooth' });
+});
+onTap('#btn-sound', function(){
+  var on = Sound.toggle();
+  this.textContent = on ? '♪ 音 ON' : '♪ 音 OFF';
+});
+onTap('#p-rot', rotatePiece);
+onTap('#p-hold', doHold);
+onTap('#p-drop', hardDrop);
+
+var rz = null;
+window.addEventListener('resize', function(){
+  clearTimeout(rz);
+  rz = setTimeout(function(){ layout(false); }, 120);
+});
+if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
+
+/* ---------------- 起動 ---------------- */
+try { best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0; } catch (e) { best = 0; }
+
+loadFaces().then(function(){
+  /* 開始前の盤面を用意して見せておく */
+  layout(true);
+  grid = new Array(ROWS * COLS).fill(null);
+  wall = freshWall(); doraInd = [wall.pop()]; refreshDora();
+  nextQ = []; fillQueue();
+  syncUI();
+  state = 'idle';
+  lastT = performance.now();
+  requestAnimationFrame(loop);
+});
+
+})();
+</script>
+</body>
+</html>
