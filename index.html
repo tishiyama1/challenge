@@ -85,6 +85,10 @@
   .card:nth-child(6) { animation-delay: 0.6s; }
   .card:nth-child(7) { animation-delay: 0.7s; }
   .card:nth-child(8) { animation-delay: 0.8s; }
+  .card:nth-child(9) { animation-delay: 0.9s; }
+  .card:nth-child(10) { animation-delay: 1.0s; }
+  .card:nth-child(11) { animation-delay: 1.1s; }
+  .card:nth-child(12) { animation-delay: 1.2s; }
   .card:hover { transform: translateY(-8px); border-color: rgba(255,255,255,0.22); }
   .card:hover .art canvas { transform: scale(1.06); }
   .card:hover .go { gap: 16px; }
@@ -150,6 +154,11 @@
   .card.doubutsu h2 { color: #fff2df; }
   .card.doubutsu .en, .card.doubutsu .go { color: #ffb84a; }
   /* hyoryu (漂流) theming */
+  /* rakujan (落雀) theming */
+  .card.raku .tag { background: rgba(227, 192, 118, 0.14); color: #f0d99b; border: 1px solid rgba(227,192,118,0.30); }
+  .card.raku:hover { box-shadow: 0 26px 60px rgba(90, 70, 20, 0.5); }
+  .card.raku h2 { color: #fff4dd; letter-spacing: 0.22em; }
+  .card.raku .en, .card.raku .go { color: #e3c076; }
   .card.jan .tag { background: rgba(143, 227, 168, 0.14); color: #a9e8c0; border: 1px solid rgba(143,227,168,0.30); }
   .card.jan:hover { box-shadow: 0 26px 60px rgba(20, 90, 55, 0.5); }
   .card.jan h2 { color: #eafff2; letter-spacing: 0.18em; }
@@ -301,6 +310,18 @@
       </div>
     </a>
 
+    <a class="card raku" href="rakujan.html">
+      <div class="art"><canvas id="art-raku"></canvas></div>
+      <div class="body">
+        <span class="tag">PUZZLE · 落ちもの麻雀</span>
+        <h2>落雀</h2>
+        <div class="en">RAKUJAN ― 落ちもの麻雀パズル</div>
+        <div class="desc">上から牌がひとつずつ降ってくる。横一列・縦一列・隣り合った塊で役ができると消え、上に積んでいた牌が落ちてまた役になれば連鎖。牌はワンセット136枚きっかり、ドラも効く。3牌そろうと消えてしまうから、大物手は国士無双と七対子だけ ― 横14列を埋め切れば役満。</div>
+        <div class="feat"><span>🀄 136牌ワンセット</span><span>⛓ 連鎖（天和）</span><span>🎴 ドラと役満</span><span>↻ 無意味な180°回転</span></div>
+        <div class="go"><span>牌を積む</span><span class="arrow">→</span></div>
+      </div>
+    </a>
+
     <a class="card jan" href="mahjong.html">
       <div class="art"><canvas id="art-jan"></canvas></div>
       <div class="body">
@@ -315,7 +336,7 @@
   </div>
 
   <footer>
-    Canvas / WebGL &amp; Web Audio でつくった、依存ライブラリなしの10作品。<br>
+    Canvas / WebGL &amp; Web Audio でつくった、依存ライブラリなしの11作品。<br>
     <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a>
     <div class="hint">カードをクリックで起動 ・ どれもフルスクリーン推奨</div>
   </footer>
@@ -359,6 +380,12 @@
 
   // mahjong preview: tiles laid on green felt, a gold sweep reading the hand
   const J = setup("art-jan");
+
+  // rakujan preview: tiles raining into a 14-wide well, a row igniting into a yaku
+  const RJ = setup("art-raku");
+  const rjDrops = [];
+  for (let i = 0; i < 7; i++) rjDrops.push({ c: Math.floor(Math.random() * 14), y: -Math.random() * 1.6, sp: rand(0.5, 1.1), k: Math.floor(Math.random() * 3) });
+  let rjFlash = 0, rjNext = 2.2;
 
   // galaxy preview: spiral of orbiting stars around a dark core
   const G = setup("art-galaxy");
@@ -800,6 +827,60 @@
       if (shown >= n - 1) {
         c.strokeStyle = "rgba(255,191,77,0.55)"; c.lineWidth = 1.2;
         for (const pi of [2, 5, 8]) { const x = m + (pi + 0.5) * (plotW / n); c.beginPath(); c.arc(x, yOf(kaShape[pi]) - 6, 3.2, 0, TAU); c.stroke(); }
+      }
+    }
+
+    // ---- rakujan card: tiles raining into a 14-column well, one row igniting ----
+    {
+      const { c, w, h } = RJ;
+      const felt = c.createLinearGradient(0, 0, 0, h);
+      felt.addColorStop(0, "#123a2a"); felt.addColorStop(1, "#07201a");
+      c.fillStyle = felt; c.fillRect(0, 0, w, h);
+      const cw = w / 14, chh = cw * 1.16, rows = Math.max(3, Math.floor(h / chh));
+      c.strokeStyle = "rgba(255,255,255,0.05)"; c.lineWidth = 1;
+      for (let i = 1; i < 14; i++) { c.beginPath(); c.moveTo(i * cw, 0); c.lineTo(i * cw, h); c.stroke(); }
+
+      rjNext -= 0.016;
+      if (rjNext <= 0) { rjFlash = 1; rjNext = rand(2.6, 4.2); }
+      if (rjFlash > 0) rjFlash = Math.max(0, rjFlash - 0.02);
+
+      const drawTile = (x, y, lit) => {
+        c.fillStyle = "rgba(0,0,0,0.32)";
+        roundRectP(c, x + 1, y + 2, cw - 3, chh - 3, 3); c.fill();
+        const g2 = c.createLinearGradient(0, y, 0, y + chh);
+        g2.addColorStop(0, "#fffdf4"); g2.addColorStop(1, "#ded6c1");
+        c.fillStyle = g2; roundRectP(c, x, y, cw - 3, chh - 3, 3); c.fill();
+        if (lit > 0) { c.fillStyle = `rgba(255,231,166,${lit})`; c.fill(); }
+        c.strokeStyle = lit > 0 ? `rgba(255,214,120,${0.4 + lit * 0.6})` : "rgba(190,180,155,0.7)";
+        c.lineWidth = lit > 0 ? 1.6 : 1; c.stroke();
+      };
+      // 底に積まれた列（点滅する一列）
+      const baseY = h - chh - 2;
+      for (let i = 0; i < 14; i++) drawTile(i * cw + 1.5, baseY, rjFlash * (0.35 + 0.65 * Math.abs(Math.sin(t * 12))));
+      for (let i = 0; i < 9; i++) {
+        const cc = (i * 5 + 2) % 14;
+        drawTile(cc * cw + 1.5, baseY - chh, 0);
+      }
+      // 降ってくる牌
+      for (const d of rjDrops) {
+        d.y += d.sp * 0.016 * rows;
+        if (d.y * chh > baseY - chh * 2) { d.y = -1.2; d.c = Math.floor(Math.random() * 14); d.k = Math.floor(Math.random() * 3); }
+        const x = d.c * cw + 1.5, y = d.y * chh;
+        drawTile(x, y, 0);
+        c.save(); c.translate(x + (cw - 3) / 2, y + (chh - 3) / 2);
+        if (d.k === 0) { c.fillStyle = "#2a5fae"; c.beginPath(); c.arc(0, 0, cw * 0.13, 0, TAU); c.fill(); }
+        else if (d.k === 1) { c.fillStyle = "#1c7a4c"; c.fillRect(-cw * 0.07, -chh * 0.16, cw * 0.14, chh * 0.32); }
+        else { c.fillStyle = "#a8262f"; c.font = `600 ${cw * 0.6}px "Hiragino Mincho ProN", serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("中", 0, 0); }
+        c.restore();
+      }
+      if (rjFlash > 0.02) {
+        c.textAlign = "center"; c.textBaseline = "middle";
+        c.fillStyle = `rgba(255,236,180,${rjFlash})`;
+        c.font = `700 ${Math.round(h * 0.15)}px "Hiragino Mincho ProN", serif`;
+        c.fillText("役満", w / 2, h * 0.42);
+        c.fillStyle = `rgba(143,227,168,${rjFlash * 0.9})`;
+        c.font = `700 ${Math.round(h * 0.075)}px system-ui, sans-serif`;
+        c.fillText("国士無双 ・ 32000", w / 2, h * 0.56);
       }
     }
 
