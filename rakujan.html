@@ -13,7 +13,8 @@
     --line: rgba(255,255,255,0.10);
     --panel: rgba(8, 22, 16, 0.55);
   }
-  html, body { width: 100%; min-height: 100%; }
+  /* touch-action: manipulation でダブルタップ拡大だけを止める（ピンチ拡大は残す） */
+  html, body { width: 100%; min-height: 100%; touch-action: manipulation; -webkit-text-size-adjust: 100%; }
   body {
     font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
     color: var(--tx);
@@ -56,8 +57,8 @@
 
   /* ---------- layout ---------- */
   .game { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 16px; align-items: start; }
-  @media (max-width: 900px) { .game { grid-template-columns: 1fr; } }
   .left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .hud { display: flex; flex-direction: column; gap: 12px; }
 
   .boardbox {
     position: relative;
@@ -65,7 +66,6 @@
     min-height: 400px;
     display: flex; align-items: center; justify-content: center;
   }
-  @media (max-width: 900px) { .boardbox { height: min(60vh, 560px); min-height: 320px; } }
   #board {
     display: block; border-radius: 12px;
     box-shadow: 0 18px 50px rgba(0,0,0,0.55), 0 0 0 1px rgba(227,192,118,0.16);
@@ -99,10 +99,6 @@
 
   /* ---------- side panels ---------- */
   .side { display: flex; flex-direction: column; gap: 12px; }
-  @media (max-width: 900px) {
-    .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-    .side .score-panel { grid-column: 1 / -1; }
-  }
   .panel {
     background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
     padding: 12px 14px 14px;
@@ -162,6 +158,63 @@
   .pad button:active { background: rgba(227,192,118,0.22); }
   .pad button.wide { flex: 1.4; }
   body.touch .pad { display: flex; }
+
+  /* ---------- 狭い画面：情報の帯を盤面の上へ ---------- */
+  @media (max-width: 900px) {
+    .wrap { padding: 12px 10px 50px; }
+    header.top { padding-bottom: 8px; margin-bottom: 10px; gap: 8px; }
+    .brand h1 { font-size: 25px; letter-spacing: 0.12em; }
+    .brand .sub { font-size: 10px; margin-top: 3px; letter-spacing: 0.14em; }
+    nav.tabs { gap: 6px; }
+    nav.tabs a, nav.tabs button { padding: 5px 9px; font-size: 11px; letter-spacing: 0.04em; }
+
+    /* 盤面・パッド・情報帯・ログを1本の縦並びにして順番を入れ替える */
+    .game { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+    .left, .side { display: contents; }
+    .hud { order: 1; }
+    .boardbox {
+      order: 2; min-height: 0;
+      height: clamp(260px, calc(100vh - 300px), 560px);
+      height: clamp(260px, calc(100dvh - 300px), 560px);
+    }
+    .pad { order: 3; }
+    .logpanel { order: 4; }
+    .wide-only { display: none !important; }
+
+    /* 4つのパネルを1枚の帯にたたむ */
+    .hud {
+      flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 14px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 8px 11px 9px;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    }
+    .hud .panel {
+      background: none; border: none; padding: 0; border-radius: 0;
+      backdrop-filter: none; -webkit-backdrop-filter: none;
+    }
+    .hud .panel > h2 { display: none; }
+    .hud .score-panel { flex: 1 1 130px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+    .hud .score-panel .val { font-size: 26px; }
+    .hud .score-panel .best { margin-top: 0; font-size: 10.5px; }
+    .hud .chainline { margin-top: 0; height: auto; font-size: 11.5px; }
+    .hud .nh-panel > div { gap: 12px !important; }
+    .hud .tilecap { margin-bottom: 3px; font-size: 9px; letter-spacing: 0.1em; }
+    .hud .mini { width: 24px; height: 33px; }
+    .hud .tilerow { min-height: 33px; gap: 4px; }
+    .hud .dora-panel { display: flex; align-items: flex-end; gap: 6px; }
+    .hud .dora-panel::before {
+      content: "ドラ"; font-size: 9px; color: var(--dim);
+      letter-spacing: 0.1em; padding-bottom: 3px;
+    }
+    .hud .ba-panel { flex: 1 1 100%; }
+    .hud .rows { flex-direction: row; flex-wrap: wrap; gap: 3px 12px; }
+    .hud .row { gap: 5px; justify-content: flex-start; font-size: 11px; }
+
+    .pad button { padding: 13px 2px; font-size: 12.5px; }
+    .logpanel .log { max-height: 150px; }
+    .docs .panel { padding: 14px 15px 16px; }
+    .docs p, .docs li { font-size: 12.5px; line-height: 1.9; }
+  }
 
   /* ---------- docs ---------- */
   .docs { margin-top: 30px; }
@@ -253,6 +306,7 @@
     </div>
 
     <aside class="side">
+      <div class="hud">
       <div class="panel score-panel">
         <h2>SCORE</h2>
         <div class="val" id="score">0</div>
@@ -260,7 +314,7 @@
         <div class="chainline" id="chainline"></div>
       </div>
 
-      <div class="panel">
+      <div class="panel nh-panel">
         <h2>NEXT / HOLD</h2>
         <div style="display:flex; gap:16px; align-items:flex-start;">
           <div>
@@ -274,24 +328,25 @@
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel dora-panel">
         <h2>ドラ表示牌</h2>
         <div class="tilerow" id="dora"></div>
-        <div class="row" style="margin-top:8px;"><span class="k">ドラ</span><span class="v" id="dora-txt">—</span></div>
+        <div class="row wide-only" style="margin-top:8px;"><span class="k">ドラ</span><span class="v" id="dora-txt">—</span></div>
       </div>
 
-      <div class="panel">
+      <div class="panel ba-panel">
         <h2>場</h2>
         <div class="rows">
           <div class="row"><span class="k">局</span><span class="v" id="kyoku">東一局</span></div>
           <div class="row"><span class="k">牌山</span><span class="v" id="wall">136</span></div>
           <div class="row"><span class="k">速さ</span><span class="v" id="level">Lv.1</span></div>
           <div class="row"><span class="k">最大連鎖</span><span class="v" id="maxchain">0</span></div>
-          <div class="row"><span class="k">最高手</span><span class="v" id="besthand">—</span></div>
+          <div class="row wide-only"><span class="k">最高手</span><span class="v" id="besthand">—</span></div>
         </div>
       </div>
+      </div>
 
-      <div class="panel">
+      <div class="panel logpanel">
         <h2>あがり</h2>
         <div class="log" id="log"><div class="empty">まだ何も消えていない</div></div>
       </div>
@@ -330,6 +385,11 @@
       <p>
         <b>回転は180°だけできます。</b>牌はひっくり返しても同じ牌なので、当然なにも起こりません。
         絵柄が逆さまになるだけです。それでも回したい時のためにあります。
+      </p>
+      <p>
+        スマホでは<b>スコア・ネクスト・ホールド・ドラ・場が盤面の上の帯にまとまり</b>、操作ボタンが下に出るので、
+        指を動かさずに全部見えます。盤面と操作ボタンの上ではダブルタップで画面が拡大しないようにしてあります
+        （二本指のピンチ操作はそのまま使えます）。
       </p>
       <p>
         <b>ホールドは1牌</b>。いま降ってくる牌を1つ預けておけます。次に押すと預けた牌と入れ替わります
@@ -1594,6 +1654,7 @@ function bindRepeat(el, fn){
   var iv = null, to = null;
   var start = function(e){
     e.preventDefault();
+    el.blur();
     fn();
     to = setTimeout(function(){ iv = setInterval(fn, 70); }, 220);
   };
@@ -1628,9 +1689,30 @@ onTap('#btn-sound', function(){
   var on = Sound.toggle();
   this.textContent = on ? '♪ 音 ON' : '♪ 音 OFF';
 });
-onTap('#p-rot', rotatePiece);
-onTap('#p-hold', doHold);
-onTap('#p-drop', hardDrop);
+/* パッドは pointerdown で処理する。click を待たないので、
+   ダブルタップ拡大よけに touchend を潰しても取りこぼさない */
+function bindPad(sel, fn){
+  var el = $(sel);
+  el.addEventListener('pointerdown', function(e){ e.preventDefault(); el.blur(); fn(); });
+}
+bindPad('#p-rot', rotatePiece);
+bindPad('#p-hold', doHold);
+bindPad('#p-drop', hardDrop);
+
+/* ---- ダブルタップでページが拡大するのを止める ----
+   盤面とパッドは click を使っていないので touchend を潰して問題ない。
+   説明文のところは触らないので、そちらは普通に拡大できる。 */
+function noDoubleTapZoom(el){
+  var last = 0;
+  el.addEventListener('touchend', function(e){
+    var now = Date.now();
+    if (now - last < 450 && e.touches.length === 0) e.preventDefault();
+    last = now;
+  }, { passive: false });
+  el.addEventListener('dblclick', function(e){ e.preventDefault(); });
+}
+noDoubleTapZoom(cv);
+noDoubleTapZoom($('.pad'));
 
 var rz = null;
 window.addEventListener('resize', function(){
