@@ -47,13 +47,13 @@
   }
   .brand .sub { font-size: 11.5px; color: var(--dim); letter-spacing: 0.22em; margin-top: 5px; }
   nav.tabs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  nav.tabs a, nav.tabs button {
+  nav.tabs button {
     font-size: 12.5px; letter-spacing: 0.08em; text-decoration: none; color: var(--dim);
     padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
     background: rgba(255,255,255,0.03); transition: 0.2s; cursor: pointer;
     font-family: inherit;
   }
-  nav.tabs a:hover, nav.tabs button:hover { color: var(--tx); border-color: rgba(227,192,118,0.4); }
+  nav.tabs button:hover { color: var(--tx); border-color: rgba(227,192,118,0.4); }
 
   /* ---------- layout ---------- */
   .game { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 16px; align-items: start; }
@@ -185,7 +185,7 @@
     .brand h1 { font-size: 25px; letter-spacing: 0.12em; }
     .brand .sub { font-size: 10px; margin-top: 3px; letter-spacing: 0.14em; }
     nav.tabs { gap: 6px; }
-    nav.tabs a, nav.tabs button { padding: 5px 9px; font-size: 11px; letter-spacing: 0.04em; }
+    nav.tabs button { padding: 5px 9px; font-size: 11px; letter-spacing: 0.04em; }
 
     /* 盤面・パッド・情報帯・ログを1本の縦並びにして順番を入れ替える */
     .game { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
@@ -265,8 +265,6 @@
     margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--line);
     font-size: 11.5px; color: var(--dim); line-height: 2; letter-spacing: 0.06em;
   }
-  footer.foot a { color: var(--gold); text-decoration: none; }
-  footer.foot a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -282,8 +280,6 @@
       <button id="btn-pause" type="button">一時停止</button>
       <button id="btn-sound" type="button">♪ 音 ON</button>
       <button id="btn-restart" type="button">やり直す</button>
-      <a href="mahjong.html">雀算</a>
-      <a href="index.html">他の作品</a>
     </nav>
   </header>
 
@@ -578,8 +574,7 @@
   </section>
 
   <footer class="foot">
-    麻雀から着想を得た落ちものパズル。牌はすべてSVG、音はWeb Audioで合成。外部ライブラリなし・通信なし・保存はハイスコアのみ。<br>
-    <a href="index.html">他の作品を見る →</a>
+    麻雀から着想を得た落ちものパズル。牌はすべてSVG、音はWeb Audioで合成。外部ライブラリなし・通信なし・保存はハイスコアのみ。
   </footer>
 </div>
 
