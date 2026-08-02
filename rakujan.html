@@ -97,6 +97,49 @@
   .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
   .btn.ghost { background: rgba(255,255,255,0.05); color: var(--tx); border-color: var(--line); font-weight: 400; }
 
+  /* ---------- toast / achievements ---------- */
+  .toasts {
+    position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+    z-index: 6; display: flex; flex-direction: column; gap: 6px; align-items: center;
+    pointer-events: none; width: max-content; max-width: 94%;
+  }
+  .toast {
+    background: rgba(6, 20, 14, 0.93); border: 1px solid rgba(227,192,118,0.5);
+    border-radius: 11px; padding: 8px 16px; text-align: center;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+    animation: toastin 0.4s cubic-bezier(.2,.9,.25,1) both;
+    transition: opacity 0.35s, transform 0.35s;
+  }
+  .toast .t { font-size: 9px; letter-spacing: 0.26em; color: var(--gold); }
+  .toast .n {
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-size: 16px; font-weight: 700; color: #fff3d6; margin-top: 3px; letter-spacing: 0.12em;
+  }
+  .toast .d { font-size: 10.5px; color: var(--dim); margin-top: 3px; letter-spacing: 0.04em; }
+  .toast.out { opacity: 0; transform: translateY(-10px); }
+  @keyframes toastin { from { opacity: 0; transform: translateY(-12px) scale(0.94); } to { opacity: 1; } }
+
+  /* 一覧だけスクロールさせ、見出しと閉じるボタンは常に見える */
+  #veil-ach { justify-content: flex-start; padding: 16px 14px 14px; z-index: 7; overflow: hidden; }
+  #veil-ach h3 { font-size: clamp(22px, 4vw, 32px); margin-bottom: 2px; flex: none; }
+  .achhead { font-size: 12px; color: var(--gold); letter-spacing: 0.16em; margin-bottom: 12px; flex: none; }
+  #veil-ach .btns { flex: none; margin-top: 12px; }
+  .achlist {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+    gap: 6px; width: 100%; text-align: left;
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; align-content: start;
+  }
+  .ach {
+    border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px;
+    background: rgba(255,255,255,0.03); opacity: 0.42;
+  }
+  .ach.done {
+    opacity: 1; border-color: rgba(227,192,118,0.45); background: rgba(227,192,118,0.09);
+  }
+  .ach .an { font-size: 12.5px; color: #dfeee2; letter-spacing: 0.08em; font-weight: 700; }
+  .ach.done .an { color: #fff3d6; }
+  .ach .ad { font-size: 10.5px; color: var(--dim); margin-top: 3px; line-height: 1.6; }
+
   /* ---------- side panels ---------- */
   .side { display: flex; flex-direction: column; gap: 12px; }
   .panel {
@@ -280,6 +323,7 @@
       <button id="btn-pause" type="button">一時停止</button>
       <button id="btn-sound" type="button">♪ 音 ON</button>
       <button id="btn-restart" type="button">やり直す</button>
+      <button id="btn-ach" type="button">実績</button>
     </nav>
   </header>
 
@@ -307,12 +351,24 @@
           <div class="btns"><button class="btn" id="btn-resume" type="button">再開する</button></div>
         </div>
 
+        <div class="toasts" id="toasts"></div>
+
+        <div class="veil" id="veil-ach">
+          <h3>実績</h3>
+          <p class="achhead"><span id="ach-count">0 / 0</span></p>
+          <div class="achlist" id="achlist"></div>
+          <div class="btns"><button class="btn" id="btn-ach-close" type="button">閉じる</button></div>
+        </div>
+
         <div class="veil" id="veil-over">
           <h3 id="over-title">終局</h3>
           <p id="over-reason">牌山が天井に届いた。</p>
           <div class="big" id="over-score">0</div>
           <p id="over-detail"></p>
-          <div class="btns"><button class="btn" id="btn-again" type="button">もう一度</button></div>
+          <div class="btns">
+            <button class="btn" id="btn-again" type="button">もう一度</button>
+            <button class="btn ghost" id="btn-ach2" type="button">実績を見る</button>
+          </div>
         </div>
       </div>
 
@@ -369,6 +425,7 @@
           <div class="row"><span class="k">和了</span><span class="v" id="agari">0</span></div>
           <div class="row"><span class="k">最大連鎖</span><span class="v" id="maxchain">0</span></div>
           <div class="row wide-only"><span class="k">最高手</span><span class="v" id="besthand">—</span></div>
+          <div class="row"><span class="k">実績</span><span class="v" id="ach-row">0 / 0</span></div>
         </div>
       </div>
       </div>
@@ -563,6 +620,15 @@
         断幺九・一盃口・二盃口・三色同順・三色同刻・一気通貫・混全帯幺九・純全帯幺九・対々和・三暗刻・三槓子・
         混老頭・小三元・役牌（白發中・場風）・混一色・清一色 を数えます。
         鳴いた手は上のとおり門前役が落ち、食い下がりが効きます。
+      </p>
+
+      <h3>実績</h3>
+      <p>
+        右上の<b>実績</b>（<span class="kbd">A</span>キー）で一覧が出ます。全39個。
+        役を1種類ずつ集めるもの、連鎖を伸ばすもの、通算の和了数や点数を積むもの、
+        それに<b>無駄回し100回</b>のようなふざけたものまであります。
+        高い手や長い連鎖をいきなり狙うのは難しいので、まずは手前のものから
+        順に埋めていくのが上達の近道です。解除したものはブラウザに保存されます。
       </p>
 
       <h3>終わりかた</h3>
@@ -1044,6 +1110,82 @@ var BIG_SHAPES_14 = [[1, 14], [14, 1], [2, 7], [7, 2]];
 var KYOKU_NAME = ['一局','二局','三局','四局'];
 var WIND_NAME = ['東','南','西','北'];
 var BEST_KEY = 'rakujan.best';
+var ACH_KEY = 'rakujan.ach';
+
+/* ---------------- 実績 ---------------- */
+var ACH = [
+  { id: 'first',    n: '初和了',      d: 'はじめて和了する' },
+  { id: 'agari10',  n: '常連',        d: '通算10回和了する' },
+  { id: 'agari50',  n: '雀士',        d: '通算50回和了する' },
+  { id: 'agari100', n: '雀豪',        d: '通算100回和了する' },
+
+  { id: 'mangan',   n: '満貫',        d: '8,000点以上の手を和了する' },
+  { id: 'haneman',  n: '跳満',        d: '12,000点以上の手を和了する' },
+  { id: 'baiman',   n: '倍満',        d: '16,000点以上の手を和了する' },
+  { id: 'sanbai',   n: '三倍満',      d: '24,000点以上の手を和了する' },
+  { id: 'yakuman',  n: '役満',        d: '役満を和了する' },
+  { id: 'wyakuman', n: 'ダブル役満',  d: '2倍役満を和了する' },
+  { id: 'score1',   n: '十万点',      d: '通算10万点をためる' },
+  { id: 'score2',   n: '百万点',      d: '通算100万点をためる' },
+
+  { id: 'chain2',   n: '二連鎖',      d: '2連鎖を出す' },
+  { id: 'chain3',   n: '三連鎖',      d: '3連鎖を出す' },
+  { id: 'chain4',   n: '四連鎖',      d: '4連鎖を出す' },
+  { id: 'chain6',   n: '六連鎖',      d: '6連鎖を出す' },
+  { id: 'renchan',  n: '八連荘',      d: '8連鎖まで伸ばして和了する' },
+
+  { id: 'tanyao',   n: '断幺九',      d: '断幺九で和了する' },
+  { id: 'yakuhai',  n: '役牌',        d: '役牌の刻子で和了する' },
+  { id: 'ittsu',    n: '一気通貫',    d: '一気通貫で和了する' },
+  { id: 'sanshoku', n: '三色',        d: '三色同順か三色同刻で和了する' },
+  { id: 'chanta',   n: 'チャンタ',    d: '混全帯幺九か純全帯幺九で和了する' },
+  { id: 'honitsu',  n: '混一色',      d: '混一色で和了する' },
+  { id: 'chinitsu', n: '清一色',      d: '清一色で和了する' },
+  { id: 'sananko',  n: '三暗刻',      d: '三暗刻で和了する' },
+  { id: 'chiitoi',  n: '七対子',      d: '七対子で和了する' },
+  { id: 'kokushi',  n: '国士無双',    d: '国士無双で和了する' },
+  { id: 'juusan',   n: '十三面待ち',  d: '雀頭を借りずに14牌で国士無双を作る' },
+  { id: 'suanko',   n: '四暗刻',      d: '四暗刻で和了する' },
+  { id: 'daisan',   n: '大三元',      d: '大三元で和了する' },
+  { id: 'tenhou',   n: '天和',        d: '一度の落下で手牌をぜんぶ集めて和了する' },
+
+  { id: 'kan',      n: '槓',          d: '槓子を作る' },
+  { id: 'dora4',    n: 'ドラ爆',      d: 'ドラを4牌以上ふくめて和了する' },
+  { id: 'menzen10', n: '門前一筋',    d: '鳴かずに10回続けて和了する' },
+  { id: 'noyaku',   n: '泣きっ面',    d: '鳴いて役なしを味わう' },
+  { id: 'nagare',   n: '河に流す',    d: '雀頭がなくて面子を流してしまう' },
+  { id: 'spin100',  n: '無駄回し',    d: '通算100回、牌を回す' },
+  { id: 'nanba',    n: '南入',        d: '南場に入る' },
+  { id: 'kiki',     n: '九死一生',    d: '上から2段目まで積んだ状態から和了する' }
+];
+var achDone = {}, achStats = { agari: 0, score: 0, spins: 0, streak: 0 };
+
+function achLoad(){
+  try {
+    var raw = JSON.parse(localStorage.getItem(ACH_KEY) || '{}');
+    if (raw.done) achDone = raw.done;
+    if (raw.stats) for (var k in achStats) if (raw.stats[k] != null) achStats[k] = raw.stats[k];
+  } catch (e) {}
+}
+function achSave(){
+  try { localStorage.setItem(ACH_KEY, JSON.stringify({ done: achDone, stats: achStats })); } catch (e) {}
+}
+function achCount(){
+  var n = 0;
+  for (var i = 0; i < ACH.length; i++) if (achDone[ACH[i].id]) n++;
+  return n;
+}
+function unlock(id){
+  if (achDone[id]) return;
+  var a = null, i;
+  for (i = 0; i < ACH.length; i++) if (ACH[i].id === id) a = ACH[i];
+  if (!a) return;
+  achDone[id] = 1;
+  achSave();
+  toast('実績', a.n, a.d);
+  Sound.ach();
+  syncAch();
+}
 
 /* ---------------- 状態 ---------------- */
 var ROWS = 16, CW = 40, CH = 52, DPR = 1;
@@ -1115,6 +1257,10 @@ var Sound = (function(){
       for (var i = 0; i < Math.min(4, Math.max(2, Math.floor(n / 3))); i++)
         tone(PENTA[Math.min(PENTA.length - 1, k + i)], 0.30, 'triangle', 0.10, i * 0.045);
       noise(0.16, 0.14, 0, 2400);
+    },
+    ach: function(){
+      var seq = [784, 1046.5, 1318.5];
+      for (var i = 0; i < seq.length; i++) tone(seq[i], 0.30, 'triangle', 0.09, i * 0.07);
     },
     naki: function(){ tone(300, 0.10, 'square', 0.06); tone(225, 0.16, 'square', 0.05, 0.07); },
     noyaku: function(){ tone(240, 0.30, 'sine', 0.09, 0, 150); noise(0.12, 0.08, 0, 500); },
@@ -1232,6 +1378,7 @@ function nextRound(){
   wall = shuffle(discard);
   discard = [];
   round++;
+  if (round >= 4) unlock('nanba');
   var k = Math.min(5, 1 + Math.floor(round / 2));
   for (var i = 0; i < k && wall.length; i++) doraInd.push(wall.pop());
   refreshDora();
@@ -1336,6 +1483,9 @@ function rotatePiece(){
   piece.flip = !piece.flip;
   piece.rot = 1;
   spins++;
+  achStats.spins++;
+  achSave();
+  if (achStats.spins >= 100) unlock('spin100');
   Sound.spin();
   if (!spinHinted && spins >= 3){
     spinHinted = true;
@@ -1556,6 +1706,10 @@ function resolveStep(active){
 
   chain++;
   maxChain = Math.max(maxChain, chain);
+  if (chain >= 2) unlock('chain2');
+  if (chain >= 3) unlock('chain3');
+  if (chain >= 4) unlock('chain4');
+  if (chain >= 6) unlock('chain6');
   var cmult = CHAIN_MULT[Math.min(chain, CHAIN_MULT.length - 1)];
   var gained = 0, big = false;
 
@@ -1567,14 +1721,15 @@ function resolveStep(active){
 
     if (g.kind === 'big'){
       /* かたまりでの和了。12牌のときは手牌の雀頭を使う */
-      gained += agari(g.res, cmult, sx, sy, '和了');
+      gained += agari(g.res, cmult, sx, sy, '和了', g.usesPair ? stock.naki : false);
       if (chain >= 8) renchanCount++;
       if (g.usesPair){ stock.pair = -1; rescanAll = true; }
       big = true;
     } else {
       var pts = Math.round(PIECE_PTS[g.kind] * cmult);
       var overflow = (g.kind !== 'pair' && stock.melds.length >= 4);
-      if (overflow) pts = Math.round(pts / 2);
+      if (overflow){ pts = Math.round(pts / 2); unlock('nagare'); }
+      if (g.kind === 'kan') unlock('kan');
       gained += pts;
       addEffect(sx, sy, PIECE_JA[g.kind] + (overflow ? '（流れ）' : ''), '+' + pts.toLocaleString(),
                 overflow ? '#9db3a4' : '#cfe8d4', 0.85, 15);
@@ -1591,7 +1746,7 @@ function resolveStep(active){
           var cy = chainYaku();
           if (tenhou) cy = [{ name: '天和', mult: 1 }].concat(cy);
           var res = evalHand(stock.melds, stock.pair, ctxNow(), { naki: stock.naki, chainYm: cy });
-          gained += agari(res, cmult, CW * COLS / 2, CH * 2.4, cy.length ? cy[0].name : '和了');
+          gained += agari(res, cmult, CW * COLS / 2, CH * 2.4, cy.length ? cy[0].name : '和了', stock.naki);
           if (tenhou) tenhouCount++;
           if (chain >= 8) renchanCount++;
           big = big || res.yakuman > 0 || res.han >= 6;
@@ -1618,16 +1773,20 @@ function resolveStep(active){
 }
 
 /* 和了の処理（点数・演出・記録）。加算する点を返す */
-function agari(res, cmult, sx, sy, tag){
+function agari(res, cmult, sx, sy, tag, naki){
   var pts = Math.round(res.pts * cmult);
   if (res.noYaku){
     /* 鳴いて役が付かなかった手。形はそろったが点にならない */
     addEffect(sx, sy, '役なし', '鳴いたのに役が無い', '#9db3a4', 1.4, 21);
     pushLog('役なし（鳴き）', 0, false);
     Sound.noyaku();
+    achStats.streak = 0;
+    unlock('noyaku');
+    achSave();
     return 0;
   }
   agariCount++;
+  checkAgariAch(res, pts, naki);
   if (!bestHand || res.pts > bestHand.pts){
     bestHand = { label: res.label, han: res.han, fu: res.fu, yakuman: res.yakuman, pts: res.pts, limit: res.limit };
   }
@@ -1640,6 +1799,56 @@ function agari(res, cmult, sx, sy, tag){
   burst(sx, sy, res.yakuman ? 60 : 30, res.yakuman ? '#ffcf7a' : '#bfe6c8');
   if (res.yakuman > 0) Sound.yakuman(); else Sound.agari(res.han);
   return pts;
+}
+
+/* 和了したときの実績まわり */
+function checkAgariAch(res, pts, naki){
+  var i, names = {};
+  for (i = 0; i < res.yaku.length; i++) names[res.yaku[i].name] = 1;
+  function has(){ for (var j = 0; j < arguments.length; j++) if (names[arguments[j]]) return true; return false; }
+
+  achStats.agari++;
+  achStats.score += pts;
+  achStats.streak = naki ? 0 : achStats.streak + 1;
+
+  unlock('first');
+  if (achStats.agari >= 10) unlock('agari10');
+  if (achStats.agari >= 50) unlock('agari50');
+  if (achStats.agari >= 100) unlock('agari100');
+  if (achStats.score >= 100000) unlock('score1');
+  if (achStats.score >= 1000000) unlock('score2');
+  if (achStats.streak >= 10) unlock('menzen10');
+
+  if (res.pts >= 8000) unlock('mangan');
+  if (res.pts >= 12000) unlock('haneman');
+  if (res.pts >= 16000) unlock('baiman');
+  if (res.pts >= 24000) unlock('sanbai');
+  if (res.yakuman >= 1) unlock('yakuman');
+  if (res.yakuman >= 2) unlock('wyakuman');
+  if (res.dora >= 4) unlock('dora4');
+
+  if (has('断幺九')) unlock('tanyao');
+  if (has('一気通貫')) unlock('ittsu');
+  if (has('三色同順', '三色同刻')) unlock('sanshoku');
+  if (has('混全帯幺九', '純全帯幺九', '混老頭')) unlock('chanta');
+  if (has('混一色')) unlock('honitsu');
+  if (has('清一色')) unlock('chinitsu');
+  if (has('三暗刻')) unlock('sananko');
+  if (has('七対子', '大車輪')) unlock('chiitoi');
+  if (has('国士無双', '国士無双十三面待ち')) unlock('kokushi');
+  if (has('国士無双十三面待ち')) unlock('juusan');
+  if (has('四暗刻')) unlock('suanko');
+  if (has('大三元')) unlock('daisan');
+  if (has('天和')) unlock('tenhou');
+  if (has('八連荘')) unlock('renchan');
+  for (i = 0; i < res.yaku.length; i++){
+    var nm = res.yaku[i].name;
+    if (nm.indexOf('役牌') === 0 || nm.indexOf('場風') === 0) unlock('yakuhai');
+  }
+
+  /* 上から2段目まで積み上がった状態からの和了 */
+  for (i = 0; i < COLS * 2; i++) if (grid[i]){ unlock('kiki'); break; }
+  achSave();
 }
 
 function applyClear(){
@@ -1971,8 +2180,59 @@ function pushLog(text, pts, ym){
   while (box.children.length > 8) box.removeChild(box.lastChild);
 }
 
+/* 一度に複数ほどけることがあるので、順番にひとつずつ見せる */
+var toastQ = [], toastBusy = false;
+function toast(tag, name, desc){
+  toastQ.push({ tag: tag, name: name, desc: desc });
+  if (!toastBusy) toastNext();
+}
+function toastNext(){
+  if (!toastQ.length){ toastBusy = false; return; }
+  toastBusy = true;
+  var t = toastQ.shift(), box = $('#toasts');
+  var d = document.createElement('div');
+  d.className = 'toast';
+  d.innerHTML = '<div class="t"></div><div class="n"></div><div class="d"></div>';
+  d.children[0].textContent = t.tag + (toastQ.length ? '　あと' + toastQ.length : '');
+  d.children[1].textContent = t.name;
+  d.children[2].textContent = t.desc;
+  box.appendChild(d);
+  setTimeout(function(){ d.classList.add('out'); }, 1250);
+  setTimeout(function(){ if (d.parentNode) box.removeChild(d); toastNext(); }, 1550);
+}
+
+function syncAch(){
+  var txt = achCount() + ' / ' + ACH.length;
+  $('#ach-count').textContent = txt;
+  $('#ach-row').textContent = txt;
+}
+function renderAch(){
+  var box = $('#achlist');
+  box.innerHTML = '';
+  for (var i = 0; i < ACH.length; i++){
+    var a = ACH[i];
+    var d = document.createElement('div');
+    d.className = 'ach' + (achDone[a.id] ? ' done' : '');
+    d.innerHTML = '<div class="an"></div><div class="ad"></div>';
+    d.children[0].textContent = (achDone[a.id] ? '✓ ' : '') + a.n;
+    d.children[1].textContent = a.d;
+    box.appendChild(d);
+  }
+  syncAch();
+}
+var achResume = 'play';
+function openAch(){
+  renderAch();
+  if (state === 'play' || state === 'flash' || state === 'fall'){ achResume = state; state = 'achpause'; }
+  $('#veil-ach').classList.add('on');
+}
+function closeAch(){
+  $('#veil-ach').classList.remove('on');
+  if (state === 'achpause') state = achResume;
+}
+
 function hideVeils(){
-  ['#veil-start', '#veil-pause', '#veil-over'].forEach(function(s){ $(s).classList.remove('on'); });
+  ['#veil-start', '#veil-pause', '#veil-over', '#veil-ach'].forEach(function(s){ $(s).classList.remove('on'); });
 }
 
 /* ---------------- 入力 ---------------- */
@@ -1997,6 +2257,10 @@ var resumeState = 'play';
 document.addEventListener('keydown', function(e){
   var k = e.key;
   if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' ','Spacebar'].indexOf(k) >= 0) e.preventDefault();
+  /* 実績はいつでも開け閉めできる */
+  if (k === 'a' || k === 'A'){ if ($('#veil-ach').classList.contains('on')) closeAch(); else openAch(); return; }
+  if (k === 'Escape' && $('#veil-ach').classList.contains('on')){ closeAch(); return; }
+  if ($('#veil-ach').classList.contains('on')) return;
   if (state === 'idle' || state === 'over'){
     if (k === ' ' || k === 'Enter' || k === 'r' || k === 'R') newGame();
     return;
@@ -2060,6 +2324,9 @@ onTap('#btn-pause', function(){ togglePause(); });
 onTap('#btn-help', function(){
   document.getElementById('help').scrollIntoView({ behavior: 'smooth' });
 });
+onTap('#btn-ach', openAch);
+onTap('#btn-ach2', openAch);
+onTap('#btn-ach-close', closeAch);
 onTap('#btn-sound', function(){
   var on = Sound.toggle();
   this.textContent = on ? '♪ 音 ON' : '♪ 音 OFF';
@@ -2098,6 +2365,7 @@ if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) document.body.cl
 
 /* ---------------- 起動 ---------------- */
 try { best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0; } catch (e) { best = 0; }
+achLoad();
 
 loadFaces().then(function(){
   /* 開始前の盤面を用意して見せておく */
@@ -2106,6 +2374,7 @@ loadFaces().then(function(){
   wall = freshWall(); doraInd = [wall.pop()]; refreshDora();
   nextQ = []; fillQueue();
   syncUI();
+  syncAch();
   state = 'idle';
   lastT = performance.now();
   requestAnimationFrame(loop);
