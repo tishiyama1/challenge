@@ -132,7 +132,12 @@
   #dora { flex-wrap: wrap; }
   .tilecap { font-size: 10px; color: var(--dim); letter-spacing: 0.16em; margin-bottom: 5px; }
 
-  .panel > h2 .hint { font-weight: 400; letter-spacing: 0.06em; color: var(--dim); font-size: 9.5px; }
+  .panel > h2 .badge {
+    font-weight: 700; letter-spacing: 0.1em; font-size: 9.5px;
+    padding: 2px 8px; border-radius: 999px;
+    color: #bfe6c8; background: rgba(143,227,168,0.13); border: 1px solid rgba(143,227,168,0.3);
+  }
+  .panel > h2 .badge.naki { color: #ffcf94; background: rgba(255,156,74,0.14); border-color: rgba(255,156,74,0.38); }
   .melds { display: grid; grid-template-columns: repeat(2, min-content); gap: 5px; justify-content: start; }
   .meldbox.pair { grid-column: 1 / -1; justify-self: start; }
   .meldbox {
@@ -334,7 +339,7 @@
       </div>
 
       <div class="panel tehai-panel">
-        <h2>手牌 <span class="hint" id="tehai-hint">4面子1雀頭で和了</span></h2>
+        <h2>手牌 <span class="badge" id="menzen">門前</span></h2>
         <div class="melds" id="melds"></div>
         <div class="tenpai" id="tenpai"></div>
       </div>
@@ -416,10 +421,33 @@
       </p>
       <p>
         面子はすべて自分で作ったものなので<b>門前・ツモ</b>として数えます。
-        <b>門前清自摸和が必ず1翻</b>つくので、役なしで和了できないということはありません。
+        <b>門前清自摸和が必ず1翻</b>つくので、放っておいても役なしにはなりません。
         符は 副底20符＋暗刻・暗槓の符＋役牌の雀頭2符＋ツモ2符 を切り上げ。
         点数は<b>子のツモ和了の総和</b>（親から2、子2人から1ずつ）で計算します。
         待ちの概念がないので、平和と待ち符は採りません。
+      </p>
+
+      <h3>ホールドを使うと鳴きになる</h3>
+      <p>
+        ホールドは便利ですが、<b>使った瞬間その手は「鳴き」扱い</b>になります。麻雀で副露するのと同じで、
+        <b>門前の役が消え、食い下がりが効きます</b>。
+      </p>
+      <ul>
+        <li><b>消える</b> ― 門前清自摸和・一盃口・二盃口・四暗刻・九蓮宝燈</li>
+        <li><b>1翻下がる</b> ― 三色同順・一気通貫・混全帯幺九・純全帯幺九・混一色・清一色</li>
+        <li><b>そのまま</b> ― 役牌・断幺九（喰いタンあり）・対々和・三暗刻・混老頭・小三元・
+          大三元・字一色・清老頭・緑一色・四喜和など</li>
+      </ul>
+      <p>
+        いちばん怖いのは、門前清自摸和という保険が外れることです。
+        鳴いた手が4面子1雀頭までそろっても、役が何も付いていなければ<b>役なし ― 点は入りません</b>。
+        鳴くと決めたら、<b>役牌の刻子を混ぜる</b>か<b>幺九牌を避けて断幺九にまとめる</b>か、
+        染め手にするか ― 鳴いても付く役を意識して組んでください。
+        手牌の欄の<b>門前／鳴き</b>の札で、いまの手がどちらかいつでも分かります。
+      </p>
+      <p>
+        鳴きは<b>その手だけ</b>のものです。和了して手牌が空になれば、また門前から始まります。
+        横14列の一列和了は手牌と別の和了なので、鳴きの影響を受けません。
       </p>
 
       <h3>一列和了（地和）</h3>
@@ -458,7 +486,7 @@
       </p>
       <p>
         <b>ホールドは1牌</b>。いま降ってくる牌を1つ預けておけます。次に押すと預けた牌と入れ替わります
-        （1牌置くまで連続では使えません）。
+        （1牌置くまで連続では使えません）。ただし<b>使った手は鳴き扱い</b>になります ― 上の「ホールドを使うと鳴きになる」を参照。
       </p>
       <p>
         スマホでは<b>手牌・スコア・ネクスト・ホールド・ドラ・場が盤面の上の帯にまとまり</b>、操作ボタンが下に出るので、
@@ -491,6 +519,7 @@
             <tr><td>刻子を取る</td><td>―</td><td class="n">200</td></tr>
             <tr><td>槓子を取る</td><td>―</td><td class="n">500</td></tr>
             <tr><td>雀頭を取る</td><td>―</td><td class="n">100</td></tr>
+            <tr><td>和了</td><td>役なし（鳴いて役が付かなかった手）</td><td class="n">0</td></tr>
             <tr><td>和了</td><td>1翻30符（門前ツモのみ）</td><td class="n">1,100</td></tr>
             <tr><td>和了</td><td>3翻40符（三暗刻＋ツモ）</td><td class="n">5,200</td></tr>
             <tr><td>和了</td><td>満貫</td><td class="n">8,000</td></tr>
@@ -505,6 +534,7 @@
         通常役は
         断幺九・一盃口・二盃口・三色同順・三色同刻・一気通貫・混全帯幺九・純全帯幺九・対々和・三暗刻・三槓子・
         混老頭・小三元・役牌（白發中・場風）・混一色・清一色 を数えます。
+        鳴いた手は上のとおり門前役が落ち、食い下がりが効きます。
       </p>
 
       <h3>終わりかた</h3>
@@ -692,9 +722,11 @@ function evalHand(melds, pair, ctx, opts){
   function add(name, h){ yaku.push({ name: name, han: h }); han += h; }
   function ym(name, k){ yaku.push({ name: name, han: 13 * k, ym: k }); yakuman += k; }
 
-  /* ---- 役満 ---- */
+  var naki = !!opts.naki;                            /* ホールドを使った手は鳴き扱い */
+
+  /* ---- 役満（四暗刻・九蓮宝燈は門前限定） ---- */
   if (opts.chihou) ym('地和', 1);
-  if (kouT.length === 4) ym('四暗刻', 1);
+  if (kouT.length === 4 && !naki) ym('四暗刻', 1);
   if (tiles.every(isHonor)) ym('字一色', 1);
   if (tiles.every(isTerminal)) ym('清老頭', 1);
   if (tiles.every(function(t){ return GREEN.indexOf(t) >= 0; })) ym('緑一色', 1);
@@ -703,14 +735,14 @@ function evalHand(melds, pair, ctx, opts){
   else if (winds === 3 && pair >= 27 && pair <= 30) ym('小四喜', 1);
   if (kouT.filter(function(t){ return t >= 31; }).length === 3) ym('大三元', 1);
   if (kanN === 4) ym('四槓子', 1);
-  if (nSuits === 1 && !honor && tiles.length === 14 && isChuuren(countsOf(tiles), suitOf(tiles[0]))) ym('九蓮宝燈', 1);
+  if (nSuits === 1 && !honor && !naki && tiles.length === 14 && isChuuren(countsOf(tiles), suitOf(tiles[0]))) ym('九蓮宝燈', 1);
 
   if (yakuman > 0){
     return finish(yaku, 13 * yakuman, yakuman, 0, tiles);
   }
 
   /* ---- 通常役 ---- */
-  add('門前清自摸和', 1);
+  if (!naki) add('門前清自摸和', 1);
 
   kouT.forEach(function(t){
     if (t >= 31) add('役牌 ' + HONORS[t - 27], 1);
@@ -723,18 +755,20 @@ function evalHand(melds, pair, ctx, opts){
   var dup = 0, seen = {};
   shunT.forEach(function(t){ seen[t] = (seen[t] || 0) + 1; });
   Object.keys(seen).forEach(function(k){ dup += Math.floor(seen[k] / 2); });
-  if (dup >= 2) add('二盃口', 3);
-  else if (dup === 1) add('一盃口', 1);
+  if (!naki){                                        /* 一盃口・二盃口は門前限定 */
+    if (dup >= 2) add('二盃口', 3);
+    else if (dup === 1) add('一盃口', 1);
+  }
 
   /* 三色同順 */
   for (i = 0; i < shunT.length; i++){
     var n0 = shunT[i] % 9, got = {};
     for (j = 0; j < shunT.length; j++) if (shunT[j] % 9 === n0) got[suitOf(shunT[j])] = 1;
-    if (Object.keys(got).length === 3){ add('三色同順', 2); break; }
+    if (Object.keys(got).length === 3){ add('三色同順', naki ? 1 : 2); break; }
   }
   /* 一気通貫 */
   for (var s = 0; s < 3; s++){
-    if (shunT.indexOf(s * 9) >= 0 && shunT.indexOf(s * 9 + 3) >= 0 && shunT.indexOf(s * 9 + 6) >= 0){ add('一気通貫', 2); break; }
+    if (shunT.indexOf(s * 9) >= 0 && shunT.indexOf(s * 9 + 3) >= 0 && shunT.indexOf(s * 9 + 6) >= 0){ add('一気通貫', naki ? 1 : 2); break; }
   }
   /* 三色同刻 */
   for (i = 0; i < kouT.length; i++){
@@ -745,18 +779,27 @@ function evalHand(melds, pair, ctx, opts){
   }
 
   if (shunT.length === 0) add('対々和', 2);
-  if (kouT.length === 3) add('三暗刻', 2);
+  if (kouT.length >= 3) add('三暗刻', 2);
   if (kanN === 3) add('三槓子', 2);
 
   if (allYao && shunT.length === 0) add('混老頭', 2);
   else if (isYaochu(pair) && melds.every(function(x){
     return x.k === 'shun' ? (x.t % 9 === 0 || x.t % 9 === 6) : isYaochu(x.t);
   })){
-    add(allYao ? '純全帯幺九' : '混全帯幺九', allYao ? 3 : 2);
+    add(allYao ? '純全帯幺九' : '混全帯幺九', (allYao ? 3 : 2) - (naki ? 1 : 0));
   }
 
-  if (nSuits <= 1 && !honor) add('清一色', 6);
-  else if (nSuits <= 1 && honor) add('混一色', 3);
+  if (nSuits <= 1 && !honor) add('清一色', naki ? 5 : 6);
+  else if (nSuits <= 1 && honor) add('混一色', naki ? 2 : 3);
+
+  /* 鳴いていて役が何も付かなければ和了にならない ― 点は入らない */
+  if (han === 0){
+    return {
+      yaku: [{ name: '役なし', han: 0 }], han: 0, yakuman: 0,
+      fu: calcFu(melds, pair, ctx), dora: 0, tiles: tiles,
+      pts: 0, limit: '', label: '役なし', noYaku: true
+    };
+  }
 
   return finish(yaku, han, 0, calcFu(melds, pair, ctx), tiles);
 
@@ -959,8 +1002,8 @@ var piece = null;                /* {t, col, y, flip, rot} */
 var state = 'idle';              /* idle | play | flash | fall | pause | over */
 var timer = 0, pendingActive = [], pendingClear = [];
 var score = 0, best = 0, chain = 0, maxChain = 0, locks = 0, cleared = 0, spins = 0;
-var stock = { melds: [], pair: -1 };   /* 消して集めた手牌。4面子1雀頭で和了 */
-var agariCount = 0, rescanAll = false;
+var stock = { melds: [], pair: -1, naki: false };  /* 消して集めた手牌。4面子1雀頭で和了 */
+var agariCount = 0, nakiCount = 0, rescanAll = false;
 var bestHand = null;
 var round = 0, level = 1;
 var effects = [], sparks = [], shake = 0;
@@ -1020,6 +1063,8 @@ var Sound = (function(){
         tone(PENTA[Math.min(PENTA.length - 1, k + i)], 0.30, 'triangle', 0.10, i * 0.045);
       noise(0.16, 0.14, 0, 2400);
     },
+    naki: function(){ tone(300, 0.10, 'square', 0.06); tone(225, 0.16, 'square', 0.05, 0.07); },
+    noyaku: function(){ tone(240, 0.30, 'sine', 0.09, 0, 150); noise(0.12, 0.08, 0, 500); },
     agari: function(han){
       var seq = han >= 6 ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25, 783.99];
       for (var i = 0; i < seq.length; i++) tone(seq[i], 0.42, 'triangle', 0.12, i * 0.075);
@@ -1186,7 +1231,7 @@ function newGame(){
   refreshDora();
   nextQ = []; hold = null; holdUsed = false;
   score = 0; chain = 0; maxChain = 0; locks = 0; cleared = 0; spins = 0;
-  stock = { melds: [], pair: -1 }; agariCount = 0; rescanAll = false;
+  stock = { melds: [], pair: -1, naki: false }; agariCount = 0; nakiCount = 0; rescanAll = false;
   bestHand = null; round = 0; level = 1;
   effects = []; sparks = []; shake = 0;
   piece = null; pendingActive = []; pendingClear = [];
@@ -1259,6 +1304,13 @@ function doHold(){
   piece.y = Math.min(piece.y, -0.2);
   holdUsed = true;
   Sound.hold();
+  if (!stock.naki){
+    /* ホールドを使った手はその時点で鳴き扱い ― 門前の役が消える */
+    stock.naki = true;
+    nakiCount++;
+    addEffect(CW * COLS / 2, CH * 1.7, '鳴き', 'この手は門前が消える', '#ffb86a', 1.3, 20);
+    Sound.naki();
+  }
   syncSide();
 }
 function hardDrop(){
@@ -1408,10 +1460,10 @@ function resolveStep(active){
         else stock.melds.push({ k: g.kind, t: g.tile });
         /* 4面子1雀頭がそろったら和了 */
         if (stock.melds.length === 4 && stock.pair >= 0){
-          var res = evalHand(stock.melds, stock.pair, ctxNow(), {});
+          var res = evalHand(stock.melds, stock.pair, ctxNow(), { naki: stock.naki });
           gained += agari(res, cmult, CW * COLS / 2, CH * 2.4, '和了');
           big = big || res.yakuman > 0 || res.han >= 6;
-          stock = { melds: [], pair: -1 };
+          stock = { melds: [], pair: -1, naki: false };
           rescanAll = true;
         }
       }
@@ -1435,6 +1487,13 @@ function resolveStep(active){
 /* 和了の処理（点数・演出・記録）。加算する点を返す */
 function agari(res, cmult, sx, sy, tag){
   var pts = Math.round(res.pts * cmult);
+  if (res.noYaku){
+    /* 鳴いて役が付かなかった手。形はそろったが点にならない */
+    addEffect(sx, sy, '役なし', '鳴いたのに役が無い', '#9db3a4', 1.4, 21);
+    pushLog('役なし（鳴き）', 0, false);
+    Sound.noyaku();
+    return 0;
+  }
   agariCount++;
   if (!bestHand || res.pts > bestHand.pts){
     bestHand = { label: res.label, han: res.han, fu: res.fu, yakuman: res.yakuman, pts: res.pts, limit: res.limit };
@@ -1506,6 +1565,7 @@ function gameOver(title, reason){
     (bestHand ? '<br>最高手 ' + bestHand.label + '（' +
       (bestHand.yakuman ? bestHand.limit : bestHand.han + '翻' + (bestHand.fu ? bestHand.fu + '符' : '')) +
       '　' + bestHand.pts.toLocaleString() + '点）' : '') +
+    (nakiCount ? '<br>鳴き ' + nakiCount + '回' : '') +
     (spins ? '<br>無駄回し ' + spins + '回' : '');
   $('#veil-over').classList.add('on');
   syncUI();
@@ -1715,10 +1775,15 @@ function syncTehai(){
   else { pd.appendChild(slotEl()); pd.appendChild(slotEl()); }
   box.appendChild(pd);
 
+  var badge = $('#menzen');
+  badge.textContent = stock.naki ? '鳴き' : '門前';
+  badge.className = 'badge' + (stock.naki ? ' naki' : '');
+
   var el = $('#tenpai'), need = 4 - stock.melds.length, hasP = stock.pair >= 0;
   if (need === 0 && !hasP){ el.textContent = 'テンパイ ― 雀頭待ち'; el.className = 'tenpai on'; }
   else if (need === 1 && hasP){ el.textContent = 'テンパイ ― あと1面子'; el.className = 'tenpai on'; }
   else { el.textContent = '面子 ' + stock.melds.length + '/4 ・ 雀頭 ' + (hasP ? 'あり' : 'まだ'); el.className = 'tenpai'; }
+  if (stock.naki) el.textContent += '　／　門前役なし';
 }
 
 function syncSide(){
