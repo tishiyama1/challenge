@@ -132,6 +132,20 @@
   #dora { flex-wrap: wrap; }
   .tilecap { font-size: 10px; color: var(--dim); letter-spacing: 0.16em; margin-bottom: 5px; }
 
+  .panel > h2 .hint { font-weight: 400; letter-spacing: 0.06em; color: var(--dim); font-size: 9.5px; }
+  .melds { display: grid; grid-template-columns: repeat(2, min-content); gap: 5px; justify-content: start; }
+  .meldbox.pair { grid-column: 1 / -1; justify-self: start; }
+  .meldbox {
+    display: flex; gap: 2px; padding: 3px; border-radius: 7px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+  }
+  .meldbox.empty { border-style: dashed; border-color: rgba(255,255,255,0.13); background: none; }
+  .meldbox.pair { border-color: rgba(227,192,118,0.45); }
+  .meldbox.pair.empty { border-color: rgba(227,192,118,0.22); }
+  .mini.sm { width: 19px; height: 26px; border-radius: 4px; }
+  .tenpai { margin-top: 9px; font-size: 11.5px; letter-spacing: 0.08em; color: var(--dim); }
+  .tenpai.on { color: #ffd98a; }
+
   .log { display: flex; flex-direction: column; gap: 5px; max-height: 190px; overflow: hidden; }
   .log .ent {
     display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
@@ -174,8 +188,8 @@
     .hud { order: 1; }
     .boardbox {
       order: 2; min-height: 0;
-      height: clamp(260px, calc(100vh - 300px), 560px);
-      height: clamp(260px, calc(100dvh - 300px), 560px);
+      height: clamp(240px, calc(100vh - 360px), 560px);
+      height: clamp(240px, calc(100dvh - 360px), 560px);
     }
     .pad { order: 3; }
     .logpanel { order: 4; }
@@ -206,6 +220,11 @@
       content: "ドラ"; font-size: 9px; color: var(--dim);
       letter-spacing: 0.1em; padding-bottom: 3px;
     }
+    .hud .tehai-panel { flex: 1 1 100%; order: -1; }
+    .hud .melds { grid-template-columns: repeat(5, min-content); gap: 4px; }
+    .hud .meldbox { grid-column: auto; padding: 2px; gap: 1px; }
+    .hud .mini.sm { width: 16px; height: 22px; }
+    .hud .tenpai { margin-top: 4px; font-size: 10.5px; }
     .hud .ba-panel { flex: 1 1 100%; }
     .hud .rows { flex-direction: row; flex-wrap: wrap; gap: 3px 12px; }
     .hud .row { gap: 5px; justify-content: flex-start; font-size: 11px; }
@@ -272,8 +291,8 @@
           <h3>落雀</h3>
           <p>
             上から牌がひとつずつ降ってくる。<br>
-            横一列・縦一列・隣り合った塊で<b>役</b>が出来ると消える。<br>
-            消えて落ちて、また役ができれば <b>連鎖（天和）</b>。
+            隣り合った牌で<b>面子</b>と<b>雀頭</b>を作ると消えて手牌に入り、<br>
+            <b>4面子1雀頭</b>そろえば和了 ― そこで役と翻と符を数える。
           </p>
           <div class="btns">
             <button class="btn" id="btn-start" type="button">牌を積む</button>
@@ -314,6 +333,12 @@
         <div class="chainline" id="chainline"></div>
       </div>
 
+      <div class="panel tehai-panel">
+        <h2>手牌 <span class="hint" id="tehai-hint">4面子1雀頭で和了</span></h2>
+        <div class="melds" id="melds"></div>
+        <div class="tenpai" id="tenpai"></div>
+      </div>
+
       <div class="panel nh-panel">
         <h2>NEXT / HOLD</h2>
         <div style="display:flex; gap:16px; align-items:flex-start;">
@@ -340,6 +365,7 @@
           <div class="row"><span class="k">局</span><span class="v" id="kyoku">東一局</span></div>
           <div class="row"><span class="k">牌山</span><span class="v" id="wall">136</span></div>
           <div class="row"><span class="k">速さ</span><span class="v" id="level">Lv.1</span></div>
+          <div class="row"><span class="k">和了</span><span class="v" id="agari">0</span></div>
           <div class="row"><span class="k">最大連鎖</span><span class="v" id="maxchain">0</span></div>
           <div class="row wide-only"><span class="k">最高手</span><span class="v" id="besthand">—</span></div>
         </div>
@@ -356,20 +382,63 @@
   <!-- ============================================================ -->
   <section class="docs" id="help">
     <div class="panel">
-      <h3>遊び方</h3>
+      <h3>どういうゲームか</h3>
+      <p>
+        上から<b>配牌がひとつ</b>ずつ降ってきます。左右に動かして積み、盤面で<b>面子</b>と<b>雀頭</b>を作ります。
+        できた面子・雀頭は盤面から消えて<b>手牌</b>に入り、
+        <b>4面子1雀頭がそろった時点で和了</b>。そこで初めて役・翻・符を数えて点数が入ります。
+      </p>
       <p>
         盤面は<b>横14列</b>。麻雀の手牌がちょうど並ぶ幅です。縦の段数は画面の大きさから自動で決まります。
-        上から<b>配牌がひとつ</b>ずつ降ってくるので、左右に動かして積んでいきます。
       </p>
+
+      <h3>盤面で消える形</h3>
       <ul>
-        <li><b>横一列</b> ― 同じ段でつながっている3〜14牌のかたまり</li>
-        <li><b>縦一列</b> ― 同じ列でつながっている3牌以上のかたまり</li>
-        <li><b>隣接した塊</b> ― 上下左右でつながった3〜5牌のかたまり（L字や2×2など）</li>
+        <li><b>面子</b> ― 順子（同じ色の連番3牌）・刻子（同じ牌3枚）・槓子（同じ牌4枚）</li>
+        <li><b>雀頭</b> ― 対子（同じ牌2枚）。ただし<b>手牌に雀頭がまだ無いときだけ</b>消えます</li>
       </ul>
       <p>
-        このいずれかが<b>役の形</b>（面子＋雀頭、七対子、国士無双）になった瞬間に消えます。
-        重なって成立したときは<b>いちばん高い役</b>が優先されます。消えたら上に積んでいた牌が落ちてきて、
-        それでまた役ができれば<b>連鎖（天和）</b>。連鎖が伸びるほど倍率が跳ね上がります。
+        対象になるのは<b>上下左右でつながった2〜4牌のかたまり</b>。
+        横一列でも縦一列でも、L字でも2×2でもかまいません。
+        重なって成立したときは<b>大きいかたまり</b>（槓子＞面子＞対子）が優先されます。
+      </p>
+      <p>
+        雀頭を取ったあとは対子が消えなくなるので、同じ牌が盤面に<b>残る</b>ようになります。
+        これが刻子の種です。刻子を作るには、同じ牌を2枚<b>離して</b>置いておき、
+        あいだの谷に3枚目を落とし込みます。対々和・三暗刻・四暗刻はこの積み方から生まれます。
+      </p>
+
+      <h3>手牌と和了</h3>
+      <p>
+        手牌は<b>面子4つ＋雀頭1つ</b>。そろった瞬間に和了して、手牌は空になり次の手に移ります。
+        面子が4つ埋まっているのに雀頭が無いと、そこでできた面子は<b>河に流れます</b>（点数は半分）。
+        雀頭は早めに確保しておくのが安全です。
+      </p>
+      <p>
+        面子はすべて自分で作ったものなので<b>門前・ツモ</b>として数えます。
+        <b>門前清自摸和が必ず1翻</b>つくので、役なしで和了できないということはありません。
+        符は 副底20符＋暗刻・暗槓の符＋役牌の雀頭2符＋ツモ2符 を切り上げ。
+        点数は<b>子のツモ和了の総和</b>（親から2、子2人から1ずつ）で計算します。
+        待ちの概念がないので、平和と待ち符は採りません。
+      </p>
+
+      <h3>一列和了（地和）</h3>
+      <p>
+        横14列がまるごと埋まり、その14牌が和了形になっていたら、手牌と関係なく<b>その場で和了</b>。
+        配牌のまま和了る形なので<b>地和</b>（役満）がつきます。<b>国士無双</b>ならさらに重なって<b>2倍役満</b>。
+      </p>
+      <p>
+        面子は3牌そろえば消えてしまうので、一列に残せるのは
+        <b>どこを切っても面子にならない手</b>だけ ― つまり<b>国士無双</b>と<b>七対子</b>です。
+        七対子は並び順が勝負で、一萬・一萬・二萬・二萬…と並べると途中で順子ができて崩れます。
+        <b>一萬 一萬 三萬 三萬 二萬 二萬</b>のように、隣り合う3牌が面子にならないよう置いていくのがコツ。
+        雀頭を確保して対子が消えない状態にしておくのも忘れずに。
+      </p>
+
+      <h3>連鎖</h3>
+      <p>
+        消えたら上に積んでいた牌が落ちてきて、それでまた面子や雀頭ができれば<b>連鎖（天和）</b>。
+        連鎖が伸びるほど倍率が跳ね上がり、面子の素点にも和了の点数にも掛かります。
       </p>
 
       <h3>操作</h3>
@@ -380,68 +449,62 @@
         <span class="kbd">↑</span><span class="kbd">Z</span> 180°回転 ／
         <span class="kbd">C</span><span class="kbd">Shift</span> ホールド ／
         <span class="kbd">P</span> 一時停止 ／
-        <span class="kbd">R</span> やり直す
+        <span class="kbd">R</span> やり直す。
+        盤面をタップしても動かせて、同じ列をもう一度叩くと落ちます。
       </p>
       <p>
         <b>回転は180°だけできます。</b>牌はひっくり返しても同じ牌なので、当然なにも起こりません。
         絵柄が逆さまになるだけです。それでも回したい時のためにあります。
       </p>
       <p>
-        スマホでは<b>スコア・ネクスト・ホールド・ドラ・場が盤面の上の帯にまとまり</b>、操作ボタンが下に出るので、
-        指を動かさずに全部見えます。盤面と操作ボタンの上ではダブルタップで画面が拡大しないようにしてあります
-        （二本指のピンチ操作はそのまま使えます）。
-      </p>
-      <p>
         <b>ホールドは1牌</b>。いま降ってくる牌を1つ預けておけます。次に押すと預けた牌と入れ替わります
         （1牌置くまで連続では使えません）。
+      </p>
+      <p>
+        スマホでは<b>手牌・スコア・ネクスト・ホールド・ドラ・場が盤面の上の帯にまとまり</b>、操作ボタンが下に出るので、
+        指を動かさずに全部見えます。盤面と操作ボタンの上ではダブルタップで画面が拡大しないようにしてあります
+        （二本指のピンチ操作はそのまま使えます）。
       </p>
 
       <h3>牌はワンセット136牌</h3>
       <p>
         萬子 9種×4 ＝ 36、筒子 36、索子 36、字牌 7種×4 ＝ 28。
-        <b>36＋36＋36＋28 ＝ 136</b> ― 合っています。この136牌ぴったりを1セットとして回しています。
-        盤面の牌・ネクスト・ホールド・ドラ表示牌・山に残っている牌をぜんぶ足すと、いつでも136牌。
+        <b>36＋36＋36＋28 ＝ 136</b>。この136牌ぴったりを1セットとして回しています。
+        盤面の牌・手牌・ネクスト・ホールド・ドラ表示牌・山に残っている牌をぜんぶ足すと、いつでも136牌。
         だから<b>同じ牌は世界に4枚しかありません</b>。山を引き切ると、それまでに消えた牌を洗牌して次局へ進みます。
       </p>
 
       <h3>ドラ</h3>
       <p>
         ドラ表示牌の<b>次の牌</b>がドラです（九萬→一萬、北→東、中→白と輪になります）。
-        消えたかたまりにドラが含まれていると<b>1牌につき+1翻</b>。局が進むごとに表示牌が1枚ずつ増えて、最大5枚になります。
+        和了した14牌にドラが含まれていると<b>1牌につき+1翻</b>。局が進むごとに表示牌が1枚ずつ増えて、最大5枚になります。
         盤面ではドラの牌の右上に金色の印がつきます。
       </p>
 
       <h3>点数</h3>
+      <p>面子・雀頭を取った時点でも小さな点が入ります（連鎖倍率つき）。本番は和了の点数です。</p>
       <div class="scroller">
         <table>
-          <thead><tr><th>形</th><th>役の例</th><th class="n">翻</th></tr></thead>
+          <thead><tr><th>入るところ</th><th>中身</th><th class="n">点</th></tr></thead>
           <tbody>
-            <tr><td>3牌</td><td>順子 ／ 刻子</td><td class="n">1</td></tr>
-            <tr><td>4牌</td><td>槓子</td><td class="n">2</td></tr>
-            <tr><td>—</td><td>役牌（白發中・場風）</td><td class="n">+1</td></tr>
-            <tr><td>—</td><td>断幺九 ／ 一盃口</td><td class="n">+1</td></tr>
-            <tr><td>3面子〜</td><td>三色同順 ／ 一気通貫 ／ 対々和 ／ 三暗刻 ／ 混老頭 ／ 小三元 ／ 混全帯幺九</td><td class="n">+2</td></tr>
-            <tr><td>3面子〜</td><td>混一色 ／ 純全帯幺九 ／ 二盃口</td><td class="n">+3</td></tr>
-            <tr><td>3面子〜</td><td>清一色</td><td class="n">+6</td></tr>
-            <tr><td>14牌</td><td>七対子</td><td class="n">6</td></tr>
-            <tr><td>14牌</td><td>国士無双 ／ 大車輪 ／ 字一色 ／ 四暗刻 ／ 大三元 ほか</td><td class="n">役満</td></tr>
+            <tr><td>順子を取る</td><td>―</td><td class="n">100</td></tr>
+            <tr><td>刻子を取る</td><td>―</td><td class="n">200</td></tr>
+            <tr><td>槓子を取る</td><td>―</td><td class="n">500</td></tr>
+            <tr><td>雀頭を取る</td><td>―</td><td class="n">100</td></tr>
+            <tr><td>和了</td><td>1翻30符（門前ツモのみ）</td><td class="n">1,100</td></tr>
+            <tr><td>和了</td><td>3翻40符（三暗刻＋ツモ）</td><td class="n">5,200</td></tr>
+            <tr><td>和了</td><td>満貫</td><td class="n">8,000</td></tr>
+            <tr><td>和了</td><td>跳満／倍満／三倍満</td><td class="n">12,000／16,000／24,000</td></tr>
+            <tr><td>和了</td><td>役満（四暗刻・大三元・字一色・清老頭・緑一色・小四喜・九蓮宝燈・四槓子 ほか）</td><td class="n">32,000</td></tr>
+            <tr><td>一列和了</td><td>地和</td><td class="n">32,000</td></tr>
+            <tr><td>一列和了</td><td>地和＋国士無双（2倍役満）</td><td class="n">64,000</td></tr>
           </tbody>
         </table>
       </div>
       <p>
-        翻は麻雀の点数表（子のロン相当）に置き換えます。1翻1000点、満貫8000点、跳満12000点、倍満16000点、
-        三倍満24000点、役満32000点。そこに<b>牌数ボーナス</b>（大きいかたまりほど高い）と
-        <b>連鎖倍率</b>、同時消しの倍率を掛けます。
-      </p>
-
-      <h3>大物手の作りかた</h3>
-      <p>
-        3牌そろえば消えてしまうので、面子で組む大物手はまず作れません。
-        逆に言うと、<b>どこを切っても3牌の役にならない手</b>だけが14牌そのまま残せます。
-        つまり<b>国士無双</b>と<b>七対子</b>。横一列14牌をこの形で埋め切ったときだけ、盤面はひと息に吹き飛びます。
-        七対子は並び順が勝負で、たとえば一萬・一萬・二萬・二萬…と並べると途中で順子ができて崩れます。
-        <b>一萬 一萬 三萬 三萬 二萬 二萬</b>のように、隣り合う3牌が役にならないよう置いていくのがコツ。
-        縦や塊でも成立してしまう点にも注意。
+        通常役は
+        断幺九・一盃口・二盃口・三色同順・三色同刻・一気通貫・混全帯幺九・純全帯幺九・対々和・三暗刻・三槓子・
+        混老頭・小三元・役牌（白發中・場風）・混一色・清一色 を数えます。
       </p>
 
       <h3>終わりかた</h3>
@@ -483,7 +546,7 @@ function doraOf(ind){
   return 31 + ((ind - 31 + 1) % 3);
 }
 
-/* ---------- 面子＋雀頭への分解（全通り） ---------- */
+/* ---------- 面子＋雀頭への分解（全通り。一列14牌の判定に使う） ---------- */
 function decompose(counts){
   var res = [], melds = [], pair = -1;
   function rec(i){
@@ -508,45 +571,34 @@ function decompose(counts){
   return res;
 }
 
+function countsOf(tiles){
+  var c = new Array(34).fill(0), i;
+  for (i = 0; i < tiles.length; i++) c[tiles[i]]++;
+  return c;
+}
+
 /* ---------- 国士無双 ---------- */
-function evalKokushi(counts){
+function isKokushi(counts){
   var pair = -1, i, k;
-  for (i = 0; i < 34; i++) if (counts[i] && YAOCHU.indexOf(i) < 0) return null;
+  for (i = 0; i < 34; i++) if (counts[i] && YAOCHU.indexOf(i) < 0) return false;
   for (k = 0; k < YAOCHU.length; k++){
     var c = counts[YAOCHU[k]];
-    if (c === 0) return null;
-    if (c === 2){ if (pair >= 0) return null; pair = YAOCHU[k]; }
-    else if (c !== 1) return null;
+    if (c === 0) return false;
+    if (c === 2){ if (pair >= 0) return false; pair = YAOCHU[k]; }
+    else if (c !== 1) return false;
   }
-  if (pair < 0) return null;
-  return { yaku: [{ name: '国士無双', han: 13, ym: 1 }], han: 13, yakuman: 1 };
+  return pair >= 0;
 }
 
 /* ---------- 七対子 ---------- */
-function evalChiitoi(counts){
-  var pairs = 0, tiles = [], i;
+function chiitoiPairs(counts){
+  var pairs = [], i;
   for (i = 0; i < 34; i++){
     if (counts[i] === 0) continue;
     if (counts[i] !== 2) return null;
-    pairs++; tiles.push(i);
+    pairs.push(i);
   }
-  if (pairs !== 7) return null;
-
-  /* 大車輪（筒子2〜8の七対子）・字一色七対子は役満 */
-  var dai = true;
-  for (i = 10; i <= 16; i++) if (counts[i] !== 2) dai = false;
-  if (dai) return { yaku: [{ name: '大車輪', han: 13, ym: 1 }], han: 13, yakuman: 1 };
-  if (tiles.every(isHonor)) return { yaku: [{ name: '字一色', han: 26, ym: 2 }], han: 26, yakuman: 2 };
-
-  var yaku = [{ name: '七対子', han: 6 }], han = 6;
-  var suits = {}, honor = false;
-  tiles.forEach(function(t){ if (isHonor(t)) honor = true; else suits[suitOf(t)] = 1; });
-  var ns = Object.keys(suits).length;
-  if (ns === 1 && !honor){ yaku.push({ name: '清一色', han: 6 }); han += 6; }
-  else if (ns === 1 && honor){ yaku.push({ name: '混一色', han: 3 }); han += 3; }
-  if (tiles.every(function(t){ return !isYaochu(t); })){ yaku.push({ name: '断幺九', han: 1 }); han += 1; }
-  if (tiles.every(isYaochu)){ yaku.push({ name: '混老頭', han: 2 }); han += 2; }
-  return { yaku: yaku, han: han, yakuman: 0 };
+  return pairs.length === 7 ? pairs : null;
 }
 
 /* ---------- 九蓮宝燈（14牌・単一数牌） ---------- */
@@ -560,197 +612,207 @@ function isChuuren(counts, suit){
   return extra === 1;
 }
 
-/* ---------- 通常形（面子＋雀頭） ---------- */
-function evalStandard(d, ctx){
-  var melds = d.melds, pair = d.pair, hasPair = pair >= 0, m = melds.length;
-  if (m === 0) return null;
+/* ============================================================
+   手牌（4面子1雀頭）の役判定
+   面子はすべて自分で作ったものなので門前・ツモ扱いで数える。
+   待ちの概念がないので平和と待ち符は採らない。
+   ============================================================ */
+function calcFu(melds, pair, ctx){
+  var fu = 20, i;                                   /* 副底 */
+  for (i = 0; i < melds.length; i++){
+    var x = melds[i];
+    if (x.k === 'shun') continue;
+    var yao = isYaochu(x.t);
+    if (x.k === 'kan') fu += yao ? 32 : 16;         /* 暗槓 */
+    else fu += yao ? 8 : 4;                          /* 暗刻 */
+  }
+  if (pair >= 31) fu += 2;                           /* 三元牌の雀頭 */
+  else if (pair === ctx.bakaze) fu += 2;             /* 場風の雀頭 */
+  fu += 2;                                           /* ツモ */
+  return Math.ceil(fu / 10) * 10;
+}
 
-  var tiles = [], i, j;
-  for (i = 0; i < m; i++){
+function ceil100(x){ return Math.ceil(x / 100) * 100; }
+
+/* 子のツモ和了の総和（親から2、子2人から1ずつ） */
+function scoreOf(han, fu, yakuman){
+  var base;
+  if (yakuman > 0) base = 8000 * yakuman;
+  else if (han >= 13) base = 8000;
+  else if (han >= 11) base = 6000;
+  else if (han >= 8) base = 4000;
+  else if (han >= 6) base = 3000;
+  else if (han >= 5) base = 2000;
+  else {
+    base = fu * Math.pow(2, 2 + han);
+    if (base > 2000) base = 2000;                    /* 切り上げ満貫はしない */
+  }
+  return ceil100(base * 2) + ceil100(base) * 2;
+}
+
+function limitName(han, fu, yakuman){
+  if (yakuman >= 2) return yakuman + '倍役満';
+  if (yakuman === 1) return '役満';
+  if (han >= 13) return '数え役満';
+  if (han >= 11) return '三倍満';
+  if (han >= 8) return '倍満';
+  if (han >= 6) return '跳満';
+  if (han >= 5) return '満貫';
+  if (han === 4 && fu >= 40) return '満貫';
+  if (han === 3 && fu >= 70) return '満貫';
+  return '';
+}
+
+/* melds: [{k:'shun'|'kou'|'kan', t}] ×4、pair: 牌番号
+   opts.chihou で一列和了（地和）の役満を上乗せする */
+function evalHand(melds, pair, ctx, opts){
+  opts = opts || {};
+  var i, j, tiles = [];
+  for (i = 0; i < melds.length; i++){
     var x = melds[i];
     if (x.k === 'shun') tiles.push(x.t, x.t + 1, x.t + 2);
-    else { var c = x.k === 'kan' ? 4 : 3; for (j = 0; j < c; j++) tiles.push(x.t); }
+    else { var n = x.k === 'kan' ? 4 : 3; for (j = 0; j < n; j++) tiles.push(x.t); }
   }
-  if (hasPair) tiles.push(pair, pair);
+  tiles.push(pair, pair);
 
-  var complete = (m >= 4 && hasPair);        /* 4面子1雀頭 = 和了形 */
   var kouT = [], shunT = [], kanN = 0;
-  melds.forEach(function(x){
-    if (x.k === 'shun') shunT.push(x.t);
-    else { kouT.push(x.t); if (x.k === 'kan') kanN++; }
-  });
+  for (i = 0; i < melds.length; i++){
+    if (melds[i].k === 'shun') shunT.push(melds[i].t);
+    else { kouT.push(melds[i].t); if (melds[i].k === 'kan') kanN++; }
+  }
   var suits = {}, honor = false;
-  tiles.forEach(function(t){ if (isHonor(t)) honor = true; else suits[suitOf(t)] = 1; });
+  for (i = 0; i < tiles.length; i++){
+    if (isHonor(tiles[i])) honor = true; else suits[suitOf(tiles[i])] = 1;
+  }
   var nSuits = Object.keys(suits).length;
   var allYao = tiles.every(isYaochu);
   var noYao = tiles.every(function(t){ return !isYaochu(t); });
 
   var yaku = [], han = 0, yakuman = 0;
   function add(name, h){ yaku.push({ name: name, han: h }); han += h; }
-  function addYM(name, mult){ yaku.push({ name: name, han: 13 * mult, ym: mult }); yakuman += mult; }
+  function ym(name, k){ yaku.push({ name: name, han: 13 * k, ym: k }); yakuman += k; }
 
-  /* ---- 役満（4面子1雀頭が要る） ---- */
-  if (complete){
-    if (kouT.length === 4) addYM('四暗刻', 1);
-    if (tiles.every(isHonor)) addYM('字一色', 1);
-    if (tiles.every(isTerminal)) addYM('清老頭', 1);
-    if (tiles.every(function(t){ return GREEN.indexOf(t) >= 0; })) addYM('緑一色', 1);
-    var winds = kouT.filter(function(t){ return t >= 27 && t <= 30; }).length;
-    if (winds === 4) addYM('大四喜', 2);
-    else if (winds === 3 && pair >= 27 && pair <= 30) addYM('小四喜', 1);
-    if (kouT.filter(function(t){ return t >= 31; }).length === 3) addYM('大三元', 1);
-    if (kanN === 4) addYM('四槓子', 1);
-    if (nSuits === 1 && !honor && tiles.length === 14 && isChuuren(countsOf(tiles), suitOf(tiles[0]))) addYM('九蓮宝燈', 1);
-    if (yakuman > 0) return { yaku: yaku, han: 13 * yakuman, yakuman: yakuman };
+  /* ---- 役満 ---- */
+  if (opts.chihou) ym('地和', 1);
+  if (kouT.length === 4) ym('四暗刻', 1);
+  if (tiles.every(isHonor)) ym('字一色', 1);
+  if (tiles.every(isTerminal)) ym('清老頭', 1);
+  if (tiles.every(function(t){ return GREEN.indexOf(t) >= 0; })) ym('緑一色', 1);
+  var winds = kouT.filter(function(t){ return t >= 27 && t <= 30; }).length;
+  if (winds === 4) ym('大四喜', 2);
+  else if (winds === 3 && pair >= 27 && pair <= 30) ym('小四喜', 1);
+  if (kouT.filter(function(t){ return t >= 31; }).length === 3) ym('大三元', 1);
+  if (kanN === 4) ym('四槓子', 1);
+  if (nSuits === 1 && !honor && tiles.length === 14 && isChuuren(countsOf(tiles), suitOf(tiles[0]))) ym('九蓮宝燈', 1);
+
+  if (yakuman > 0){
+    return finish(yaku, 13 * yakuman, yakuman, 0, tiles);
   }
 
-  /* ---- 面子そのものの基礎翻 ---- */
-  var base = 0;
-  melds.forEach(function(x){ base += (x.k === 'kan' ? 2 : 1); });
-  if (m === 1){
-    add(melds[0].k === 'shun' ? '順子' : (melds[0].k === 'kan' ? '槓子' : '刻子'), base);
-  } else {
-    add(m + '面子' + (hasPair ? '1雀頭' : ''), base);
-  }
+  /* ---- 通常役 ---- */
+  add('門前清自摸和', 1);
 
-  /* ---- 役牌 ---- */
   kouT.forEach(function(t){
     if (t >= 31) add('役牌 ' + HONORS[t - 27], 1);
     else if (t >= 27 && t === ctx.bakaze) add('場風 ' + HONORS[t - 27], 1);
   });
   if (kouT.filter(function(t){ return t >= 31; }).length === 2 && pair >= 31) add('小三元', 2);
 
-  /* ---- 一盃口・二盃口 ---- */
+  if (noYao) add('断幺九', 1);
+
   var dup = 0, seen = {};
   shunT.forEach(function(t){ seen[t] = (seen[t] || 0) + 1; });
   Object.keys(seen).forEach(function(k){ dup += Math.floor(seen[k] / 2); });
-  if (dup >= 2 && m >= 4) add('二盃口', 3);
-  else if (dup >= 1) add('一盃口', 1);
+  if (dup >= 2) add('二盃口', 3);
+  else if (dup === 1) add('一盃口', 1);
 
-  /* ---- 断幺九 ---- */
-  if (noYao && m >= 2) add('断幺九', 1);
-
-  /* ---- 3面子以上で成立する役 ---- */
-  if (m >= 3){
-    /* 三色同順 */
-    for (i = 0; i < shunT.length; i++){
-      var n0 = shunT[i] % 9, s0 = suitOf(shunT[i]);
-      if (s0 > 2) continue;
-      var got = {}; got[s0] = 1;
-      for (j = 0; j < shunT.length; j++) if (shunT[j] % 9 === n0 && suitOf(shunT[j]) < 3) got[suitOf(shunT[j])] = 1;
-      if (Object.keys(got).length === 3){ add('三色同順', 2); break; }
-    }
-    /* 一気通貫 */
-    for (var s = 0; s < 3; s++){
-      if (shunT.indexOf(s * 9) >= 0 && shunT.indexOf(s * 9 + 3) >= 0 && shunT.indexOf(s * 9 + 6) >= 0){ add('一気通貫', 2); break; }
-    }
-    /* 三色同刻 */
-    for (i = 0; i < kouT.length; i++){
-      if (suitOf(kouT[i]) > 2) continue;
-      var kn = kouT[i] % 9, kg = {};
-      for (j = 0; j < kouT.length; j++) if (suitOf(kouT[j]) < 3 && kouT[j] % 9 === kn) kg[suitOf(kouT[j])] = 1;
-      if (Object.keys(kg).length === 3){ add('三色同刻', 2); break; }
-    }
-    if (shunT.length === 0) add('対々和', 2);
-    if (kouT.length >= 3) add('三暗刻', 2);
-    if (kanN >= 3) add('三槓子', 2);
-
-    if (allYao && shunT.length === 0) add('混老頭', 2);
-    else if (hasPair && isYaochu(pair) && melds.every(function(x){
-      return x.k === 'shun' ? (x.t % 9 === 0 || x.t % 9 === 6) : isYaochu(x.t);
-    })){
-      add(allYao ? '純全帯幺九' : '混全帯幺九', allYao ? 3 : 2);
-    }
-
-    if (nSuits <= 1 && !honor) add('清一色', 6);
-    else if (nSuits <= 1 && honor) add('混一色', 3);
+  /* 三色同順 */
+  for (i = 0; i < shunT.length; i++){
+    var n0 = shunT[i] % 9, got = {};
+    for (j = 0; j < shunT.length; j++) if (shunT[j] % 9 === n0) got[suitOf(shunT[j])] = 1;
+    if (Object.keys(got).length === 3){ add('三色同順', 2); break; }
+  }
+  /* 一気通貫 */
+  for (var s = 0; s < 3; s++){
+    if (shunT.indexOf(s * 9) >= 0 && shunT.indexOf(s * 9 + 3) >= 0 && shunT.indexOf(s * 9 + 6) >= 0){ add('一気通貫', 2); break; }
+  }
+  /* 三色同刻 */
+  for (i = 0; i < kouT.length; i++){
+    if (suitOf(kouT[i]) > 2) continue;
+    var kn = kouT[i] % 9, kg = {};
+    for (j = 0; j < kouT.length; j++) if (suitOf(kouT[j]) < 3 && kouT[j] % 9 === kn) kg[suitOf(kouT[j])] = 1;
+    if (Object.keys(kg).length === 3){ add('三色同刻', 2); break; }
   }
 
-  return { yaku: yaku, han: han, yakuman: 0 };
-}
+  if (shunT.length === 0) add('対々和', 2);
+  if (kouT.length === 3) add('三暗刻', 2);
+  if (kanN === 3) add('三槓子', 2);
 
-function countsOf(tiles){
-  var c = new Array(34).fill(0), i;
-  for (i = 0; i < tiles.length; i++) c[tiles[i]]++;
-  return c;
-}
-
-/* ---------- 翻 → 点数（子のロン相当） ---------- */
-var HAN_PTS = [0, 1000, 2000, 3900, 7700, 8000, 12000, 12000, 16000, 16000, 16000, 24000, 24000];
-function ptsOf(han, yakuman){
-  if (yakuman > 0) return 32000 * yakuman;
-  if (han <= 0) return 0;
-  return HAN_PTS[Math.min(han, 12)];
-}
-function sizeFactor(n){ return 1 + 0.12 * (n - 3); }
-
-/* ---------- かたまりの評価（本体） ---------- */
-var evalMemo = new Map();
-var _cnt = new Array(34).fill(0);
-
-/* 明らかに面子にならない牌が混じっていれば即座に捨てる（必要条件だけの粗い篩）。
-   14牌は国士無双がありうるので篩にかけない。 */
-function sift(tiles, enforce){
-  var n = tiles.length, i, t, ok = true;
-  for (i = 0; i < n; i++) _cnt[tiles[i]]++;
-  for (i = 0; enforce && i < n; i++){
-    t = tiles[i];
-    if (_cnt[t] >= 2) continue;          /* 対子・刻子の芽がある */
-    if (t >= 27){ ok = false; break; }   /* 1枚だけの字牌はどうにもならない */
-    var p = t % 9;
-    var a = p >= 2 && _cnt[t-2] && _cnt[t-1];
-    var b = p >= 1 && p <= 7 && _cnt[t-1] && _cnt[t+1];
-    var c = p <= 6 && _cnt[t+1] && _cnt[t+2];
-    if (!a && !b && !c){ ok = false; break; }
+  if (allYao && shunT.length === 0) add('混老頭', 2);
+  else if (isYaochu(pair) && melds.every(function(x){
+    return x.k === 'shun' ? (x.t % 9 === 0 || x.t % 9 === 6) : isYaochu(x.t);
+  })){
+    add(allYao ? '純全帯幺九' : '混全帯幺九', allYao ? 3 : 2);
   }
-  var counts = ok ? _cnt.slice() : null;
-  for (i = 0; i < n; i++) _cnt[tiles[i]] = 0;
-  return counts;
+
+  if (nSuits <= 1 && !honor) add('清一色', 6);
+  else if (nSuits <= 1 && honor) add('混一色', 3);
+
+  return finish(yaku, han, 0, calcFu(melds, pair, ctx), tiles);
+
+  function finish(yaku, han, yakuman, fu, tiles){
+    var dora = 0;
+    if (yakuman === 0 && ctx.dora && ctx.dora.length){
+      for (var k = 0; k < tiles.length; k++)
+        for (var q = 0; q < ctx.dora.length; q++) if (ctx.dora[q] === tiles[k]) dora++;
+      if (dora > 0){ yaku = yaku.concat([{ name: 'ドラ' + dora, han: dora, dora: true }]); han += dora; }
+    }
+    return {
+      yaku: yaku, han: han, yakuman: yakuman, fu: fu, dora: dora, tiles: tiles,
+      pts: scoreOf(han, fu, yakuman),
+      limit: limitName(han, fu, yakuman),
+      label: labelOf(yaku, yakuman)
+    };
+  }
 }
 
-function analyze(tiles, ctx){
-  var n = tiles.length;
-  if (n < 3 || n > 14) return null;
-  var counts = sift(tiles, n < 14);
-  if (!counts) return null;
+/* ---------- 七対子（一列和了のみ） ---------- */
+function evalChiitoiRow(pairs, ctx){
+  var tiles = [], i;
+  for (i = 0; i < pairs.length; i++) tiles.push(pairs[i], pairs[i]);
+  var yaku = [{ name: '地和', han: 13, ym: 1 }, { name: '七対子', han: 2 }];
+  return {
+    yaku: yaku, han: 13, yakuman: 1, fu: 25, dora: 0, tiles: tiles,
+    pts: scoreOf(13, 25, 1), limit: '役満', label: '地和・七対子'
+  };
+}
 
-  var key = tiles.slice().sort(function(a,b){ return a-b; }).join(',') + '|' + ctx.bakaze;
-  var best = evalMemo.get(key);
-  if (best === undefined){
-    var cand = [], r, i;
-    if (n === 14){
-      r = evalKokushi(counts); if (r) cand.push(r);
-      r = evalChiitoi(counts); if (r) cand.push(r);
-    }
-    var ds = decompose(counts.slice());
-    for (i = 0; i < ds.length; i++){
-      r = evalStandard(ds[i], ctx);
-      if (r) cand.push(r);
-    }
-    best = null;
-    for (i = 0; i < cand.length; i++){
-      var c = cand[i];
-      if (!best || c.yakuman > best.yakuman || (c.yakuman === best.yakuman && c.han > best.han)) best = c;
-    }
-    if (best) best = { yaku: best.yaku, han: best.han, yakuman: best.yakuman };
-    if (evalMemo.size > 60000) evalMemo.clear();
-    evalMemo.set(key, best || null);
+/* ---------- 盤面の横一列14牌 ---------- */
+function evalRow(tiles, ctx){
+  if (tiles.length !== 14) return null;
+  var counts = countsOf(tiles);
+  if (isKokushi(counts)){
+    return {
+      yaku: [{ name: '地和', han: 13, ym: 1 }, { name: '国士無双', han: 13, ym: 1 }],
+      han: 26, yakuman: 2, fu: 0, dora: 0, tiles: tiles,
+      pts: scoreOf(26, 0, 2), limit: '2倍役満', label: '地和・国士無双'
+    };
   }
-  if (!best) return null;
+  var pairs = chiitoiPairs(counts);
+  if (pairs) return evalChiitoiRow(pairs, ctx);
 
-  /* ドラは分解によらず一定なので後乗せ */
-  var yaku = best.yaku.slice(), han = best.han, ym = best.yakuman, dora = 0;
-  if (ym === 0 && ctx.dora && ctx.dora.length){
-    for (var k = 0; k < tiles.length; k++) if (ctx.dora.indexOf(tiles[k]) >= 0) dora++;
-    if (dora > 0){ yaku = yaku.concat([{ name: 'ドラ' + dora, han: dora, dora: true }]); han += dora; }
+  var ds = decompose(counts.slice()), best = null;
+  for (var i = 0; i < ds.length; i++){
+    var d = ds[i];
+    if (d.melds.length !== 4 || d.pair < 0) continue;
+    var r = evalHand(d.melds, d.pair, ctx, { chihou: true });
+    if (!best || r.pts > best.pts) best = r;
   }
-  var pts = Math.round(ptsOf(han, ym) * sizeFactor(n));
-  return { yaku: yaku, han: han, yakuman: ym, dora: dora, pts: pts, n: n, label: labelOf(yaku, ym) };
+  return best;
 }
 
 function labelOf(yaku, ym){
-  /* ドラは名前としては後回し、それ以外は翻の高い順 */
-  var sorted = yaku.slice().sort(function(a,b){
+  var sorted = yaku.slice().sort(function(a, b){
     if (!!a.dora !== !!b.dora) return a.dora ? 1 : -1;
     return b.han - a.han;
   });
@@ -760,6 +822,29 @@ function labelOf(yaku, ym){
   }
   return sorted.slice(0, 2).map(function(y){ return y.name; }).join('・');
 }
+
+/* ---------- 盤面で消える形の判定 ---------- */
+/* 2牌=対子、3牌=順子/刻子、4牌=槓子。それ以外は消えない */
+function classifyGroup(tiles){
+  var n = tiles.length, a, b, c;
+  if (n === 2) return tiles[0] === tiles[1] ? { k: 'pair', t: tiles[0], rank: 1 } : null;
+  if (n === 3){
+    if (tiles[0] === tiles[1] && tiles[1] === tiles[2]) return { k: 'kou', t: tiles[0], rank: 3 };
+    var s = tiles.slice().sort(function(x, y){ return x - y; });
+    a = s[0]; b = s[1]; c = s[2];
+    if (a < 27 && a % 9 <= 6 && b === a + 1 && c === a + 2) return { k: 'shun', t: a, rank: 3 };
+    return null;
+  }
+  if (n === 4){
+    if (tiles[0] === tiles[1] && tiles[1] === tiles[2] && tiles[2] === tiles[3]) return { k: 'kan', t: tiles[0], rank: 4 };
+    return null;
+  }
+  return null;
+}
+
+/* 面子・雀頭そのものの素点（連鎖倍率が乗る） */
+var PIECE_PTS = { shun: 100, kou: 200, kan: 500, pair: 100 };
+var PIECE_JA = { shun: '順子', kou: '刻子', kan: '槓子', pair: '雀頭' };
 
 /* ---------- 牌の絵（SVG） ---------- */
 var PIN_POS = {
@@ -859,7 +944,7 @@ var clamp = function(v, a, b){ return v < a ? a : (v > b ? b : v); };
 /* ---------------- 定数 ---------------- */
 var COLS = 14;
 var TILE_AR = 1.16;              /* セルの縦横比（牌の絵柄はこの中で 44:60 を保つ） */
-var MAX_CLUSTER = 5;             /* 隣接塊として見る最大牌数 */
+var MAX_CLUSTER = 4;             /* 隣接塊として見る最大牌数（槓子まで） */
 var CHAIN_MULT = [1, 1, 1.6, 2.4, 3.5, 5, 7, 10, 14, 20, 28, 40];
 var KYOKU_NAME = ['一局','二局','三局','四局'];
 var WIND_NAME = ['東','南','西','北'];
@@ -874,6 +959,8 @@ var piece = null;                /* {t, col, y, flip, rot} */
 var state = 'idle';              /* idle | play | flash | fall | pause | over */
 var timer = 0, pendingActive = [], pendingClear = [];
 var score = 0, best = 0, chain = 0, maxChain = 0, locks = 0, cleared = 0, spins = 0;
+var stock = { melds: [], pair: -1 };   /* 消して集めた手牌。4面子1雀頭で和了 */
+var agariCount = 0, rescanAll = false;
 var bestHand = null;
 var round = 0, level = 1;
 var effects = [], sparks = [], shake = 0;
@@ -932,6 +1019,11 @@ var Sound = (function(){
       for (var i = 0; i < Math.min(4, Math.max(2, Math.floor(n / 3))); i++)
         tone(PENTA[Math.min(PENTA.length - 1, k + i)], 0.30, 'triangle', 0.10, i * 0.045);
       noise(0.16, 0.14, 0, 2400);
+    },
+    agari: function(han){
+      var seq = han >= 6 ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25, 783.99];
+      for (var i = 0; i < seq.length; i++) tone(seq[i], 0.42, 'triangle', 0.12, i * 0.075);
+      noise(0.20, 0.11, 0, 2600);
     },
     yakuman: function(){
       var seq = [523.25, 659.25, 783.99, 1046.5, 1318.5];
@@ -1094,6 +1186,7 @@ function newGame(){
   refreshDora();
   nextQ = []; hold = null; holdUsed = false;
   score = 0; chain = 0; maxChain = 0; locks = 0; cleared = 0; spins = 0;
+  stock = { melds: [], pair: -1 }; agariCount = 0; rescanAll = false;
   bestHand = null; round = 0; level = 1;
   effects = []; sparks = []; shake = 0;
   piece = null; pendingActive = []; pendingClear = [];
@@ -1187,13 +1280,18 @@ function lockPiece(){
   resolveStep([r * COLS + c]);
 }
 
-/* ---- 消える組を探す ---- */
+/* ---- 消える組を探す ----
+   盤面で消えるのは 面子（順子・刻子・槓子）と、手牌に雀頭がまだ無いときの対子。
+   上下左右でつながった2〜4牌のかたまりを総当たりするので、
+   横一列・縦一列・L字・2×2 がそのまま対象になる。
+   それとは別に、横14列がまるごと埋まって和了形なら「一列和了」。 */
 function ctxNow(){ return { dora: doraTiles, bakaze: bakaze() }; }
 
 function findGroups(active){
   var seen = new Set(), clusterSeen = new Set(), out = [], cx = ctxNow();
+  var rowsDone = {};
+
   function tryCells(cells){
-    if (cells.length < 3 || cells.length > 14) return;
     var sorted = cells.slice().sort(function(a,b){ return a-b; });
     var key = sorted.join(',');
     if (seen.has(key)) return;
@@ -1204,35 +1302,32 @@ function findGroups(active){
       if (!o) return;
       tiles.push(o.t);
     }
-    var res = analyze(tiles, cx);
-    if (res) out.push({ cells: sorted, res: res });
+    var g = classifyGroup(tiles);
+    if (g) out.push({ cells: sorted, kind: g.k, tile: g.t, rank: g.rank });
   }
 
   for (var a = 0; a < active.length; a++){
     var idx = active[a];
     if (!grid[idx]) continue;
-    var r0 = Math.floor(idx / COLS), c0 = idx % COLS, i, j;
+    var r0 = Math.floor(idx / COLS);
 
-    /* 横一列 */
-    var L = c0; while (L > 0 && grid[r0 * COLS + L - 1]) L--;
-    var R = c0; while (R < COLS - 1 && grid[r0 * COLS + R + 1]) R++;
-    for (i = L; i <= c0; i++) for (j = c0; j <= R; j++){
-      if (j - i + 1 < 3) continue;
-      var seg = [];
-      for (var k = i; k <= j; k++) seg.push(r0 * COLS + k);
-      tryCells(seg);
-    }
-    /* 縦一列 */
-    var U = r0; while (U > 0 && grid[(U - 1) * COLS + c0]) U--;
-    var D = r0; while (D < ROWS - 1 && grid[(D + 1) * COLS + c0]) D++;
-    for (i = U; i <= r0; i++) for (j = r0; j <= D; j++){
-      if (j - i + 1 < 3) continue;
-      var seg2 = [];
-      for (var k2 = i; k2 <= j; k2++) seg2.push(k2 * COLS + c0);
-      tryCells(seg2);
-    }
-    /* 隣接した塊（最大5牌） */
+    /* 2〜4牌のかたまり */
     growCluster([idx], clusterSeen, tryCells);
+
+    /* 横一列14牌 */
+    if (!rowsDone[r0]){
+      rowsDone[r0] = 1;
+      var full = true, cells = [], tiles = [], c;
+      for (c = 0; c < COLS; c++){
+        var o = grid[r0 * COLS + c];
+        if (!o){ full = false; break; }
+        cells.push(r0 * COLS + c); tiles.push(o.t);
+      }
+      if (full){
+        var res = evalRow(tiles, cx);
+        if (res) out.push({ cells: cells, kind: 'row', res: res, rank: 100 });
+      }
+    }
   }
   return out;
 }
@@ -1250,7 +1345,7 @@ function growCluster(sub, seen, emit){
   var key = sub.join(',');
   if (seen.has(key)) return;
   seen.add(key);
-  if (sub.length >= 3) emit(sub);
+  if (sub.length >= 2) emit(sub);
   if (sub.length >= MAX_CLUSTER) return;
   var cands = {}, i, j;
   for (i = 0; i < sub.length; i++){
@@ -1271,54 +1366,88 @@ function resolveStep(active){
   var groups = findGroups(active);
   if (groups.length === 0){ finishChain(); return; }
 
-  /* 高い役から順に、重ならないように採用 */
-  groups.sort(function(a, b){
-    if (b.res.pts !== a.res.pts) return b.res.pts - a.res.pts;
-    return b.res.n - a.res.n;
-  });
-  var used = new Set(), picked = [];
+  /* 大きいかたまりから、重ならないように採用する。
+     対子は雀頭がまだ無いときに1つだけ取れる */
+  groups.sort(function(a, b){ return b.rank - a.rank; });
+  var used = new Set(), picked = [], pairTaken = (stock.pair >= 0);
   for (var i = 0; i < groups.length; i++){
     var g = groups[i], ok = true;
+    if (g.kind === 'pair' && pairTaken) continue;
     for (var j = 0; j < g.cells.length; j++) if (used.has(g.cells[j])) { ok = false; break; }
     if (!ok) continue;
+    if (g.kind === 'pair') pairTaken = true;
     for (var k = 0; k < g.cells.length; k++) used.add(g.cells[k]);
     picked.push(g);
   }
+  if (picked.length === 0){ finishChain(); return; }
 
   chain++;
   maxChain = Math.max(maxChain, chain);
   var cmult = CHAIN_MULT[Math.min(chain, CHAIN_MULT.length - 1)];
-  var smult = 1 + 0.25 * (picked.length - 1);
-  var gained = 0, ym = false;
+  var gained = 0, big = false;
 
   for (var p = 0; p < picked.length; p++){
-    var res = picked[p].res, cells = picked[p].cells;
-    var pts = Math.round(res.pts * cmult * smult);
-    gained += pts;
-    if (res.yakuman > 0) ym = true;
-    if (!bestHand || res.pts > bestHand.pts) bestHand = { label: res.label, han: res.han, yakuman: res.yakuman, pts: res.pts };
-    /* 表示 */
+    var g = picked[p], cells = g.cells;
     var sx = 0, sy = 0;
     for (var q = 0; q < cells.length; q++){ sx += (cells[q] % COLS) + 0.5; sy += Math.floor(cells[q] / COLS) + 0.5; }
     sx = sx / cells.length * CW; sy = sy / cells.length * CH;
-    addEffect(sx, sy, res.label, (res.yakuman ? '役満' : res.han + '翻') + '  ' + pts.toLocaleString(),
-              res.yakuman ? '#ffb86a' : '#ffe6a8', 1.1, res.yakuman ? 26 : 18);
-    pushLog((chain > 1 ? chain + '連鎖 ' : '') + res.label, pts, res.yakuman > 0);
-    if (res.yakuman > 0) burst(sx, sy, 46, '#ffcf7a');
+
+    if (g.kind === 'row'){
+      /* 一列和了 ― 手牌とは関係なくその場で和了 */
+      gained += agari(g.res, cmult, sx, sy, '一列和了');
+      big = true;
+    } else {
+      var pts = Math.round(PIECE_PTS[g.kind] * cmult);
+      var overflow = (g.kind !== 'pair' && stock.melds.length >= 4);
+      if (overflow) pts = Math.round(pts / 2);
+      gained += pts;
+      addEffect(sx, sy, PIECE_JA[g.kind] + (overflow ? '（流れ）' : ''), '+' + pts.toLocaleString(),
+                overflow ? '#9db3a4' : '#cfe8d4', 0.85, 15);
+      if (!overflow){
+        if (g.kind === 'pair') stock.pair = g.tile;
+        else stock.melds.push({ k: g.kind, t: g.tile });
+        /* 4面子1雀頭がそろったら和了 */
+        if (stock.melds.length === 4 && stock.pair >= 0){
+          var res = evalHand(stock.melds, stock.pair, ctxNow(), {});
+          gained += agari(res, cmult, CW * COLS / 2, CH * 2.4, '和了');
+          big = big || res.yakuman > 0 || res.han >= 6;
+          stock = { melds: [], pair: -1 };
+          rescanAll = true;
+        }
+      }
+    }
     for (var z = 0; z < cells.length; z++) grid[cells[z]].flash = 1;
     cleared += cells.length;
   }
 
   score += gained;
-  shake = Math.max(shake, ym ? 14 : Math.min(10, 2 + chain * 1.6));
-  if (ym) Sound.yakuman(); else Sound.clear(chain, used.size);
+  shake = Math.max(shake, big ? 14 : Math.min(9, 1.5 + chain * 1.5));
+  if (!big) Sound.clear(chain, used.size);
   if (chain > 1) showChain(chain);
 
   pendingClear = picked;
   state = 'flash';
-  timer = 0.30;
+  timer = big ? 0.62 : 0.28;
   syncSide();
   bumpScore();
+}
+
+/* 和了の処理（点数・演出・記録）。加算する点を返す */
+function agari(res, cmult, sx, sy, tag){
+  var pts = Math.round(res.pts * cmult);
+  agariCount++;
+  if (!bestHand || res.pts > bestHand.pts){
+    bestHand = { label: res.label, han: res.han, fu: res.fu, yakuman: res.yakuman, pts: res.pts, limit: res.limit };
+  }
+  var sub = res.yakuman ? res.limit : (res.han + '翻' + (res.fu ? res.fu + '符' : ''));
+  addEffect(sx, sy, res.label, sub + '  ' + pts.toLocaleString(),
+            res.yakuman ? '#ffb86a' : '#ffe6a8', 1.5, res.yakuman ? 27 : 21);
+  addEffect(sx, sy - CH * 1.1, tag, '', res.yakuman ? '#ffd79a' : '#bfe6c8', 1.3, 14);
+  pushLog((chain > 1 ? chain + '連鎖 ' : '') + res.label + (res.limit ? '（' + res.limit + '）' : ''),
+          pts, res.yakuman > 0);
+  burst(sx, sy, res.yakuman ? 60 : 30, res.yakuman ? '#ffcf7a' : '#bfe6c8');
+  if (res.yakuman > 0) Sound.yakuman(); else Sound.agari(res.han);
+  return pts;
 }
 
 function applyClear(){
@@ -1340,6 +1469,12 @@ function applyClear(){
       if (r !== w){ grid[w * COLS + c] = o2; grid[r * COLS + c] = null; moved.push(w * COLS + c); }
       w--;
     }
+  }
+  /* 和了して雀頭の枠が空いたら、盤面の対子を取り直せるので全面を見直す */
+  if (rescanAll){
+    rescanAll = false;
+    moved = [];
+    for (var z = 0; z < grid.length; z++) if (grid[z]) moved.push(z);
   }
   pendingActive = moved;
   state = 'fall';
@@ -1367,8 +1502,10 @@ function gameOver(title, reason){
   $('#over-reason').textContent = reason;
   $('#over-score').textContent = score.toLocaleString();
   $('#over-detail').innerHTML =
-    kyokuName() + ' ／ 最大' + maxChain + '連鎖 ／ ' + cleared + '牌を消した' +
-    (bestHand ? '<br>最高手 ' + bestHand.label + '（' + (bestHand.yakuman ? '役満' : bestHand.han + '翻') + '）' : '') +
+    kyokuName() + ' ／ ' + agariCount + '回和了 ／ 最大' + maxChain + '連鎖 ／ ' + cleared + '牌を消した' +
+    (bestHand ? '<br>最高手 ' + bestHand.label + '（' +
+      (bestHand.yakuman ? bestHand.limit : bestHand.han + '翻' + (bestHand.fu ? bestHand.fu + '符' : '')) +
+      '　' + bestHand.pts.toLocaleString() + '点）' : '') +
     (spins ? '<br>無駄回し ' + spins + '回' : '');
   $('#veil-over').classList.add('on');
   syncUI();
@@ -1548,6 +1685,42 @@ function miniTile(t, cls){
   d.title = tileJa(t);
   return d;
 }
+function slotEl(cls){
+  var d = document.createElement('div');
+  d.className = 'mini sm slot ' + (cls || '');
+  return d;
+}
+function syncTehai(){
+  var box = $('#melds');
+  box.innerHTML = '';
+  var i, q;
+  for (i = 0; i < 4; i++){
+    var m = stock.melds[i];
+    var d = document.createElement('div');
+    d.className = 'meldbox' + (m ? '' : ' empty');
+    if (m){
+      var ts = m.k === 'shun' ? [m.t, m.t + 1, m.t + 2]
+             : m.k === 'kan' ? [m.t, m.t, m.t, m.t] : [m.t, m.t, m.t];
+      d.title = PIECE_JA[m.k];
+      for (q = 0; q < ts.length; q++) d.appendChild(miniTile(ts[q], 'sm'));
+    } else {
+      for (q = 0; q < 3; q++) d.appendChild(slotEl());
+    }
+    box.appendChild(d);
+  }
+  var pd = document.createElement('div');
+  pd.className = 'meldbox pair' + (stock.pair >= 0 ? '' : ' empty');
+  pd.title = '雀頭';
+  if (stock.pair >= 0){ pd.appendChild(miniTile(stock.pair, 'sm')); pd.appendChild(miniTile(stock.pair, 'sm')); }
+  else { pd.appendChild(slotEl()); pd.appendChild(slotEl()); }
+  box.appendChild(pd);
+
+  var el = $('#tenpai'), need = 4 - stock.melds.length, hasP = stock.pair >= 0;
+  if (need === 0 && !hasP){ el.textContent = 'テンパイ ― 雀頭待ち'; el.className = 'tenpai on'; }
+  else if (need === 1 && hasP){ el.textContent = 'テンパイ ― あと1面子'; el.className = 'tenpai on'; }
+  else { el.textContent = '面子 ' + stock.melds.length + '/4 ・ 雀頭 ' + (hasP ? 'あり' : 'まだ'); el.className = 'tenpai'; }
+}
+
 function syncSide(){
   var nx = $('#next'); nx.innerHTML = '';
   for (var i = 0; i < 3; i++) nx.appendChild(nextQ.length > i ? miniTile(nextQ[i], i ? 'dim' : '') : miniTile(null));
@@ -1559,8 +1732,10 @@ function syncSide(){
   $('#wall').textContent = wall.length;
   $('#kyoku').textContent = kyokuName();
   $('#level').textContent = 'Lv.' + level;
+  $('#agari').textContent = agariCount;
   $('#maxchain').textContent = maxChain;
-  $('#besthand').textContent = bestHand ? bestHand.label : '—';
+  $('#besthand').textContent = bestHand ? (bestHand.label + (bestHand.limit ? '（' + bestHand.limit + '）' : '')) : '—';
+  syncTehai();
 }
 function syncUI(){
   $('#score').textContent = score.toLocaleString();
