@@ -30,7 +30,7 @@
       radial-gradient(800px 520px at 10% 10%, rgba(227, 192, 118, 0.08), transparent 60%),
       linear-gradient(180deg, #0a2418 0%, #081e14 45%, #05140e 100%);
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 14px 60px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 14px 14px; }
 
   /* ---------- header ---------- */
   header.top {
@@ -62,8 +62,7 @@
 
   .boardbox {
     position: relative;
-    height: min(78vh, 820px);
-    min-height: 400px;
+    height: min(78vh, 820px);   /* JS が実際の空きに合わせて上書きする */
     display: flex; align-items: center; justify-content: center;
   }
   #board {
@@ -119,32 +118,58 @@
   .toast.out { opacity: 0; transform: translateY(-10px); }
   @keyframes toastin { from { opacity: 0; transform: translateY(-12px) scale(0.94); } to { opacity: 1; } }
 
-  /* 一覧だけスクロールさせ、見出しと閉じるボタンは常に見える */
-  #veil-ach { justify-content: flex-start; padding: 16px 14px 14px; z-index: 7; overflow: hidden; }
-  #veil-ach h3 { font-size: clamp(22px, 4vw, 32px); margin-bottom: 2px; flex: none; }
-  .achhead { font-size: 12px; color: var(--gold); letter-spacing: 0.16em; margin-bottom: 12px; flex: none; }
-  #veil-ach .btns { flex: none; margin-top: 12px; }
+  /* ---------- 別画面（モーダル） ---------- */
+  .modal {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    align-items: center; justify-content: center; padding: 14px;
+    background: rgba(2, 10, 6, 0.86);
+    backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+  }
+  .modal.on { display: flex; }
+  .mbox {
+    width: min(920px, 100%); max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px);
+    display: flex; flex-direction: column; overflow: hidden;
+    background: rgba(8, 24, 17, 0.97); border: 1px solid var(--line);
+    border-radius: 16px; box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+    animation: rise 0.28s cubic-bezier(.2,.9,.25,1) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; } }
+  .mhead {
+    display: flex; align-items: baseline; gap: 12px; flex: none;
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+  }
+  .mhead h3 {
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-size: 19px; letter-spacing: 0.16em; color: var(--gold); font-weight: 700;
+  }
+  .mnote { font-size: 11px; color: var(--dim); letter-spacing: 0.12em; }
+  .mclose {
+    margin-left: auto; align-self: center; font-family: inherit;
+    font-size: 12px; letter-spacing: 0.1em; cursor: pointer;
+    padding: 7px 15px; border-radius: 999px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.05); color: var(--tx); transition: 0.2s;
+  }
+  .mclose:hover { color: var(--gold); border-color: rgba(227,192,118,0.45); }
+  .mbody { overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px 20px; }
+
   .achlist {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
-    gap: 6px; width: 100%; text-align: left;
-    flex: 1 1 auto; min-height: 0; overflow-y: auto; align-content: start;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 7px; text-align: left;
   }
   .ach {
-    border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px;
-    background: rgba(255,255,255,0.03); opacity: 0.42;
+    border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px;
+    background: rgba(255,255,255,0.03); opacity: 0.45;
   }
-  .ach.done {
-    opacity: 1; border-color: rgba(227,192,118,0.45); background: rgba(227,192,118,0.09);
-  }
-  .ach .an { font-size: 12.5px; color: #dfeee2; letter-spacing: 0.08em; font-weight: 700; }
+  .ach.done { opacity: 1; border-color: rgba(227,192,118,0.45); background: rgba(227,192,118,0.09); }
+  .ach .an { font-size: 13px; color: #dfeee2; letter-spacing: 0.08em; font-weight: 700; }
   .ach.done .an { color: #fff3d6; }
-  .ach .ad { font-size: 10.5px; color: var(--dim); margin-top: 3px; line-height: 1.6; }
+  .ach .ad { font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.7; }
 
   /* ---------- side panels ---------- */
-  .side { display: flex; flex-direction: column; gap: 12px; }
+  .side { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; }
   .panel {
     background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-    padding: 12px 14px 14px;
+    padding: 10px 13px 11px;
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
   .panel > h2 {
@@ -164,6 +189,7 @@
   .chainline.on { opacity: 1; }
 
   .rows { display: flex; flex-direction: column; gap: 6px; }
+  @media (min-width: 901px) { .ba-panel .rows { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; } }
   .row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
   .row .k { color: var(--dim); letter-spacing: 0.1em; }
   .row .v { color: var(--tx); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
@@ -194,7 +220,7 @@
   .tenpai { margin-top: 9px; font-size: 11.5px; letter-spacing: 0.08em; color: var(--dim); }
   .tenpai.on { color: #ffd98a; }
 
-  .log { display: flex; flex-direction: column; gap: 5px; max-height: 190px; overflow: hidden; }
+  .log { display: flex; flex-direction: column; gap: 5px; }
   .log .ent {
     display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
     font-size: 11.5px; padding: 5px 7px; border-radius: 7px;
@@ -223,7 +249,7 @@
 
   /* ---------- 狭い画面：情報の帯を盤面の上へ ---------- */
   @media (max-width: 900px) {
-    .wrap { padding: 12px 10px 50px; }
+    .wrap { padding: 10px 10px 10px; }
     header.top { padding-bottom: 8px; margin-bottom: 10px; gap: 8px; }
     .brand h1 { font-size: 25px; letter-spacing: 0.12em; }
     .brand .sub { font-size: 10px; margin-top: 3px; letter-spacing: 0.14em; }
@@ -234,13 +260,8 @@
     .game { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
     .left, .side { display: contents; }
     .hud { order: 1; }
-    .boardbox {
-      order: 2; min-height: 0;
-      height: clamp(240px, calc(100vh - 360px), 560px);
-      height: clamp(240px, calc(100dvh - 360px), 560px);
-    }
+    .boardbox { order: 2; height: clamp(200px, calc(100dvh - 400px), 560px); }
     .pad { order: 3; }
-    .logpanel { order: 4; }
     .wide-only { display: none !important; }
 
     /* 4つのパネルを1枚の帯にたたむ */
@@ -278,14 +299,18 @@
     .hud .row { gap: 5px; justify-content: flex-start; font-size: 11px; }
 
     .pad button { padding: 13px 2px; font-size: 12.5px; }
-    .logpanel .log { max-height: 150px; }
-    .docs .panel { padding: 14px 15px 16px; }
-    .docs p, .docs li { font-size: 12.5px; line-height: 1.9; }
+    .modal { padding: 8px; }
+    .mbox { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); border-radius: 13px; }
+    .mhead { padding: 11px 13px; }
+    .mhead h3 { font-size: 16px; }
+    .mbody { padding: 12px 13px 16px; }
+    .achlist { grid-template-columns: 1fr; gap: 6px; }
+    .docs p, .docs li { font-size: 12.5px; line-height: 1.95; }
+    .docs table { font-size: 11.5px; }
+    .docs th, .docs td { padding: 6px 7px; }
   }
 
   /* ---------- docs ---------- */
-  .docs { margin-top: 30px; }
-  .docs .panel { padding: 18px 20px 20px; }
   .docs h3 {
     font-size: 12px; letter-spacing: 0.22em; color: var(--gold); margin: 22px 0 10px; font-weight: 700;
   }
@@ -298,11 +323,13 @@
   .docs th { color: var(--gold); font-weight: 600; letter-spacing: 0.1em; font-size: 11px; }
   .docs td { color: #cfe0d4; }
   .docs td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .credit { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--dim); }
   .kbd {
     display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11.5px;
     border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: #e6f0e8;
     margin: 0 2px; font-family: ui-monospace, monospace;
   }
+  .scroller { overflow-x: auto; }
   .scroller { overflow-x: auto; }
   footer.foot {
     margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--line);
@@ -324,6 +351,8 @@
       <button id="btn-sound" type="button">♪ 音 ON</button>
       <button id="btn-restart" type="button">やり直す</button>
       <button id="btn-ach" type="button">実績</button>
+      <button id="btn-help" type="button">遊び方</button>
+      <button id="btn-log" type="button">履歴</button>
     </nav>
   </header>
 
@@ -341,7 +370,7 @@
           </p>
           <div class="btns">
             <button class="btn" id="btn-start" type="button">牌を積む</button>
-            <button class="btn ghost" id="btn-help" type="button">遊び方を読む</button>
+            <button class="btn ghost" id="btn-help2" type="button">遊び方を読む</button>
           </div>
         </div>
 
@@ -353,13 +382,6 @@
 
         <div class="toasts" id="toasts"></div>
 
-        <div class="veil" id="veil-ach">
-          <h3>実績</h3>
-          <p class="achhead"><span id="ach-count">0 / 0</span></p>
-          <div class="achlist" id="achlist"></div>
-          <div class="btns"><button class="btn" id="btn-ach-close" type="button">閉じる</button></div>
-        </div>
-
         <div class="veil" id="veil-over">
           <h3 id="over-title">終局</h3>
           <p id="over-reason">牌山が天井に届いた。</p>
@@ -367,7 +389,8 @@
           <p id="over-detail"></p>
           <div class="btns">
             <button class="btn" id="btn-again" type="button">もう一度</button>
-            <button class="btn ghost" id="btn-ach2" type="button">実績を見る</button>
+            <button class="btn ghost" id="btn-ach2" type="button">実績</button>
+            <button class="btn ghost" id="btn-log2" type="button">履歴</button>
           </div>
         </div>
       </div>
@@ -422,24 +445,57 @@
           <div class="row"><span class="k">局</span><span class="v" id="kyoku">東一局</span></div>
           <div class="row"><span class="k">牌山</span><span class="v" id="wall">136</span></div>
           <div class="row"><span class="k">速さ</span><span class="v" id="level">Lv.1</span></div>
+          <div class="row"><span class="k">今局</span><span class="v" id="roundpts">0</span></div>
+          <div class="row"><span class="k">平均/局</span><span class="v" id="avgpts">0</span></div>
           <div class="row"><span class="k">和了</span><span class="v" id="agari">0</span></div>
-          <div class="row"><span class="k">最大連鎖</span><span class="v" id="maxchain">0</span></div>
+          <div class="row wide-only"><span class="k">最大連鎖</span><span class="v" id="maxchain">0</span></div>
           <div class="row wide-only"><span class="k">最高手</span><span class="v" id="besthand">—</span></div>
-          <div class="row"><span class="k">実績</span><span class="v" id="ach-row">0 / 0</span></div>
+          <div class="row wide-only"><span class="k">実績</span><span class="v" id="ach-row">0 / 0</span></div>
         </div>
       </div>
       </div>
 
-      <div class="panel logpanel">
-        <h2>あがり</h2>
-        <div class="log" id="log"><div class="empty">まだ何も消えていない</div></div>
-      </div>
     </aside>
   </div>
 
   <!-- ============================================================ -->
-  <section class="docs" id="help">
-    <div class="panel">
+
+</div>
+
+<!-- ============================================================ -->
+<!-- 別画面（実績・遊び方・あがり履歴）                              -->
+<!-- ============================================================ -->
+<div class="modal" id="modal-ach">
+  <div class="mbox">
+    <div class="mhead">
+      <h3>実績</h3>
+      <span class="mnote" id="ach-count">0 / 0</span>
+      <button class="mclose" type="button" data-close="modal-ach">閉じる</button>
+    </div>
+    <div class="mbody"><div class="achlist" id="achlist"></div></div>
+  </div>
+</div>
+
+<div class="modal" id="modal-log">
+  <div class="mbox">
+    <div class="mhead">
+      <h3>あがり履歴</h3>
+      <span class="mnote" id="log-note">—</span>
+      <button class="mclose" type="button" data-close="modal-log">閉じる</button>
+    </div>
+    <div class="mbody"><div class="log" id="log"><div class="empty">まだ何も消えていない</div></div></div>
+  </div>
+</div>
+
+<div class="modal" id="modal-help">
+  <div class="mbox">
+    <div class="mhead">
+      <h3>遊び方</h3>
+      <span class="mnote">落雀 ― RAKUJAN</span>
+      <button class="mclose" type="button" data-close="modal-help">閉じる</button>
+    </div>
+    <div class="mbody docs">
+
       <h3>どういうゲームか</h3>
       <p>
         上から<b>配牌がひとつ</b>ずつ降ってきます。左右に動かして積み、盤面で<b>面子</b>と<b>雀頭</b>を作ります。
@@ -559,7 +615,9 @@
         <span class="kbd">C</span><span class="kbd">Shift</span> ホールド ／
         <span class="kbd">P</span> 一時停止 ／
         <span class="kbd">R</span> やり直す。
-        盤面をタップしても動かせて、同じ列をもう一度叩くと落ちます。
+        盤面をタップしても動かせて、同じ列をもう一度叩くと落ちます。<br>
+        別画面は <span class="kbd">A</span> 実績 ／ <span class="kbd">H</span> 遊び方 ／ <span class="kbd">L</span> あがり履歴、
+        <span class="kbd">Esc</span> で閉じます。開いているあいだは手が止まります。
       </p>
       <p>
         <b>回転は180°だけできます。</b>牌はひっくり返しても同じ牌なので、当然なにも起こりません。
@@ -586,8 +644,12 @@
       <h3>ドラ</h3>
       <p>
         ドラ表示牌の<b>次の牌</b>がドラです（九萬→一萬、北→東、中→白と輪になります）。
-        和了した14牌にドラが含まれていると<b>1牌につき+1翻</b>。局が進むごとに表示牌が1枚ずつ増えて、最大5枚になります。
-        盤面ではドラの牌の右上に金色の印がつきます。
+        和了した14牌にドラが含まれていると<b>1牌につき+1翻</b>。盤面ではドラの牌の右上に金色の印がつきます。
+      </p>
+      <p>
+        表示牌は<b>局のはじめは1枚</b>。<b>槓子を作るたびに1枚めくれます</b>（カンドラ）。最大5枚まで。
+        局が変わると<b>また1枚に戻ります</b>。槓は4牌そろえるぶん手間ですが、
+        めくったドラはその局の和了すべてに乗るので、早い槓ほど効きます。
       </p>
 
       <h3>点数</h3>
@@ -622,6 +684,13 @@
         鳴いた手は上のとおり門前役が落ち、食い下がりが効きます。
       </p>
 
+      <h3>効率の見かた</h3>
+      <p>
+        場の欄に<b>今局</b>（いまの局で稼いだ点）と<b>平均/局</b>（総得点÷回った局数）が出ます。
+        1局は山を引き切るまでなので、局が進むほど手が速くなり、盤面も混みます。
+        <b>平均/局が伸びているうちは組み方が噛み合っている</b>、頭打ちなら積み方を変える頃合い、という目安に使ってください。
+      </p>
+
       <h3>実績</h3>
       <p>
         右上の<b>実績</b>（<span class="kbd">A</span>キー）で一覧が出ます。全39個。
@@ -636,12 +705,10 @@
         ゴールはありません。<b>牌が最上段まで積み上がったら終局</b>。それまでにどれだけ稼げるかだけのゲームです。
         連鎖で天井を掘り崩せば生き延びられます。
       </p>
+    
+      <p class="credit">麻雀から着想を得た落ちものパズル。牌はすべてSVG、音はWeb Audioで合成。外部ライブラリなし・通信なし・保存はハイスコアと実績のみ。</p>
     </div>
-  </section>
-
-  <footer class="foot">
-    麻雀から着想を得た落ちものパズル。牌はすべてSVG、音はWeb Audioで合成。外部ライブラリなし・通信なし・保存はハイスコアのみ。
-  </footer>
+  </div>
 </div>
 
 <!-- ============================================================ -->
@@ -1201,6 +1268,7 @@ var agariCount = 0, nakiCount = 0, tenhouCount = 0, renchanCount = 0, rescanAll 
 var chainHandTiles = 0;          /* この落下のあいだに手牌へ入った牌数 */
 var bestHand = null;
 var round = 0, level = 1;
+var roundStart = 0, roundScores = [];   /* 局ごとの得点 */
 var effects = [], sparks = [], shake = 0;
 var lastT = 0, dropAcc = 0;
 var spinHinted = false;
@@ -1377,10 +1445,11 @@ function nextRound(){
   if (discard.length === 0){ refreshDora(); return false; }
   wall = shuffle(discard);
   discard = [];
+  roundScores.push(score - roundStart);
+  roundStart = score;
   round++;
   if (round >= 4) unlock('nanba');
-  var k = Math.min(5, 1 + Math.floor(round / 2));
-  for (var i = 0; i < k && wall.length; i++) doraInd.push(wall.pop());
+  if (wall.length) doraInd.push(wall.pop());   /* 局のドラは1枚から。あとは槓で増える */
   refreshDora();
   pushLog('― ' + kyokuName() + ' ―', 0, false);
   return true;
@@ -1389,6 +1458,15 @@ function kyokuName(){
   return WIND_NAME[Math.floor(round / 4) % 4] + KYOKU_NAME[round % 4];
 }
 function bakaze(){ return 27 + (Math.floor(round / 4) % 4); }
+/* 槓をしたらカンドラを1枚めくる。局が変わればまた1枚に戻る */
+function addKanDora(){
+  if (doraInd.length >= 5) return;
+  if (wall.length === 0) return;
+  doraInd.push(wall.pop());
+  refreshDora();
+  addEffect(CW * COLS / 2, CH * 1.4, 'カンドラ', tileJa(doraTiles[doraTiles.length - 1]), '#e0a83c', 1.2, 17);
+}
+
 function drawWall(){
   if (wall.length === 0 && !nextRound()) return null;
   if (wall.length === 0) return null;
@@ -1403,7 +1481,21 @@ function fillQueue(){
 }
 
 /* ---------------- ゲーム進行 ---------------- */
+/* ページがスクロールしないよう、盤面の高さを実際の空きに合わせる */
+function fitBoardHeight(){
+  var bb = $('#boardbox'), padEl = $('.pad');
+  var vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  var top = bb.getBoundingClientRect().top;
+  var padH = (getComputedStyle(padEl).display === 'none') ? 0 : padEl.offsetHeight + 10;
+  var avail = vh - top - padH - 16;
+  bb.style.height = clamp(Math.floor(avail), 200, 860) + 'px';
+  var side = $('.side');
+  if (window.innerWidth > 900) side.style.maxHeight = Math.max(200, Math.floor(vh - top - 16)) + 'px';
+  else side.style.maxHeight = '';
+}
+
 function layout(newGame){
+  fitBoardHeight();
   var box = $('#boardbox').getBoundingClientRect();
   DPR = Math.min(2, window.devicePixelRatio || 1);
   var maxW = box.width, maxH = box.height;
@@ -1434,6 +1526,7 @@ function newGame(){
   stock = { melds: [], pair: -1, naki: false }; agariCount = 0; nakiCount = 0; tenhouCount = 0;
   renchanCount = 0; rescanAll = false; chainHandTiles = 0;
   bestHand = null; round = 0; level = 1;
+  roundStart = 0; roundScores = [];
   effects = []; sparks = []; shake = 0;
   piece = null; pendingActive = []; pendingClear = [];
   $('#log').innerHTML = '<div class="empty">まだ何も消えていない</div>';
@@ -1442,6 +1535,7 @@ function newGame(){
   state = 'play';
   hideVeils();
   syncUI();
+  layout(false);
 }
 
 function spawn(){
@@ -1729,7 +1823,10 @@ function resolveStep(active){
       var pts = Math.round(PIECE_PTS[g.kind] * cmult);
       var overflow = (g.kind !== 'pair' && stock.melds.length >= 4);
       if (overflow){ pts = Math.round(pts / 2); unlock('nagare'); }
-      if (g.kind === 'kan') unlock('kan');
+      if (g.kind === 'kan'){
+        unlock('kan');
+        addKanDora();
+      }
       gained += pts;
       addEffect(sx, sy, PIECE_JA[g.kind] + (overflow ? '（流れ）' : ''), '+' + pts.toLocaleString(),
                 overflow ? '#9db3a4' : '#cfe8d4', 0.85, 15);
@@ -1904,6 +2001,7 @@ function gameOver(title, reason){
   $('#over-score').textContent = score.toLocaleString();
   $('#over-detail').innerHTML =
     kyokuName() + ' ／ ' + agariCount + '回和了 ／ 最大' + maxChain + '連鎖 ／ ' + cleared + '牌を消した' +
+    '<br>1局あたり ' + Math.round(score / (round + 1)).toLocaleString() + '点' +
     (bestHand ? '<br>最高手 ' + bestHand.label + '（' +
       (bestHand.yakuman ? bestHand.limit : bestHand.han + '翻' + (bestHand.fu ? bestHand.fu + '符' : '')) +
       '　' + bestHand.pts.toLocaleString() + '点）' : '') +
@@ -2142,6 +2240,7 @@ function syncSide(){
   $('#kyoku').textContent = kyokuName();
   $('#level').textContent = 'Lv.' + level;
   $('#agari').textContent = agariCount;
+  syncRoundStats();
   $('#maxchain').textContent = maxChain;
   $('#besthand').textContent = bestHand ? (bestHand.label + (bestHand.limit ? '（' + bestHand.limit + '）' : '')) : '—';
   syncTehai();
@@ -2206,6 +2305,11 @@ function syncAch(){
   $('#ach-count').textContent = txt;
   $('#ach-row').textContent = txt;
 }
+/* 局ごとの成績。効率が見えるように今局と平均を出す */
+function syncRoundStats(){
+  $('#roundpts').textContent = (score - roundStart).toLocaleString();
+  $('#avgpts').textContent = Math.round(score / (round + 1)).toLocaleString();
+}
 function renderAch(){
   var box = $('#achlist');
   box.innerHTML = '';
@@ -2220,19 +2324,28 @@ function renderAch(){
   }
   syncAch();
 }
-var achResume = 'play';
-function openAch(){
-  renderAch();
-  if (state === 'play' || state === 'flash' || state === 'fall'){ achResume = state; state = 'achpause'; }
-  $('#veil-ach').classList.add('on');
+/* ---- 別画面（実績・履歴・遊び方） ---- */
+var modalResume = 'play';
+function openModal(id){
+  if (id === 'modal-ach') renderAch();
+  if (id === 'modal-log') $('#log-note').textContent = agariCount + '回和了';
+  var any = document.querySelector('.modal.on');
+  if (!any && (state === 'play' || state === 'flash' || state === 'fall')){
+    modalResume = state; state = 'modal';
+  }
+  if (any) any.classList.remove('on');
+  $('#' + id).classList.add('on');
 }
-function closeAch(){
-  $('#veil-ach').classList.remove('on');
-  if (state === 'achpause') state = achResume;
+function closeModal(){
+  var m = document.querySelector('.modal.on');
+  if (m) m.classList.remove('on');
+  if (state === 'modal') state = modalResume;
 }
+function modalOpen(){ return !!document.querySelector('.modal.on'); }
 
 function hideVeils(){
-  ['#veil-start', '#veil-pause', '#veil-over', '#veil-ach'].forEach(function(s){ $(s).classList.remove('on'); });
+  ['#veil-start', '#veil-pause', '#veil-over'].forEach(function(s){ $(s).classList.remove('on'); });
+  closeModal();
 }
 
 /* ---------------- 入力 ---------------- */
@@ -2257,10 +2370,12 @@ var resumeState = 'play';
 document.addEventListener('keydown', function(e){
   var k = e.key;
   if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' ','Spacebar'].indexOf(k) >= 0) e.preventDefault();
-  /* 実績はいつでも開け閉めできる */
-  if (k === 'a' || k === 'A'){ if ($('#veil-ach').classList.contains('on')) closeAch(); else openAch(); return; }
-  if (k === 'Escape' && $('#veil-ach').classList.contains('on')){ closeAch(); return; }
-  if ($('#veil-ach').classList.contains('on')) return;
+  /* 別画面はいつでも開け閉めできる */
+  if (k === 'a' || k === 'A'){ if ($('#modal-ach').classList.contains('on')) closeModal(); else openModal('modal-ach'); return; }
+  if (k === 'h' || k === 'H'){ if ($('#modal-help').classList.contains('on')) closeModal(); else openModal('modal-help'); return; }
+  if (k === 'l' || k === 'L'){ if ($('#modal-log').classList.contains('on')) closeModal(); else openModal('modal-log'); return; }
+  if (k === 'Escape' && modalOpen()){ closeModal(); return; }
+  if (modalOpen()) return;
   if (state === 'idle' || state === 'over'){
     if (k === ' ' || k === 'Enter' || k === 'r' || k === 'R') newGame();
     return;
@@ -2321,12 +2436,19 @@ onTap('#btn-restart', function(){
 });
 onTap('#btn-resume', function(){ togglePause(); });
 onTap('#btn-pause', function(){ togglePause(); });
-onTap('#btn-help', function(){
-  document.getElementById('help').scrollIntoView({ behavior: 'smooth' });
+onTap('#btn-ach', function(){ openModal('modal-ach'); });
+onTap('#btn-ach2', function(){ openModal('modal-ach'); });
+onTap('#btn-log', function(){ openModal('modal-log'); });
+onTap('#btn-log2', function(){ openModal('modal-log'); });
+onTap('#btn-help', function(){ openModal('modal-help'); });
+onTap('#btn-help2', function(){ openModal('modal-help'); });
+Array.prototype.forEach.call(document.querySelectorAll('.mclose'), function(el){
+  el.addEventListener('click', function(){ el.blur(); closeModal(); });
 });
-onTap('#btn-ach', openAch);
-onTap('#btn-ach2', openAch);
-onTap('#btn-ach-close', closeAch);
+/* 外側を叩いても閉じる */
+Array.prototype.forEach.call(document.querySelectorAll('.modal'), function(el){
+  el.addEventListener('pointerdown', function(e){ if (e.target === el) closeModal(); });
+});
 onTap('#btn-sound', function(){
   var on = Sound.toggle();
   this.textContent = on ? '♪ 音 ON' : '♪ 音 OFF';
@@ -2368,13 +2490,16 @@ try { best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0; } catch (
 achLoad();
 
 loadFaces().then(function(){
-  /* 開始前の盤面を用意して見せておく */
-  layout(true);
-  grid = new Array(ROWS * COLS).fill(null);
+  /* 開始前の盤面を用意して見せておく。
+     情報欄を埋めてから採寸しないと、盤面の高さが余って下にはみ出す */
   wall = freshWall(); doraInd = [wall.pop()]; refreshDora();
-  nextQ = []; fillQueue();
+  nextQ = []; hold = null;
   syncUI();
   syncAch();
+  layout(true);
+  grid = new Array(ROWS * COLS).fill(null);
+  fillQueue();
+  syncUI();
   state = 'idle';
   lastT = performance.now();
   requestAnimationFrame(loop);
