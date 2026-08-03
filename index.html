@@ -153,6 +153,11 @@
   .card.doubutsu:hover { box-shadow: 0 26px 60px rgba(120, 80, 20, 0.5); }
   .card.doubutsu h2 { color: #fff2df; }
   .card.doubutsu .en, .card.doubutsu .go { color: #ffb84a; }
+  /* snake (へびとりんご) theming */
+  .card.snake .tag { background: rgba(126, 200, 80, 0.16); color: #b8ec84; border: 1px solid rgba(126,200,80,0.32); }
+  .card.snake:hover { box-shadow: 0 26px 60px rgba(40, 100, 30, 0.5); }
+  .card.snake h2 { color: #eaffdd; }
+  .card.snake .en, .card.snake .go { color: #7ec850; }
   /* hyoryu (漂流) theming */
   /* rakujan (落雀) theming */
   .card.raku .tag { background: rgba(227, 192, 118, 0.14); color: #f0d99b; border: 1px solid rgba(227,192,118,0.30); }
@@ -197,8 +202,8 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">INTERACTIVE WORLDS</div>
-    <h1>10の、小さな世界。</h1>
-    <p>ブラウザだけで動く、10の体験。<br>宇宙のいちばん大きなものから、深海、大地、形と空(くう)のあわい、小さないきもの、こどものまなび、チャートに潜むかたち、そして 光が砂に落ちる庭まで。</p>
+    <h1>12の、小さな世界。</h1>
+    <p>ブラウザだけで動く、12の体験。<br>宇宙のいちばん大きなものから、深海、大地、形と空(くう)のあわい、小さないきもの、こどものまなび、草原を這うへび、チャートに潜むかたち、そして 光が砂に落ちる庭まで。</p>
   </header>
 
   <div class="cards">
@@ -274,6 +279,18 @@
       </div>
     </a>
 
+    <a class="card snake" href="snake.html">
+      <div class="art"><canvas id="art-snake"></canvas></div>
+      <div class="body">
+        <span class="tag">ACTION · SNAKE</span>
+        <h2>へびとりんご</h2>
+        <div class="en">SNAKE &amp; APPLE ― 3マスからはじまる</div>
+        <div class="desc">あたま・どう・しっぽの3マスではじまるへびを操り、りんごを食べるたびに胴が1マスずつ伸びていく。長くなるほど自分のからだが壁になる、あの遊び。かべあり/ループの2ルール、速さは3段階。</div>
+        <div class="feat"><span>🍎 食べると+1マス</span><span>🐍 なめらかに這う</span><span>🌀 ループモード</span><span>📱 スワイプ操作</span></div>
+        <div class="go"><span>這わせる</span><span class="arrow">→</span></div>
+      </div>
+    </a>
+
     <a class="card kata" href="kata.html">
       <div class="art"><canvas id="art-kata"></canvas></div>
       <div class="body">
@@ -336,7 +353,7 @@
   </div>
 
   <footer>
-    Canvas / WebGL &amp; Web Audio でつくった、依存ライブラリなしの11作品。<br>
+    Canvas / WebGL &amp; Web Audio でつくった、依存ライブラリなしの12作品。<br>
     <a href="https://github.com/tishiyama1/challenge" target="_blank" rel="noopener">GitHub でソースを見る</a>
     <div class="hint">カードをクリックで起動 ・ どれもフルスクリーン推奨</div>
   </footer>
@@ -435,6 +452,36 @@
   ];
   const krLeaves = [];
   for (let i = 0; i < 14; i++) krLeaves.push({ x: Math.random(), y: rand(0.25, 1), a: rand(0, TAU), s: rand(0.5, 1) });
+
+  // snake preview: a little snake crawling the grass, eating apples and growing
+  const SN = setup("art-snake");
+  const snC = 13, snR = 8, snStep = 0.26;
+  let snBody = [{ x: 5, y: 4 }, { x: 4, y: 4 }, { x: 3, y: 4 }];
+  let snPrev = snBody.map(s => ({ ...s }));
+  let snApple = { x: 9, y: 2 };
+  let snDir = { x: 1, y: 0 };
+  let snAcc = 0, snPop = 0;
+  const snWrap = (v, m) => (v + m) % m;
+  function snTick() {
+    const h = snBody[0];
+    const opts = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]
+      .filter(d => !(d.x === -snDir.x && d.y === -snDir.y));
+    const cellOf = d => ({ x: snWrap(h.x + d.x, snC), y: snWrap(h.y + d.y, snR) });
+    const free = opts.filter(d => { const n = cellOf(d); return !snBody.slice(0, -1).some(s => s.x === n.x && s.y === n.y); });
+    const pool = free.length ? free : opts;
+    const dist = d => { const n = cellOf(d); return Math.abs(n.x - snApple.x) + Math.abs(n.y - snApple.y); };
+    pool.sort((a, b) => dist(a) - dist(b));
+    snDir = pool[0];
+    const n = cellOf(snDir);
+    snPrev = snBody.map(s => ({ ...s }));
+    snBody.unshift(n);
+    if (n.x === snApple.x && n.y === snApple.y) {
+      snPop = 1;
+      if (snBody.length > 10) snBody.pop();
+      do { snApple = { x: Math.floor(Math.random() * snC), y: Math.floor(Math.random() * snR) }; }
+      while (snBody.some(s => s.x === snApple.x && s.y === snApple.y));
+    } else snBody.pop();
+  }
 
   // kata preview: candlesticks forming a head & shoulders top with a neckline
   const KA = setup("art-kata");
@@ -632,6 +679,71 @@
         // smile
         c.strokeStyle = shade; c.lineWidth = 2; c.beginPath(); c.arc(x, y + u*0.16, u*0.16, Math.PI*0.15, Math.PI*0.85); c.stroke();
       }
+    }
+
+    // ---- snake card: a snake crawling a checkered lawn toward an apple ----
+    {
+      const { c, w, h } = SN;
+      snAcc += 0.016; snPop = Math.max(0, snPop - 0.05);
+      while (snAcc >= snStep) { snAcc -= snStep; snTick(); }
+      const k = snAcc / snStep;
+      const cw = w / snC, ch = h / snR, u = Math.min(cw, ch);
+      // lawn
+      c.fillStyle = "#25401a"; c.fillRect(0, 0, w, h);
+      c.fillStyle = "#2b4a1e";
+      for (let y = 0; y < snR; y++) for (let x = 0; x < snC; x++)
+        if ((x + y) % 2 === 0) c.fillRect(x * cw, y * ch, cw + 0.5, ch + 0.5);
+      // apple
+      const ax = (snApple.x + 0.5) * cw, ay = (snApple.y + 0.5) * ch, ar = u * 0.3;
+      const ag = c.createRadialGradient(ax - ar * 0.35, ay - ar * 0.4, ar * 0.1, ax, ay, ar * 1.3);
+      ag.addColorStop(0, "#ff8367"); ag.addColorStop(0.55, "#e8503a"); ag.addColorStop(1, "#a8231a");
+      c.fillStyle = ag; c.beginPath(); c.arc(ax, ay, ar, 0, TAU); c.fill();
+      c.strokeStyle = "#7a4a24"; c.lineWidth = Math.max(1.2, ar * 0.22); c.lineCap = "round";
+      c.beginPath(); c.moveTo(ax, ay - ar * 0.8); c.lineTo(ax + ar * 0.28, ay - ar * 1.35); c.stroke();
+      c.fillStyle = "#79c34a"; c.beginPath(); c.ellipse(ax - ar * 0.32, ay - ar * 1.15, ar * 0.38, ar * 0.18, -0.5, 0, TAU); c.fill();
+      if (snPop > 0) { c.strokeStyle = `rgba(255,220,160,${snPop * 0.7})`; c.lineWidth = 2; c.beginPath(); c.arc(ax, ay, u * (0.3 + (1 - snPop) * 0.9), 0, TAU); c.stroke(); }
+      // interpolated body points (a wrapped step slides off the edge)
+      const pts = snBody.map((s, i) => {
+        const p = snPrev[i] || s;
+        let dx = s.x - p.x, dy = s.y - p.y;
+        if (Math.abs(dx) > 1) dx = -Math.sign(dx);
+        if (Math.abs(dy) > 1) dy = -Math.sign(dy);
+        return { x: (p.x + dx * k + 0.5) * cw, y: (p.y + dy * k + 0.5) * ch };
+      });
+      // split at wrap seams so the snake never streaks across the field
+      const runs = [[pts[0]]];
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        if (Math.hypot(b.x - a.x, b.y - a.y) > u * 1.6) runs.push([b]); else runs[runs.length - 1].push(b);
+      }
+      const bw = u * 0.6;
+      for (const pass of [{ w: bw + 4, s: "#22461a" }, { w: bw, s: "#79c94e" }]) {
+        c.strokeStyle = pass.s; c.lineWidth = pass.w; c.lineJoin = "round"; c.lineCap = "round";
+        for (const run of runs) {
+          if (run.length < 2) { c.beginPath(); c.arc(run[0].x, run[0].y, pass.w / 2, 0, TAU); c.fillStyle = pass.s; c.fill(); continue; }
+          c.beginPath(); c.moveTo(run[0].x, run[0].y);
+          for (let i = 1; i < run.length; i++) c.lineTo(run[i].x, run[i].y);
+          c.stroke();
+        }
+      }
+      // head
+      const hp = pts[0], np = pts[1] || { x: hp.x - cw, y: hp.y };
+      const hang = Math.atan2(hp.y - np.y, hp.x - np.x);
+      c.save(); c.translate(hp.x, hp.y); c.rotate(hang);
+      const R = bw * 0.66;
+      c.fillStyle = "#22461a"; c.beginPath(); c.ellipse(R * 0.12, 0, R * 1.2, R * 1.06, 0, 0, TAU); c.fill();
+      c.fillStyle = "#8fd964"; c.beginPath(); c.ellipse(R * 0.12, 0, R, R * 0.88, 0, 0, TAU); c.fill();
+      for (const s of [-1, 1]) {
+        c.fillStyle = "#fffdf3"; c.beginPath(); c.ellipse(R * 0.42, s * R * 0.42, R * 0.3, R * 0.28, 0, 0, TAU); c.fill();
+        c.fillStyle = "#20301a"; c.beginPath(); c.ellipse(R * 0.52, s * R * 0.42, R * 0.14, R * 0.19, 0, 0, TAU); c.fill();
+      }
+      if (frac(t * 1.6) < 0.2) {
+        c.strokeStyle = "#ff5f7a"; c.lineWidth = Math.max(1.2, R * 0.16); c.lineCap = "round";
+        c.beginPath(); c.moveTo(R, 0); c.lineTo(R * 2.1, 0);
+        c.moveTo(R * 2.1, 0); c.lineTo(R * 2.5, -R * 0.3);
+        c.moveTo(R * 2.1, 0); c.lineTo(R * 2.5, R * 0.3); c.stroke();
+      }
+      c.restore();
     }
 
     // ---- doubutsu card: animals + a little sum + twinkling stars ----
