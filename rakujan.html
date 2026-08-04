@@ -14,13 +14,16 @@
     --panel: rgba(8, 22, 16, 0.55);
   }
   /* touch-action: manipulation でダブルタップ拡大だけを止める（ピンチ拡大は残す） */
-  html, body { width: 100%; min-height: 100%; touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+  /* ページはスクロールさせない。スクロールでアドレスバーが伸び縮みすると
+     表示領域が変わって盤面の大きさがぶれるため、body ごと固定する。
+     touch-action: manipulation でダブルタップ拡大だけを止める（ピンチは残す） */
+  html, body { width: 100%; height: 100%; overflow: hidden; touch-action: manipulation; -webkit-text-size-adjust: 100%; }
   body {
     font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
     color: var(--tx);
     background: #04120c;
     -webkit-font-smoothing: antialiased;
-    min-height: 100vh;
+    position: fixed; inset: 0;
     overscroll-behavior: none;
   }
   #bg {
@@ -30,7 +33,7 @@
       radial-gradient(800px 520px at 10% 10%, rgba(227, 192, 118, 0.08), transparent 60%),
       linear-gradient(180deg, #0a2418 0%, #081e14 45%, #05140e 100%);
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 14px 14px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 14px 14px; height: 100%; }
 
   /* ---------- header ---------- */
   header.top {
@@ -54,6 +57,7 @@
     font-family: inherit;
   }
   nav.tabs button:hover { color: var(--tx); border-color: rgba(227,192,118,0.4); }
+  nav.tabs .sm { display: none; }
 
   /* ---------- layout ---------- */
   .game { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 16px; align-items: start; }
@@ -156,14 +160,16 @@
     display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 7px; text-align: left;
   }
+  /* 未解除でも中身が読めるように、透かしではなく色の差で表す */
   .ach {
     border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px;
-    background: rgba(255,255,255,0.03); opacity: 0.45;
+    background: rgba(255,255,255,0.03);
   }
-  .ach.done { opacity: 1; border-color: rgba(227,192,118,0.45); background: rgba(227,192,118,0.09); }
-  .ach .an { font-size: 13px; color: #dfeee2; letter-spacing: 0.08em; font-weight: 700; }
-  .ach.done .an { color: #fff3d6; }
-  .ach .ad { font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.7; }
+  .ach.done { border-color: rgba(227,192,118,0.5); background: rgba(227,192,118,0.10); }
+  .ach .an { font-size: 13.5px; color: #b9cfc0; letter-spacing: 0.08em; font-weight: 700; }
+  .ach.done .an { color: #ffe9b8; }
+  .ach .ad { font-size: 12px; color: #98ad9f; margin-top: 4px; line-height: 1.7; }
+  .ach.done .ad { color: #c3d8c9; }
 
   /* ---------- side panels ---------- */
   .side { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; }
@@ -249,12 +255,17 @@
 
   /* ---------- 狭い画面：情報の帯を盤面の上へ ---------- */
   @media (max-width: 900px) {
-    .wrap { padding: 10px 10px 10px; }
+    .wrap {
+      padding: calc(8px + env(safe-area-inset-top, 0px)) 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    }
     header.top { padding-bottom: 8px; margin-bottom: 10px; gap: 8px; }
-    .brand h1 { font-size: 25px; letter-spacing: 0.12em; }
-    .brand .sub { font-size: 10px; margin-top: 3px; letter-spacing: 0.14em; }
-    nav.tabs { gap: 6px; }
-    nav.tabs button { padding: 5px 9px; font-size: 11px; letter-spacing: 0.04em; }
+    header.top { flex-wrap: nowrap; align-items: center; gap: 6px; padding-bottom: 6px; margin-bottom: 8px; }
+    .brand h1 { font-size: 20px; letter-spacing: 0.08em; }
+    .brand .sub { display: none; }
+    nav.tabs { gap: 5px; flex-wrap: nowrap; }
+    nav.tabs button { padding: 6px 8px; font-size: 11px; letter-spacing: 0.02em; }
+    nav.tabs .lg { display: none; }
+    nav.tabs .sm { display: inline; }
 
     /* 盤面・パッド・情報帯・ログを1本の縦並びにして順番を入れ替える */
     .game { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
@@ -305,6 +316,9 @@
     .mhead h3 { font-size: 16px; }
     .mbody { padding: 12px 13px 16px; }
     .achlist { grid-template-columns: 1fr; gap: 6px; }
+    .ach { padding: 9px 12px; }
+    .ach .an { font-size: 14px; }
+    .ach .ad { font-size: 12.5px; }
     .docs p, .docs li { font-size: 12.5px; line-height: 1.95; }
     .docs table { font-size: 11.5px; }
     .docs th, .docs td { padding: 6px 7px; }
@@ -347,9 +361,9 @@
       <div class="sub">RAKUJAN ― 落ちもの麻雀パズル</div>
     </div>
     <nav class="tabs">
-      <button id="btn-pause" type="button">一時停止</button>
-      <button id="btn-sound" type="button">♪ 音 ON</button>
-      <button id="btn-restart" type="button">やり直す</button>
+      <button id="btn-pause" type="button"><span class="lg">一時停止</span><span class="sm">停止</span></button>
+      <button id="btn-sound" type="button"><span class="lg">♪ 音 ON</span><span class="sm">♪ON</span></button>
+      <button id="btn-restart" type="button"><span class="lg">やり直す</span><span class="sm">やり直</span></button>
       <button id="btn-ach" type="button">実績</button>
       <button id="btn-help" type="button">遊び方</button>
       <button id="btn-log" type="button">履歴</button>
@@ -629,8 +643,9 @@
       </p>
       <p>
         スマホでは<b>手牌・スコア・ネクスト・ホールド・ドラ・場が盤面の上の帯にまとまり</b>、操作ボタンが下に出るので、
-        指を動かさずに全部見えます。盤面と操作ボタンの上ではダブルタップで画面が拡大しないようにしてあります
-        （二本指のピンチ操作はそのまま使えます）。
+        指を動かさずに全部見えます。<b>ページはスクロールしません</b> ―
+        スクロールでアドレスバーが伸び縮みすると表示領域が変わって盤面の大きさがぶれるので、画面ごと固定しています。
+        盤面と操作ボタンの上ではダブルタップで画面が拡大しないようにしてあります（二本指のピンチ操作はそのまま使えます）。
       </p>
 
       <h3>牌はワンセット136牌</h3>
@@ -1487,7 +1502,8 @@ function fitBoardHeight(){
   var vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
   var top = bb.getBoundingClientRect().top;
   var padH = (getComputedStyle(padEl).display === 'none') ? 0 : padEl.offsetHeight + 10;
-  var avail = vh - top - padH - 16;
+  var wrapPad = parseFloat(getComputedStyle($('.wrap')).paddingBottom) || 0;
+  var avail = vh - top - padH - wrapPad - 6;
   bb.style.height = clamp(Math.floor(avail), 200, 860) + 'px';
   var side = $('.side');
   if (window.innerWidth > 900) side.style.maxHeight = Math.max(200, Math.floor(vh - top - 16)) + 'px';
@@ -2451,7 +2467,8 @@ Array.prototype.forEach.call(document.querySelectorAll('.modal'), function(el){
 });
 onTap('#btn-sound', function(){
   var on = Sound.toggle();
-  this.textContent = on ? '♪ 音 ON' : '♪ 音 OFF';
+  this.querySelector('.lg').textContent = on ? '♪ 音 ON' : '♪ 音 OFF';
+  this.querySelector('.sm').textContent = on ? '♪ON' : '♪OFF';
 });
 /* パッドは pointerdown で処理する。click を待たないので、
    ダブルタップ拡大よけに touchend を潰しても取りこぼさない */
