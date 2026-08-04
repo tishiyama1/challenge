@@ -166,10 +166,11 @@
     background: rgba(255,255,255,0.03);
   }
   .ach.done { border-color: rgba(227,192,118,0.5); background: rgba(227,192,118,0.10); }
-  .ach .an { font-size: 13.5px; color: #b9cfc0; letter-spacing: 0.08em; font-weight: 700; }
-  .ach.done .an { color: #ffe9b8; }
-  .ach .ad { font-size: 12px; color: #98ad9f; margin-top: 4px; line-height: 1.7; }
-  .ach.done .ad { color: #c3d8c9; }
+  .ach .achname { font-size: 13.5px; color: #b9cfc0; letter-spacing: 0.08em; font-weight: 700; }
+  .ach.done .achname { color: #ffe9b8; }
+  /* class 名を "ad" にすると広告ブロッカーの汎用フィルタに消されるので使わない */
+  .ach .achdesc { font-size: 12px; color: #98ad9f; margin-top: 4px; line-height: 1.7; }
+  .ach.done .achdesc { color: #c3d8c9; }
 
   /* ---------- side panels ---------- */
   .side { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; }
@@ -317,8 +318,8 @@
     .mbody { padding: 12px 13px 16px; }
     .achlist { grid-template-columns: 1fr; gap: 6px; }
     .ach { padding: 9px 12px; }
-    .ach .an { font-size: 14px; }
-    .ach .ad { font-size: 12.5px; }
+    .ach .achname { font-size: 14px; }
+    .ach .achdesc { font-size: 12.5px; }
     .docs p, .docs li { font-size: 12.5px; line-height: 1.95; }
     .docs table { font-size: 11.5px; }
     .docs th, .docs td { padding: 6px 7px; }
@@ -2333,7 +2334,7 @@ function renderAch(){
     var a = ACH[i];
     var d = document.createElement('div');
     d.className = 'ach' + (achDone[a.id] ? ' done' : '');
-    d.innerHTML = '<div class="an"></div><div class="ad"></div>';
+    d.innerHTML = '<div class="achname"></div><div class="achdesc"></div>';
     d.children[0].textContent = (achDone[a.id] ? '✓ ' : '') + a.n;
     d.children[1].textContent = a.d;
     box.appendChild(d);
