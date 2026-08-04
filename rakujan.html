@@ -186,20 +186,32 @@
   .panel > h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
   .score-panel .val {
-    font-size: clamp(26px, 4.6vw, 38px); font-weight: 800; letter-spacing: 0.02em;
+    font-size: calc(clamp(26px, 4.6vw, 38px) * var(--sf, 1)); font-weight: 800; letter-spacing: 0.02em;
     color: #fff6e0; line-height: 1.1; font-variant-numeric: tabular-nums;
-    transition: color 0.2s;
+    transition: color 0.2s; white-space: nowrap;
+    display: flex; align-items: flex-end;
+    min-height: calc(clamp(26px, 4.6vw, 38px) * 1.1);
   }
   .score-panel .val.pop { color: var(--gold); }
-  .score-panel .best { font-size: 11.5px; color: var(--dim); margin-top: 6px; letter-spacing: 0.1em; }
-  .chainline { margin-top: 8px; height: 20px; font-size: 13px; letter-spacing: 0.12em; color: #ffd98a; opacity: 0; transition: opacity 0.25s; }
+  .score-panel .best {
+    font-size: 11.5px; color: var(--dim); margin-top: 6px; letter-spacing: 0.1em;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  /* 出たり消えたりで高さが動かないよう、場所は常に確保しておく */
+  .chainline {
+    margin-top: 8px; height: 20px; font-size: 13px; letter-spacing: 0.12em; color: #ffd98a;
+    opacity: 0; transition: opacity 0.25s; white-space: nowrap; overflow: hidden;
+  }
   .chainline.on { opacity: 1; }
 
   .rows { display: flex; flex-direction: column; gap: 6px; }
-  @media (min-width: 901px) { .ba-panel .rows { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; } }
-  .row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
-  .row .k { color: var(--dim); letter-spacing: 0.1em; }
-  .row .v { color: var(--tx); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+  @media (min-width: 901px) { .ba-panel .rows { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 5px 16px; } }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; min-width: 0; }
+  .row .k { color: var(--dim); letter-spacing: 0.1em; white-space: nowrap; }
+  .row .v {
+    color: var(--tx); font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  }
 
   .tilerow { display: flex; gap: 5px; align-items: flex-end; flex-wrap: nowrap; min-height: 46px; }
   .mini { width: 32px; height: 44px; border-radius: 5px; display: block; flex: 0 0 auto; }
@@ -288,23 +300,32 @@
       backdrop-filter: none; -webkit-backdrop-filter: none;
     }
     .hud .panel > h2 { display: none; }
-    .hud .score-panel { flex: 1 1 130px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
-    .hud .score-panel .val { font-size: 26px; }
-    .hud .score-panel .best { margin-top: 0; font-size: 10.5px; }
-    .hud .chainline { margin-top: 0; height: auto; font-size: 11.5px; }
-    .hud .nh-panel > div { gap: 12px !important; }
-    .hud .tilecap { margin-bottom: 3px; font-size: 9px; letter-spacing: 0.1em; }
-    .hud .mini { width: 24px; height: 33px; }
-    .hud .tilerow { min-height: 33px; gap: 4px; }
-    .hud .dora-panel { display: flex; align-items: flex-end; gap: 6px; }
-    .hud .dora-panel::before {
-      content: "ドラ"; font-size: 9px; color: var(--dim);
-      letter-spacing: 0.1em; padding-bottom: 3px;
+    /* 桁が増えても折り返さないよう、縦に積んで幅を先に確保しておく */
+    .hud .score-panel {
+      flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+      width: 118px; overflow: hidden;
     }
+    .hud .score-panel .val { font-size: calc(23px * var(--sf, 1)); min-height: calc(23px * 1.1); }
+    .hud .score-panel .best { margin-top: 0; font-size: 10px; }
+    .hud .chainline { margin-top: 0; height: 13px; font-size: 10.5px; }
+    .hud .ba-panel .rows { flex-wrap: nowrap; gap: 3px 10px; }
+    .hud .ba-panel .row { flex: 0 0 auto; }
+    .hud { gap: 4px 10px; }
+    .hud .nh-panel > div { gap: 10px !important; }
+    .hud .tilecap { margin-bottom: 3px; font-size: 9px; letter-spacing: 0.1em; }
+    .hud .mini { width: 16px; height: 22px; }
+    .hud .tilerow { min-height: 22px; gap: 3px; }
+    .hud .dora-panel { display: flex; align-items: center; gap: 5px; }
+    .hud .dora-panel::before {
+      content: "ドラ"; font-size: 9px; color: var(--dim); letter-spacing: 0.1em; flex: none;
+    }
+    /* 5枠を3列に畳んで、枚数が増えても幅も高さも動かないようにする */
+    .hud #dora { display: grid; grid-template-columns: repeat(3, auto); gap: 3px; min-height: 0; }
     .hud .tehai-panel { flex: 1 1 100%; order: -1; }
     .hud .melds { grid-template-columns: repeat(5, min-content); gap: 4px; }
     .hud .meldbox { grid-column: auto; padding: 2px; gap: 1px; }
-    .hud .mini.sm { width: 16px; height: 22px; }
+    /* 槓子で4牌になっても収まる大きさにしておく */
+    .hud .mini.sm { width: 13px; height: 18px; }
     .hud .tenpai { margin-top: 4px; font-size: 10.5px; }
     .hud .ba-panel { flex: 1 1 100%; }
     .hud .rows { flex-direction: row; flex-wrap: wrap; gap: 3px 12px; }
@@ -460,8 +481,6 @@
           <div class="row"><span class="k">局</span><span class="v" id="kyoku">東一局</span></div>
           <div class="row"><span class="k">牌山</span><span class="v" id="wall">136</span></div>
           <div class="row"><span class="k">速さ</span><span class="v" id="level">Lv.1</span></div>
-          <div class="row"><span class="k">今局</span><span class="v" id="roundpts">0</span></div>
-          <div class="row"><span class="k">平均/局</span><span class="v" id="avgpts">0</span></div>
           <div class="row"><span class="k">和了</span><span class="v" id="agari">0</span></div>
           <div class="row wide-only"><span class="k">最大連鎖</span><span class="v" id="maxchain">0</span></div>
           <div class="row wide-only"><span class="k">最高手</span><span class="v" id="besthand">—</span></div>
@@ -702,9 +721,9 @@
 
       <h3>効率の見かた</h3>
       <p>
-        場の欄に<b>今局</b>（いまの局で稼いだ点）と<b>平均/局</b>（総得点÷回った局数）が出ます。
+        終局画面に<b>1局あたりの点</b>（総得点÷回った局数）と<b>最高の局</b>が出ます。
         1局は山を引き切るまでなので、局が進むほど手が速くなり、盤面も混みます。
-        <b>平均/局が伸びているうちは組み方が噛み合っている</b>、頭打ちなら積み方を変える頃合い、という目安に使ってください。
+        <b>1局あたりが伸びているうちは組み方が噛み合っている</b>、頭打ちなら積み方を変える頃合い、という目安に使ってください。
       </p>
 
       <h3>実績</h3>
@@ -1504,11 +1523,13 @@ function fitBoardHeight(){
   var top = bb.getBoundingClientRect().top;
   var padH = (getComputedStyle(padEl).display === 'none') ? 0 : padEl.offsetHeight + 10;
   var wrapPad = parseFloat(getComputedStyle($('.wrap')).paddingBottom) || 0;
-  var avail = vh - top - padH - wrapPad - 6;
-  bb.style.height = clamp(Math.floor(avail), 200, 860) + 'px';
+  var avail = clamp(Math.floor(vh - top - padH - wrapPad - 6), 200, 860);
+  if (Math.abs(bb.getBoundingClientRect().height - avail) < 2) return false;
+  bb.style.height = avail + 'px';
   var side = $('.side');
   if (window.innerWidth > 900) side.style.maxHeight = Math.max(200, Math.floor(vh - top - 16)) + 'px';
   else side.style.maxHeight = '';
+  return true;
 }
 
 function layout(newGame){
@@ -2019,6 +2040,7 @@ function gameOver(title, reason){
   $('#over-detail').innerHTML =
     kyokuName() + ' ／ ' + agariCount + '回和了 ／ 最大' + maxChain + '連鎖 ／ ' + cleared + '牌を消した' +
     '<br>1局あたり ' + Math.round(score / (round + 1)).toLocaleString() + '点' +
+    '　／　最高の局 ' + roundBest().toLocaleString() + '点' +
     (bestHand ? '<br>最高手 ' + bestHand.label + '（' +
       (bestHand.yakuman ? bestHand.limit : bestHand.han + '翻' + (bestHand.fu ? bestHand.fu + '符' : '')) +
       '　' + bestHand.pts.toLocaleString() + '点）' : '') +
@@ -2246,31 +2268,39 @@ function syncTehai(){
 }
 
 function syncSide(){
+  /* ドラは槓で増えるので、最初から5枠ぶんの場所を取っておく */
   var nx = $('#next'); nx.innerHTML = '';
   for (var i = 0; i < 3; i++) nx.appendChild(nextQ.length > i ? miniTile(nextQ[i], i ? 'dim' : '') : miniTile(null));
   var hd = $('#hold'); hd.innerHTML = '';
   hd.appendChild(hold === null ? miniTile(null) : miniTile(hold));
   var dr = $('#dora'); dr.innerHTML = '';
-  for (var j = 0; j < doraInd.length; j++) dr.appendChild(miniTile(doraInd[j]));
+  for (var j = 0; j < 5; j++) dr.appendChild(j < doraInd.length ? miniTile(doraInd[j]) : miniTile(null));
   $('#dora-txt').textContent = doraTiles.length ? doraTiles.map(tileJa).join('・') : '—';
   $('#wall').textContent = wall.length;
   $('#kyoku').textContent = kyokuName();
   $('#level').textContent = 'Lv.' + level;
   $('#agari').textContent = agariCount;
-  syncRoundStats();
   $('#maxchain').textContent = maxChain;
   $('#besthand').textContent = bestHand ? (bestHand.label + (bestHand.limit ? '（' + bestHand.limit + '）' : '')) : '—';
   syncTehai();
 }
 function syncUI(){
   $('#score').textContent = score.toLocaleString();
+  fitScoreFont();
   $('#best').textContent = best.toLocaleString();
   syncSide();
 }
+/* 桁数に合わせて字の大きさを決める。枠の幅は固定なので行がずれない */
+function fitScoreFont(){
+  var el = $('#score'), n = el.textContent.length;
+  el.style.setProperty('--sf', n <= 7 ? 1 : (n <= 9 ? 0.84 : (n <= 11 ? 0.7 : 0.6)));
+}
+
 var popT = null;
 function bumpScore(){
   var el = $('#score');
   el.textContent = score.toLocaleString();
+  fitScoreFont();
   if (score > best){ best = score; $('#best').textContent = best.toLocaleString(); }
   el.classList.add('pop');
   clearTimeout(popT);
@@ -2322,10 +2352,11 @@ function syncAch(){
   $('#ach-count').textContent = txt;
   $('#ach-row').textContent = txt;
 }
-/* 局ごとの成績。効率が見えるように今局と平均を出す */
-function syncRoundStats(){
-  $('#roundpts').textContent = (score - roundStart).toLocaleString();
-  $('#avgpts').textContent = Math.round(score / (round + 1)).toLocaleString();
+/* 局ごとの成績は終局画面で見せる */
+function roundBest(){
+  var b = score - roundStart, i;
+  for (i = 0; i < roundScores.length; i++) if (roundScores[i] > b) b = roundScores[i];
+  return b;
 }
 function renderAch(){
   var box = $('#achlist');
@@ -2501,6 +2532,20 @@ window.addEventListener('resize', function(){
   clearTimeout(rz);
   rz = setTimeout(function(){ layout(false); }, 120);
 });
+if (window.visualViewport) window.visualViewport.addEventListener('resize', function(){
+  clearTimeout(rz);
+  rz = setTimeout(function(){ layout(false); }, 120);
+});
+if (window.ResizeObserver){
+  var roPending = false;
+  var ro = new ResizeObserver(function(){
+    if (roPending) return;
+    roPending = true;
+    requestAnimationFrame(function(){ roPending = false; layout(false); });
+  });
+  ro.observe($('.hud'));
+  ro.observe($('header.top'));
+}
 if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
 
 /* ---------------- 起動 ---------------- */
